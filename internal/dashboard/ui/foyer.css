@@ -1,10 +1,22 @@
 /* Foyer's pages on PocketBase's dashboard, in its own variables:
    --smSpacing is 20px, --fieldsGap 10px. */
 
+/* As many columns as the page holds, however wide it is. */
+.foyer-full {
+  width: 100%;
+}
+
 .foyer-posters {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
   gap: var(--smSpacing);
+}
+
+@media (max-width: 600px) {
+  .foyer-posters {
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    gap: var(--fieldsGap);
+  }
 }
 
 .foyer-poster {

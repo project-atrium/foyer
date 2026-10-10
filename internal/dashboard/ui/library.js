@@ -228,7 +228,8 @@ export function pageLibrary(route) {
         ),
       ),
       t.div(
-        { className: 'wrapper m-b-base' },
+        // The page's whole width: PocketBase's wrapper holds a page to 840px.
+        { className: 'foyer-full m-b-base' },
         () => {
           const running = data.scans.filter((s) => s.running);
           if (!running.length) {
