@@ -94,6 +94,13 @@ directory, with the migrations applied, through PocketBase's real router
   for the grace period takes its film; a correction sticks, and merges;
   Zurg's webhook wants its token. And the episode mapping and the matching
   policy on their own.
+- **Streams:** a user plays a title through Foyer — a part, the whole, a
+  version by its file; a forged, lengthened or expired signature is refused,
+  and a new file-token secret ends every address; nothing plays that a user
+  may not see; no stream address reaches the request log, a refused one
+  neither; the loopback serves a tool one file until revoked. And the proxy
+  on its own: ranges, HEAD, a source's failures, a stream outlasting the
+  server's deadlines, a player leaving.
 - **The guard:** Foyer's collections refuse a superuser's record writes, a
   change, a truncate, an import and a delete; `users`' rules stay.
 - **TMDB**, against a fake of its routes: Loge's matcher's own cases, ported —

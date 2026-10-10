@@ -15,6 +15,8 @@ and their rules, and how they fail.
 | Route | Who | Answer |
 | --- | --- | --- |
 | `GET /api/foyer/info` | anyone | `{ serverVersion }` |
+| `POST /api/foyer/play` | users | `{ collection, id, file? }` → `{ url, expiresAt, version, versions, chapters }`: a signed address for the title's best version, or the file asked for; `404` for a title the user may not see |
+| `GET`, `HEAD /api/foyer/stream/{file}?u&exp&sig` | whoever holds the address | the file's bytes, a `Range` passed on: `206` with `Content-Range`; `403` when the signature is wrong or six hours old |
 | `GET /api/foyer/admin/adapters` | superusers | every adapter: `[{ key, name, description, notice?, enabled, fields, values, status? }]`, each secret as `"******"` when set and `""` when not |
 | `PUT /api/foyer/admin/adapters/{key}` | superusers | `{ enabled, values }` → the adapter as `GET` shows it; `400` names each field that will not do, as `values.<key>` |
 | `POST /api/foyer/admin/adapters/{key}/test` | superusers | `{ values? }`, laid over what is saved → `{ ok, message, details? }` |
@@ -30,6 +32,20 @@ and their rules, and how they fail.
 | `GET /api/foyer/admin/zurg/hook` | superusers | `{ token, command }`: the line for Zurg's `on_library_update` |
 | `POST /api/foyer/zurg/updated` | Zurg, with `Authorization: Bearer <token>` | the folders that changed, one per line → `202`; `403` without the token |
 | `DELETE /api/foyer/admin/libraries/{id}` | superusers | `204`: its collections, artwork, torrents, files and identities gone; watch status stays. `409` when a collection of your own still points at it |
+
+### Streams
+
+- **An address is its signature**, good for six hours: a player sends no
+  headers. It is signed with a key drawn from the `users` collection's
+  file-token secret — regenerating that secret in the dashboard (users →
+  Options → Tokens) ends every address at once, and signs nobody out.
+- **Bytes come through Foyer**, so Zurg's address and password never leave
+  the server. A `Range`, `If-Range` or HEAD is passed on; Zurg's `200` with
+  a `Content-Range` is a `206`; a player that leaves stops Zurg's answer.
+- **No stream address is ever logged**, a refused one neither: it opens the
+  file to whoever holds it.
+- Streams have a rate limit of their own: 600 requests in 10 seconds per
+  address, before the catch-all.
 
 ### The Adapters page's routes
 

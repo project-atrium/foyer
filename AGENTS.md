@@ -77,11 +77,12 @@ internal/parse/      release names: title, year, season and episode, numbers cou
 internal/library/    libraries: their collections from one template, the scan — walk, name, identify, place,
                      sweep, artwork — corrections, and the dashboard's library routes
 internal/media/      what a file is: Loge's MediaVersion, from a release's name or ffprobe
+internal/stream/     signed stream addresses, the Range proxy, the quiet log, the loopback for tools
 internal/identity/   Loge's watchIdentity and identityHash, ported
 internal/dashboard/  the dashboard's icon: a PocketBase UI extension, embedded
 internal/version/    the version, always the app's: its `npm run release` moves both
 migrations/          0001 users are profiles; 0002 the name, the rate limits, the first superuser; 0003 adapters;
-                     0004 libraries, media_torrents, media_files, identities
+                     0004 libraries, media_torrents, media_files, identities; 0005 streams' rate limit
 Dockerfile           two stages: a Go build, then the binary alone
 docker-compose.yml   the server, and pb_data in a volume
 ```
@@ -120,6 +121,18 @@ Go tests sit beside what they test. Everything else is PocketBase's: `serve`,
 - **What Zurg stops listing is kept three days**, then let go with any title
   left with nothing — never on a listing that came back empty, nor when most
   of a library vanished, until the next scan agrees. Watch status stays.
+- **A stream outlives PocketBase's deadlines.** Its server reads and writes
+  with five-minute deadlines, which would end a film five minutes in; the
+  proxy lifts both, and a write that stalls half an hour ends it instead.
+- **A stream address is a key, and never logged.** It opens its file to
+  whoever holds it for six hours. `stream.Quiet` runs inside PocketBase's
+  activity logger and answers every stream request itself — a refusal, a
+  429, a panic — so the logger has nothing to keep. A test reads the log.
+- **A tool reads files through the loopback**, never from Zurg: a grant on
+  127.0.0.1 opens one file for minutes, so ffprobe's arguments and output
+  never hold Zurg's address or password.
+- **A rate limit's place matters.** PocketBase takes the first rule whose
+  prefix matches, in order: a narrower prefix goes before `/api/`.
 - **One scan at a time**, from one loop that runs only beside `serve`
   (`Background`): SQLite has one writer, and nothing a test binds starts it.
 - **No admin route answers 401 for a service's refusal.** The dashboard takes

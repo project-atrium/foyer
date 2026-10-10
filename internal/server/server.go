@@ -19,6 +19,7 @@ import (
 	"foyer/internal/guard"
 	"foyer/internal/library"
 	"foyer/internal/routes"
+	"foyer/internal/stream"
 )
 
 // Server is Foyer on one PocketBase app: what Bind made, for main and the
@@ -28,6 +29,7 @@ type Server struct {
 	Config   config.Config
 	Adapters *adapters.Registry
 	Library  *library.Engine
+	Streams  *stream.Streamer
 }
 
 // collections are Foyer's own static collections: written by its code alone.
@@ -41,11 +43,13 @@ var collections = []string{
 // Background.
 func Bind(app core.App, cfg config.Config) *Server {
 	registry := adapters.NewRegistry(app, zurg.Adapter(), tmdb.Adapter())
+	lib := library.New(app, registry)
 	s := &Server{
 		App:      app,
 		Config:   cfg,
 		Adapters: registry,
-		Library:  library.New(app, registry),
+		Library:  lib,
+		Streams:  stream.New(app, library.FilesCollection, lib.OpenFile),
 	}
 	guard.Bind(app, s.managed)
 	app.OnServe().BindFunc(func(se *core.ServeEvent) error {
@@ -58,6 +62,9 @@ func Bind(app core.App, cfg config.Config) *Server {
 			return err
 		}
 		routes.Register(se)
+		se.Router.Bind(stream.Quiet())
+		s.Streams.Routes(se.Router)
+		s.Library.PlayRoutes(se.Router, s.Streams)
 		admin := se.Router.Group("/api/foyer/admin")
 		admin.Bind(apis.RequireSuperuserAuth())
 		s.Adapters.Routes(admin)
@@ -76,17 +83,24 @@ func Bind(app core.App, cfg config.Config) *Server {
 
 // Background is what runs beside the routes once the server serves — main
 // asks for it, a test never does: the library's collections brought up to
-// date, then its scans, until the server stops.
+// date, the loopback the tools read files through, then the scans, until
+// the server stops.
 func (s *Server) Background() *Server {
 	ctx, cancel := context.WithCancel(context.Background())
 	var wg sync.WaitGroup
 	s.App.OnServe().BindFunc(func(se *core.ServeEvent) error {
 		s.Library.EnsureAll()
+		if err := s.Streams.StartTwin(); err != nil {
+			return err
+		}
 		wg.Go(func() { s.Library.Run(ctx) })
 		return se.Next()
 	})
 	s.App.OnTerminate().BindFunc(func(e *core.TerminateEvent) error {
 		cancel()
+		stop, release := context.WithTimeout(context.Background(), 5*time.Second)
+		_ = s.Streams.StopTwin(stop)
+		release()
 		// A scan stops at its next request; the database closes after.
 		done := make(chan struct{})
 		go func() { wg.Wait(); close(done) }()
