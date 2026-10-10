@@ -1,9 +1,8 @@
 # Getting started
 
-Your own server is the account a household runs itself: the app's profiles,
-their PINs and preferences, and the household's sources, IPTV subscriptions
-and metadata keys — with their passwords — kept in step between its devices. It is
-PocketBase, with the app's collections added.
+Foyer is the household's own server: each person in the household is one of
+its users, and its library is growing from Zurg. It is PocketBase, with
+Foyer's collections added.
 
 ## Run it
 
@@ -31,7 +30,7 @@ appears below. `docs/deployment` has the settings, TLS and backups.
 ## The superuser
 
 The dashboard, at `http://localhost:8090/_/` and wearing Foyer's icon, needs
-a superuser: the server's administrator. Either of these makes it:
+a superuser: the household's administrator. Either of these makes it:
 
 - `FOYER_ADMIN_EMAIL` and `FOYER_ADMIN_PASSWORD` in `.env`, before the first start
 - `go run . superuser upsert you@example.com 'a long password'`
@@ -39,33 +38,24 @@ a superuser: the server's administrator. Either of these makes it:
 Foyer never opens a browser to ask for one, as plain PocketBase does when it
 starts without a superuser.
 
-A superuser sees everything the server holds, every source password included.
-Keep that login to yourself.
+A superuser sees everything the server holds, every secret included. Keep
+that login to yourself.
 
-## Make an account
+## The household's users
 
-Accounts are created from the app, with an invite:
+Each person is a user — a profile. In the dashboard, open **users** and add
+one for each:
 
-```bash
-go run . invite                  # a one-time code, good for seven days
-go run . invite --days 1         # good for one
-```
+- **username** — what they sign in with; case does not matter
+- **name** — what the household calls them
+- **password** — at least eight characters
+- **pin** — four digits, if they want a child lock on their profile; empty
+  for none
+- **avatar** — a picture, if they like
 
-In the app: **Sign in to your server → Create an account** — from Welcome on a
-new device, or from Settings → Account on one already in use. Give the
-server's address, the code, a username and a password.
-
-- **On a new device**, the account starts with one profile named after it.
-- **On a device already in use**, its local account goes up to the server: its
-  profiles, their PINs and preferences, and its sources with their passwords —
-  if the server's profile limit has room for them.
-
-Every other device signs in with the same username and password, and takes
-the account as the server holds it.
-
-Choose the password with care: it opens every source password the account
-holds. If it is forgotten, a superuser can set a new one in the dashboard, and
-each device then asks for it once.
+A user can change their own name, avatar, PIN and password; only the
+superuser adds or removes one. A forgotten password is set again in the
+dashboard, which ends every session that user had.
 
 ## Addresses
 
@@ -75,14 +65,3 @@ each device then asks for it once.
   `http://192.168.x.x:8090`, with the server started with
   `--http=0.0.0.0:8090`.
 - Anywhere beyond a trusted home network: behind TLS (`docs/deployment`).
-
-The app on the web runs from a secure page, so a browser can reach only an
-`https` server, or one on `localhost`.
-
-## Who may sign up
-
-`FOYER_SIGNUP`, in `.env`:
-
-- `invite` — the default: a code from `invite`, used once
-- `open` — anyone who can reach the server; only on a network you trust
-- `closed` — nobody; a superuser makes accounts in the dashboard

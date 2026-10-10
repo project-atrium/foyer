@@ -1,6 +1,6 @@
-// Your own server: PocketBase, with the account's collections, rules and hooks.
-// PocketBase does most of it — users, sign-in and sessions, the record APIs,
-// batches, the dashboard, backups and the rate limiter. This is the rest.
+// Foyer: the household's own server, on PocketBase. PocketBase does most of
+// it — users, sign-in and sessions, the record APIs, the dashboard, backups
+// and the rate limiter. This is the rest.
 package main
 
 import (
@@ -11,7 +11,6 @@ import (
 	"github.com/pocketbase/pocketbase/plugins/migratecmd"
 
 	"foyer/internal/config"
-	"foyer/internal/invites"
 	"foyer/internal/server"
 	"foyer/internal/version"
 	_ "foyer/migrations"
@@ -25,16 +24,17 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	for _, name := range cfg.Retired {
+		log.Printf("%s does nothing any more: a user is a profile, and the superuser makes them", name)
+	}
 
 	// Dev mode — which PocketBase turns on by itself under `go run` — prints
-	// every SQL statement to stdout, and so buries the one line a script reads
-	// from `invite`. It is there for the asking: --dev.
+	// every SQL statement to stdout. It is there for the asking: --dev.
 	app := pocketbase.NewWithConfig(pocketbase.Config{DefaultDev: false})
 	app.RootCmd.Version = version.Version
-	// The migrations own the collections: none is ever written from the dashboard.
+	// The migrations own Foyer's collections: none is ever written from the dashboard.
 	migratecmd.MustRegister(app, app.RootCmd, migratecmd.Config{Automigrate: false})
 	server.Bind(app, cfg)
-	app.RootCmd.AddCommand(invites.Command(app))
 
 	if err := app.Start(); err != nil {
 		log.Fatal(err)

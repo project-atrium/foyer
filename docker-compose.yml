@@ -1,8 +1,8 @@
-# Foyer, your own server, and its data in a volume of its own.
+# Foyer, the household's own server, and its data in a volume of its own.
 #
 #   cp .env.example .env
 #   docker compose up -d
-#   docker compose exec foyer foyer invite
+#   docker compose exec foyer foyer superuser upsert you@example.com 'a long password'
 
 # Named, so its volume is foyer_pb_data wherever this folder is checked out.
 name: foyer

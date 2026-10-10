@@ -1,6 +1,7 @@
 package config
 
 import (
+	"slices"
 	"strings"
 	"testing"
 )
@@ -14,15 +15,13 @@ func TestDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.MaxProfiles != 10 || cfg.SignUp != SignUpInvite || cfg.TrustProxy != "" {
+	if cfg.AdminEmail != "" || cfg.TrustProxy != "" || len(cfg.Retired) != 0 {
 		t.Fatalf("unexpected defaults: %+v", cfg)
 	}
 }
 
 func TestReadsEveryVariable(t *testing.T) {
 	cfg, err := FromEnv(env(map[string]string{
-		"FOYER_MAX_PROFILES":   "4",
-		"FOYER_SIGNUP":         "open",
 		"FOYER_ADMIN_EMAIL":    "admin@example.com",
 		"FOYER_ADMIN_PASSWORD": "a long password",
 		"FOYER_TRUST_PROXY":    "X-Forwarded-For",
@@ -30,18 +29,16 @@ func TestReadsEveryVariable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.MaxProfiles != 4 || cfg.SignUp != SignUpOpen || cfg.AdminEmail != "admin@example.com" || cfg.TrustProxy != "X-Forwarded-For" {
+	if cfg.AdminEmail != "admin@example.com" || cfg.AdminPassword != "a long password" || cfg.TrustProxy != "X-Forwarded-For" {
 		t.Fatalf("unexpected config: %+v", cfg)
 	}
 }
 
 func TestRefusesWhatItCannotUse(t *testing.T) {
 	for name, values := range map[string]map[string]string{
-		"a limit that is not a number": {"FOYER_MAX_PROFILES": "ten"},
-		"no profiles at all":           {"FOYER_MAX_PROFILES": "0"},
-		"an unknown sign-up mode":      {"FOYER_SIGNUP": "anyone"},
-		"an email without a password":  {"FOYER_ADMIN_EMAIL": "admin@example.com"},
-		"a proxy header that is not":   {"FOYER_TRUST_PROXY": "X-Forwarded-For: 1.2.3.4"},
+		"an email without a password": {"FOYER_ADMIN_EMAIL": "admin@example.com"},
+		"a password without an email": {"FOYER_ADMIN_PASSWORD": "a long password"},
+		"a proxy header that is not":  {"FOYER_TRUST_PROXY": "X-Forwarded-For: 1.2.3.4"},
 	} {
 		if _, err := FromEnv(env(values)); err == nil {
 			t.Errorf("%s: accepted", name)
@@ -59,5 +56,18 @@ func TestRefusesTheNamesFromBeforeFoyer(t *testing.T) {
 		if want := "FOYER_" + old[len("SC_"):]; !strings.Contains(err.Error(), want) {
 			t.Errorf("%s: %q does not name %s", old, err, want)
 		}
+	}
+}
+
+// The profile limit and the sign-up mode went with the account that held
+// profiles. Ignoring them weakens nothing, so an old .env still starts — and
+// main says they do nothing now.
+func TestNamesWhatNoLongerDoesAnything(t *testing.T) {
+	cfg, err := FromEnv(env(map[string]string{"FOYER_MAX_PROFILES": "4", "FOYER_SIGNUP": "open"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(cfg.Retired, []string{"FOYER_MAX_PROFILES", "FOYER_SIGNUP"}) {
+		t.Fatalf("retired: %v", cfg.Retired)
 	}
 }

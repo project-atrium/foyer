@@ -12,13 +12,12 @@ import (
 	"github.com/pocketbase/pocketbase/tests"
 
 	"foyer/internal/config"
-	"foyer/internal/records"
 	"foyer/internal/server"
 	_ "foyer/migrations"
 )
 
-// harness is the server on a temporary data directory: PocketBase with this
-// server's migrations, hooks and routes, called through its real router.
+// harness is the server on a temporary data directory: PocketBase with
+// Foyer's migrations, hooks and routes, called through its real router.
 type harness struct {
 	t   *testing.T
 	app *tests.TestApp
@@ -26,19 +25,12 @@ type harness struct {
 }
 
 type options struct {
-	cfg config.Config
 	// Most tests sign in more often than the limiter lets one address.
 	limits bool
 }
 
 func start(t *testing.T, opts options) *harness {
 	t.Helper()
-	if opts.cfg.MaxProfiles == 0 {
-		opts.cfg.MaxProfiles = config.DefaultMaxProfiles
-	}
-	if opts.cfg.SignUp == "" {
-		opts.cfg.SignUp = config.SignUpOpen
-	}
 	app, err := tests.NewTestAppWithConfig(core.BaseAppConfig{DataDir: t.TempDir(), EncryptionEnv: "pb_test_env"})
 	if err != nil {
 		t.Fatal(err)
@@ -47,7 +39,7 @@ func start(t *testing.T, opts options) *harness {
 	if !opts.limits {
 		app.Settings().RateLimits.Enabled = false
 	}
-	server.Bind(app, opts.cfg)
+	server.Bind(app, config.Config{})
 
 	router, err := apis.NewRouter(app)
 	if err != nil {
@@ -108,112 +100,60 @@ func (h *harness) fetch(path string) (int, http.Header, []byte) {
 	return recorder.Code, recorder.Header(), recorder.Body.Bytes()
 }
 
-// account is one signed-up account and a session for it.
-type account struct {
-	id, token, name string
+// user is one profile, as the household's superuser makes it, and a session
+// for it.
+type user struct {
+	id, token, username string
 }
 
-func (h *harness) signUp(name string, extra map[string]any) account {
+const password = "a long password"
+
+// makeUser saves a profile as the dashboard does — as a superuser, past the
+// rules — then signs it in through PocketBase's own route.
+func (h *harness) makeUser(username string, fields map[string]any) user {
 	h.t.Helper()
-	body := map[string]any{"username": name, "password": "a long password", "firstProfile": false}
-	for key, value := range extra {
-		body[key] = value
+	users, err := h.app.FindCollectionByNameOrId("users")
+	if err != nil {
+		h.t.Fatal(err)
 	}
-	got := h.call(http.MethodPost, "/api/foyer/sign-up", "", body)
+	record := core.NewRecord(users)
+	record.Set("username", username)
+	record.Set("name", username)
+	for name, value := range fields {
+		record.Set(name, value)
+	}
+	record.SetPassword(password)
+	if err := h.app.Save(record); err != nil {
+		h.t.Fatalf("making %s: %v", username, err)
+	}
+	got := h.signIn(username, password)
 	if got.status != http.StatusOK {
-		h.t.Fatalf("sign-up of %s: %d %v", name, got.status, got.body)
+		h.t.Fatalf("signing in %s: %d %v", username, got.status, got.body)
 	}
-	record, _ := got.body["record"].(map[string]any)
-	return account{id: record["id"].(string), token: got.body["token"].(string), name: name}
+	return user{id: record.Id, token: got.body["token"].(string), username: username}
 }
 
-func (h *harness) signIn(name, password string) answer {
+func (h *harness) signIn(username, password string) answer {
 	h.t.Helper()
-	return h.call(http.MethodPost, "/api/collections/users/auth-with-password", "", map[string]any{"identity": name, "password": password})
+	return h.call(http.MethodPost, "/api/collections/users/auth-with-password", "", map[string]any{"identity": username, "password": password})
 }
 
-// put is one upsert of a batch, as the plugin writes it.
-func put(kind string, body map[string]any) map[string]any {
-	collection, _ := records.Collection(kind)
-	return map[string]any{"method": http.MethodPut, "url": "/api/collections/" + collection + "/records", "body": body}
-}
-
-func (h *harness) batch(who account, requests ...map[string]any) answer {
+// superuser is a dashboard session.
+func (h *harness) superuser() string {
 	h.t.Helper()
-	return h.call(http.MethodPost, "/api/batch", who.token, map[string]any{"requests": requests})
-}
-
-// list reads a collection whole, as a pull does.
-func (h *harness) list(who account, kind string) answer {
-	h.t.Helper()
-	collection, _ := records.Collection(kind)
-	return h.call(http.MethodGet, "/api/collections/"+collection+"/records?page=1&perPage=1000&sort=id&skipTotal=1", who.token, nil)
-}
-
-func (h *harness) items(who account, kind string) []map[string]any {
-	h.t.Helper()
-	got := h.list(who, kind)
-	if got.status != http.StatusOK {
-		h.t.Fatalf("list %s: %d %v", kind, got.status, got.body)
+	superusers, err := h.app.FindCollectionByNameOrId(core.CollectionNameSuperusers)
+	if err != nil {
+		h.t.Fatal(err)
 	}
-	raw, _ := got.body["items"].([]any)
-	items := make([]map[string]any, 0, len(raw))
-	for _, item := range raw {
-		items = append(items, item.(map[string]any))
+	record := core.NewRecord(superusers)
+	record.SetEmail("admin@example.com")
+	record.SetPassword(password)
+	if err := h.app.Save(record); err != nil {
+		h.t.Fatal(err)
 	}
-	return items
-}
-
-// The bodies of a well-formed account, derived as the plugin derives them.
-
-func profile(who account, key, name string) map[string]any {
-	return map[string]any{
-		"id": records.ID(who.id, records.KindProfile, key), "user": who.id, "key": key, "deleted": false, "name": name,
+	token, err := record.NewAuthToken()
+	if err != nil {
+		h.t.Fatal(err)
 	}
-}
-
-func pin(who account, key, value string) map[string]any {
-	return map[string]any{
-		"id": records.ID(who.id, records.KindPin, key), "user": who.id, "key": key, "deleted": false,
-		"profile": records.ID(who.id, records.KindProfile, key), "pin": value,
-	}
-}
-
-func connection(who account, key string, secretKeys []string, secrets map[string]any) map[string]any {
-	return map[string]any{
-		"id": records.ID(who.id, records.KindConnection, key), "user": who.id, "key": key, "deleted": false,
-		"plugin_id": "sources/jellyfin", "label": "Home", "enabled": true, "per_profile": "none",
-		"fields": map[string]any{"serverUrl": "http://jellyfin.local:8096"}, "settings": map[string]any{},
-		"secret_keys": secretKeys, "secrets": secrets,
-	}
-}
-
-func tombstone(who account, kind, key string, parents map[string]any) map[string]any {
-	body := map[string]any{"id": records.ID(who.id, kind, key), "user": who.id, "key": key, "deleted": true}
-	for name, value := range parents {
-		body[name] = value
-	}
-	return body
-}
-
-// refusal is the write a failed batch names, and the codes it names it by.
-func refusal(t *testing.T, got answer) (index string, codes []string) {
-	t.Helper()
-	if got.status != http.StatusBadRequest {
-		t.Fatalf("expected the batch refused, got %d %v", got.status, got.body)
-	}
-	data, _ := got.body["data"].(map[string]any)
-	requests, _ := data["requests"].(map[string]any)
-	for i, entry := range requests {
-		response, _ := entry.(map[string]any)["response"].(map[string]any)
-		fields, _ := response["data"].(map[string]any)
-		for _, field := range fields {
-			if code, ok := field.(map[string]any)["code"].(string); ok {
-				codes = append(codes, code)
-			}
-		}
-		return i, codes
-	}
-	t.Fatalf("the refusal names no write: %v", got.body)
-	return "", nil
+	return token
 }

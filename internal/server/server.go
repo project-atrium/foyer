@@ -1,5 +1,5 @@
-// Package server binds this server's rules and routes to a PocketBase app —
-// the one main starts, or the one a test starts on a temporary directory.
+// Package server binds Foyer's rules and routes to a PocketBase app — the one
+// main starts, or the one a test starts on a temporary directory.
 package server
 
 import (
@@ -9,22 +9,20 @@ import (
 
 	"foyer/internal/config"
 	"foyer/internal/dashboard"
-	"foyer/internal/hooks"
 	"foyer/internal/routes"
 )
 
 func Bind(app core.App, cfg config.Config) {
-	hooks.Register(app, cfg)
 	app.OnServe().BindFunc(func(se *core.ServeEvent) error {
 		// Never PocketBase's installer: on a server with no superuser it opens a
-		// browser tab on whoever started it — one per test in the harness. The
-		// first superuser comes from FOYER_ADMIN_EMAIL and FOYER_ADMIN_PASSWORD,
-		// or from `superuser upsert`.
+		// browser tab on whoever started it — one per test. The first superuser
+		// comes from FOYER_ADMIN_EMAIL and FOYER_ADMIN_PASSWORD, or from
+		// `superuser upsert`.
 		se.InstallerFunc = nil
 		if err := trustProxy(se.App, cfg); err != nil {
 			return err
 		}
-		routes.Register(se, cfg)
+		routes.Register(se)
 		// Read by PocketBase's own handler for UI extensions, which runs last.
 		extension, err := dashboard.Extension()
 		if err != nil {

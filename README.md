@@ -1,72 +1,51 @@
-# Foyer — your own server
+# Foyer — your household's own server
 
-A small server you run yourself, so your household's account in
-[Loge](https://github.com/Loge-Foyer/loge) — its profiles, their settings, and
-your sources with their passwords — follows you between your own devices.
+A small server you run yourself for [Loge](https://github.com/Loge-Foyer/loge):
+your household's profiles, and — as it grows — your library, what each of you
+watched, and the streams.
 
-It is [PocketBase](https://pocketbase.io), with the app's collections added:
-one program, one database, and a dashboard to see what it holds.
+It is [PocketBase](https://pocketbase.io), with Foyer's collections and code
+added: one program, one database, and a dashboard to see and set what it holds.
 
 ---
 
 ## The problem it solves
 
-You add your Jellyfin server on your phone. You pick up the tablet. It should
-already have it — the address, the sign-in, your profile's home screen —
-without you typing a password again.
+A household that keeps its films on Real-Debrid usually runs a chain of
+things to watch them: Zurg to reach the files, CineSync to give them names a
+media server understands, Jellyfin to turn them into a library with profiles
+and watch status, and a few more beside it. Each keeps its own idea of who is
+watching and what they watched.
 
-Everything you set up in the app lives in your **account**: your profiles,
-their PINs and preferences, the sources and IPTV subscriptions you added — and
-a TMDB key, if you gave one — and what each profile follows, lists and watched.
-A device holds one account, and it lives in one of two places:
+Foyer is growing into the one place for that:
 
-- **On the device.** Nothing to run. To move it, export a backup file.
-  Keeping one in iCloud, Google Drive or OneDrive by itself comes later.
-- **On your own server** — this. Every device signed in to it stays in step.
-
-What you watched on a media server is already taken care of: Jellyfin keeps
-its own record, and the app reads it from there and writes it back there. That
-never goes through this server.
-
-## Why you might want this one
-
-Because a lot of people who run their own media server do not want a cloud
-account.
-
-- **It is live.** A backup file moves an account; this keeps several devices
-  on one.
-- **It is shared.** Everyone in the household signs in to the same account and
-  picks their own profile. Friends or family can have accounts of their own on
-  the same server.
-- **It is yours.** It runs where you run it, and its dashboard shows
-  everything it holds.
-- **Its password resets a forgotten PIN.**
-
-And it keeps two concerns separate. Your films come from wherever you keep
-films. Your account goes wherever you want it. Changing one should not force
-the other.
+- **Profiles are its users.** One Foyer is one household; each person signs
+  in as themselves, with a PIN as a child lock if they want one.
+- **Your library, from Zurg.** Each Zurg folder you choose — `movies`,
+  `shows` — becomes a collection of films or series, named by TMDB, with
+  posters, the right release dates, and what each file is: its quality, its
+  codecs, its audio and subtitle languages. Nothing is renamed or moved: the
+  files stay where Zurg has them.
+- **What you watched**, per person, kept by Foyer.
+- **Streams for Loge**, through Foyer, so Zurg's address and password never
+  leave the server.
 
 ## What it will and will not do
 
-**Will:** keep each account's profiles, PINs, preferences, sources, IPTV
-subscriptions and metadata keys, with their passwords; hand them to every device signed in to
-it; keep what one device deleted deleted on the others; hold an account to its
-profile limit — ten, unless you say otherwise; and let people in only with an
-invite you made, unless you open it.
+**Will:** keep the household's profiles and their PINs; read your Zurg
+folders, name what is in them with your own TMDB key, and keep the artwork;
+probe each file with ffprobe; hand Loge a stream it may play; show all of it
+on its dashboard, where you set it up.
 
-**Will not:** store or stream video; decide which version wins when two
-devices edit the same thing — the app does that, and the last change sent
-wins; or keep your source passwords from whoever runs it.
+**Will not:** rename, move or download your files; keep your passwords from
+whoever runs it.
 
-That last one deserves plain words. **Your sources' passwords are stored as you
-typed them.** Whoever has the server's data folder, a backup of it, or its
-dashboard login can read every one. That is the price of keeping the server
-simple, for now. So run it yourself, put it behind TLS if it leaves your home
-network, keep the dashboard to yourself, and treat its backups like a list of
-passwords.
-
-Your account password is different: the server keeps only a hash of it. PINs
-are readable too — a PIN is a child lock, not a password.
+That last one deserves plain words. **Zurg's password and your TMDB key are
+stored as you typed them**, and so are the PINs. Whoever has the server's data
+folder, a backup of it, or its dashboard login can read them. Your profiles'
+passwords are different: the server keeps only a hash of each. So run it
+yourself, put it behind TLS if it leaves your home network, keep the
+dashboard to yourself, and treat its backups like a list of passwords.
 
 ## Running it
 
@@ -76,31 +55,29 @@ With Go 1.26 or later:
 go run . serve --http=0.0.0.0:8090
 ```
 
-Then make the dashboard's superuser and an invite for the first account.
+Then make the dashboard's superuser, and a user for each person.
 `docs/getting-started` walks through both, and through Docker.
 
 ## Current state
 
-**2026.10.1, the first version.** PocketBase v0.40.4, used as a Go framework.
+**2026.10.1.** PocketBase v0.40.4, used as a Go framework.
 
-- **The account's collections and their rules**: profiles, PINs,
-  preferences, connections and each profile's values on them. Then what a
-  profile keeps for itself: subscriptions, playlists, favourite channels and
-  watch progress. Then the account's own settings.
-- **The hooks**, `info` and `sign-up`, and the `invite` command.
+- **A user is a profile**: a username, a name, an avatar and an optional
+  four-digit PIN, made by the superuser in the dashboard. Each signs in with
+  their own password; sessions last 30 days.
+- **The account that held up to ten profiles is gone**, with the protocol
+  Loge's `sync/custom-server` adapter spoke. Loge signs in to Foyer anew in
+  Step 2 — a device with two profiles signs in as two users.
+- **The library is being built**: Zurg over WebDAV, TMDB, ffprobe, streams,
+  watch status, and the dashboard's Library and Adapters pages.
 - **The dashboard** wears Foyer's icon.
-- **`go test ./...` proves it**: the rules, sign-up and invites, the hooks,
-  batches, sessions and the shared fixtures.
-- **The app's `sync/custom-server` adapter speaks it**, and the harness
-  drives that very adapter against the real binary: sign-up and sign-in, the
-  rules, the owner check, a password changed elsewhere, a session that ended,
-  signing out, and throttling.
+- **`go test ./...` proves it.**
 - **The Dockerfile and compose file are written**, and not yet built.
 
 ## Documentation
 
-`docs/` covers getting started, the account protocol, the routes and
-collections, deployment and development.
+`docs/` covers getting started, the routes and collections, deployment and
+development.
 
 `CLAUDE.md` and `AGENTS.md` are written for AI coding assistants — denser, and
 full of rules. This file is the one written for you.

@@ -2,12 +2,10 @@
 
 ```bash
 go run . serve                    # the server, on 127.0.0.1:8090; data in ./pb_data
-go run . invite                   # a one-time code for "Create an account"
 go run . superuser upsert you@example.com 'a long password'
 go test ./...                     # every Go test
 go vet ./... && gofmt -l .        # nothing to report
-(cd harness && npm install && npm test)   # the real plugin against the real binary
-go build -o foyer .       # one static binary
+go build -o foyer .               # one static binary
 ```
 
 ## Go and PocketBase
@@ -24,12 +22,11 @@ go build -o foyer .       # one static binary
 - **`go run . serve`** keeps its data in `./pb_data`, in the working directory;
   a built binary keeps it beside itself, and `--dir` puts it anywhere. Delete
   `pb_data` to start again from nothing.
-- **`.env`** is read when the server starts: `FOYER_MAX_PROFILES`, `FOYER_SIGNUP`,
-  `FOYER_ADMIN_EMAIL`, `FOYER_ADMIN_PASSWORD`, `FOYER_TRUST_PROXY`.
+- **`.env`** is read when the server starts: `FOYER_ADMIN_EMAIL`,
+  `FOYER_ADMIN_PASSWORD`, `FOYER_TRUST_PROXY`.
 - **Dev mode is off unless asked for** (`--dev`). PocketBase turns it on by
-  itself under `go run`, and it prints every SQL statement to stdout — which
-  buried the code `invite` prints, the one line a script reads. `main.go`
-  keeps it off by default; `go run . serve --dev` still shows the statements.
+  itself under `go run`, and it prints every SQL statement to stdout.
+  `main.go` keeps it off by default; `go run . serve --dev` still shows them.
 - **The dashboard wears Foyer's icon.** `internal/dashboard` is a PocketBase
   UI extension, embedded in the binary. Its `main.js` is folded into
   `/_/extensions.js`, and its icon is served at
@@ -43,72 +40,37 @@ go build -o foyer .       # one static binary
 `internal/version/version.go` is Foyer's version, and it is always Loge's:
 `YEAR.MONTH.BUILD`, where `BUILD` counts every release of the pair and never
 starts again. The app's `npm run release` moves both, and refuses when they
-disagree; the harness fails when the server answers another version than the
-app's `package.json`. `info` answers it, and `foyer --version` prints it.
+disagree. `info` answers it, and `foyer --version` prints it.
 `../loge/docs/development` has the whole scheme.
 
 ## Migrations
 
-`migrations/` holds the schema, as Go, in numbered files. PocketBase applies
-the ones a server has not run at every start, and remembers them.
+`migrations/` holds Foyer's own collections and settings, as Go, one file
+each. PocketBase applies the ones a server has not run at every start, and
+remembers them by file name.
 
+- **Names are zero-padded** — `0001_users.go` — because PocketBase sorts them
+  as text, and `10_x.go` would run before `1_x.go`.
+- **One registration per file.** PocketBase names a migration after the file
+  that registered it, so a second one in the same file collides.
 - **Never edit one that has shipped.** A server that ran it never runs it
   again: fix forward with a new one.
 - **Automigrate is off**, and the collections are never changed in the
   dashboard: what is made there exists on one machine only.
-- **A new field is optional.** Older apps never send it.
+- **A new field is optional.** Older clients never send it.
 
 ## Tests
 
-**The Go tests** use PocketBase's `tests` package. Each runs on a temporary
-data directory, with the migrations applied:
+The Go tests use PocketBase's `tests` package. Each runs on a temporary data
+directory, with the migrations applied, through PocketBase's real router
+(`internal/server/harness_test.go`):
 
-- **Rules:** two users never see each other's records; a write naming another
-  user is refused; a guest gets `401`, never an empty list.
-- **Sign-up:** each `FOYER_SIGNUP` mode; an invite used once, and expiring;
-  `firstProfile` makes a profile named after the account; a public create of a
-  user is refused.
-- **The hooks:** the limit counts only live profiles; an un-delete of a
-  profile or connection is refused; a PIN or preference can be deleted and set
-  again; a tombstone is cleared; a hard delete is refused, while deleting a
-  user cascades; a listed secret a write lacks keeps its value.
-- **Batch:** stored all or nothing, naming the write refused; a resent batch
-  changes nothing; the largest push fits.
-- **Sessions:** 30 days; a password change ends every one.
-- **Records:** the shared fixtures, accepted and refused as in TypeScript.
-
-**The harness** (`harness/`) is Node and vitest, and test-only. It builds the
-binary once, starts it for each test on a temporary directory and a free
-port — with the rate limits on, as in production — and drives the real
-`sync/custom-server` plugin, aliased to its source in
-`../loge/adapters` and never installed, over a Node host: `fetch`,
-node:crypto, and a session store that outlives a provider. It counts the
-sign-ins each device makes:
-
-- sign up with an invite, a second device signs in, and each reads what the
-  other wrote, record for record, passwords included
-- the server's rules through the plugin: the limit, deleted stays deleted, a
-  password a write leaves out kept, all or nothing, an invalid write named
-- a resent batch changes nothing; a whole account fits one batch
-- the owner check takes the password typed again, and an empty one never
-  reaches the server
-- the password changed elsewhere: the other device is refused once, then
-  parked — across a relaunch — until it signs in with the new one
-- a session that ended: one more sign-in, with the saved password
-- signing out forgets the session; a first profile at sign-up; an invite spent
-  once, and a closed or open server
-- throttled sign-ins wait (`backoff`, `too-many-attempts`), and latch nothing
-
-It is the one place TypeScript touches this repository, and its `AGENTS.md`
-says so. Nothing the server ships comes from it.
-
-**The shared fixtures** are
-`../loge/adapters/api/fixtures/account-records.json`: records every
-side must accept, and records every side must refuse, each with its reason.
-The api's tests judge them with `isAccountRecord`; the Go tests map each to its
-collection, as the plugin does, and expect the same verdict. A change to the
-record contract changes that file first, in the app's `adapters/api`, then the
-collections here, and both suites run.
-
-The app's tests prove the client side of the same protocol, two devices at a
-time, against a fake PocketBase on every pair of database engines.
+- **Users:** only a superuser makes or removes one; a user sees and changes
+  only itself; a PIN is four digits or none, and its own user's; usernames
+  are unique without regard to case.
+- **Sessions:** 30 days; a password change ends every one; signing in is
+  throttled per address.
+- **The server:** its name and rate limits; `info` without a session;
+  PocketBase's installer never opens a browser.
+- **The dashboard:** the extension is served, and PocketBase's bundle still
+  reads what it sets.
