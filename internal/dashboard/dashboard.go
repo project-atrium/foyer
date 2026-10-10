@@ -1,15 +1,16 @@
-// Package dashboard dresses PocketBase's dashboard as Foyer: its icon in the
-// browser's tab, on the sign-in page and in the header.
+// Package dashboard puts Foyer on PocketBase's dashboard: its icon in the
+// browser's tab, on the sign-in page and in the header, and its pages —
+// Library, and Settings → Adapters.
 //
 // PocketBase calls this a UI extension, and marks the API experimental. The
-// server's tests hold the dashboard to the three fields ui/main.js sets, so an
-// upgrade that renames them fails there rather than quietly showing
-// PocketBase's icon again.
+// server's tests hold the dashboard to every name ui/ uses, so an upgrade
+// that renames one fails there rather than quietly breaking a page.
 package dashboard
 
 import (
 	"embed"
 	"io/fs"
+	"strings"
 
 	"github.com/pocketbase/pocketbase/core"
 )
@@ -27,4 +28,15 @@ func Extension() (core.UIExtension, error) {
 		return core.UIExtension{}, err
 	}
 	return core.UIExtension{Name: "foyer", FS: ui}, nil
+}
+
+// Fresh has a browser ask for the extension's files every time. Outside
+// --dev PocketBase lets it keep everything under /_/ for two weeks, so after
+// an upgrade the dashboard would run the last version's pages against this
+// version's routes. PocketBase sets its own header only where none is set.
+func Fresh(e *core.RequestEvent) error {
+	if p := e.Request.URL.Path; p == "/_/extensions.js" || strings.HasPrefix(p, "/_/extensions/") {
+		e.Response.Header().Set("Cache-Control", "no-cache")
+	}
+	return e.Next()
 }

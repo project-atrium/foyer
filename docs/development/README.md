@@ -27,13 +27,22 @@ go build -o foyer .               # one static binary
 - **Dev mode is off unless asked for** (`--dev`). PocketBase turns it on by
   itself under `go run`, and it prints every SQL statement to stdout.
   `main.go` keeps it off by default; `go run . serve --dev` still shows them.
-- **The dashboard wears Foyer's icon.** `internal/dashboard` is a PocketBase
-  UI extension, embedded in the binary. Its `main.js` is folded into
-  `/_/extensions.js`, and its icon is served at
-  `/_/extensions/foyer/icon.png`. The API is experimental in v0.40, and a
-  test fails when the dashboard stops reading what it sets.
-  - Outside `--dev`, `/_/` and its extensions are cached for two weeks. A
-    changed icon shows after a hard reload, or in a fresh browser profile.
+- **The dashboard has Foyer's icon and pages.** `internal/dashboard/ui` is
+  a PocketBase UI extension, embedded in the binary: plain JavaScript, no
+  build step, so a change shows after the server is started again and the
+  page reloaded. `main.js` is folded into `/_/extensions.js`; it registers
+  `#/library` and `#/settings/adapters`, and each page's module —
+  `library.js`, `adapters.js` — loads when first opened, beside `foyer.css`
+  and the icon under `/_/extensions/foyer/`.
+  - The pages are written as PocketBase's own: Shablon's `t`, `store` and
+    `watch`, `app.components`, `app.pb.send`, its CSS classes and variables
+    (`--smSpacing`, `--fieldsGap`). PocketBase's own source is the only
+    documentation: read its bundle under `ui/dist` in the module cache.
+  - Read store values inside functions, never while building elements, and
+    give no `rid` to an element whose content is not reactive: `AGENTS.md`
+    says why.
+  - Foyer's files are served `no-cache`; the rest of `/_/` PocketBase lets a
+    browser keep for two weeks outside `--dev`.
 
 ## The version
 
@@ -72,8 +81,9 @@ directory, with the migrations applied, through PocketBase's real router
   throttled per address.
 - **The server:** its name and rate limits; `info` without a session;
   PocketBase's installer never opens a browser.
-- **The dashboard:** the extension is served, and PocketBase's bundle still
-  reads what it sets.
+- **The dashboard:** the extension is served and never kept stale; each page
+  exports what `main.js` loads; PocketBase's bundle still has every `app.…`
+  name the pages use.
 - **Adapters:** the page's routes are the superusers'; a secret is masked,
   kept when a save leaves it out, and readable by no profile; a save that
   will not do names its fields.

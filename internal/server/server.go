@@ -80,6 +80,7 @@ func Bind(app core.App, cfg config.Config) *Server {
 		s.Library.Routes(admin)
 		s.Library.HookRoutes(se.Router)
 		// Read by PocketBase's own handler for UI extensions, which runs last.
+		se.Router.BindFunc(dashboard.Fresh)
 		extension, err := dashboard.Extension()
 		if err != nil {
 			return err

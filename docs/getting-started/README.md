@@ -1,7 +1,7 @@
 # Getting started
 
 Foyer is the household's own server: each person in the household is one of
-its users, and its library is growing from Zurg. It is PocketBase, with
+its users, and its library comes from Zurg. It is PocketBase, with
 Foyer's collections added.
 
 ## Run it
@@ -56,6 +56,30 @@ one for each:
 A user can change their own name, avatar, PIN and password; only the
 superuser adds or removes one. A forgotten password is set again in the
 dashboard, which ends every session that user had.
+
+## The library
+
+Everything else is set on the dashboard, under **Settings → Adapters**. Each
+adapter is switched on with **Enabled**, tried with **Test**, and kept with
+**Save changes**.
+
+1. **Zurg** — its address, such as `http://zurg:9999`, and its username and
+   password if it asks for them.
+2. **TMDB** — your own key, from themoviedb.org → Settings → API: the API
+   Read Access Token or the API key. And the language titles and artwork
+   are asked in.
+3. **FFmpeg** — where ffprobe and ffmpeg are, if not on the PATH. Its test
+   says what it found, and whether the GPU answers.
+4. **Libraries**, under Zurg: its folders. **Make a library** of each you
+   want, as movies or as shows; it is scanned at once. A folder that is not
+   one — `__all__`, a download folder — is never read.
+5. **Scan as soon as Zurg changes**: paste the `on_library_update` shown
+   there into Zurg's `config.yml`, with the address Zurg reaches Foyer by.
+
+Then **Library**, in the header: every title as a poster, the newest added
+first. A title TMDB could only guess at is marked, and hidden from the
+household until you open it and **Confirm** — or **Set TMDB id** to the one
+it is. `docs/library` says how a scan reads Zurg.
 
 ## Addresses
 

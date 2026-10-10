@@ -82,7 +82,8 @@ internal/ffmpeg/     the tools: where, which versions, the GPU tried; the FFmpeg
 internal/probe/      ffprobe's answers as versions, and the queue of files waiting for it
 internal/watch/      each user's watch status: Loge's rules, the routes, an identity's history moved
 internal/identity/   Loge's watchIdentity and identityHash, ported
-internal/dashboard/  the dashboard's icon: a PocketBase UI extension, embedded
+internal/dashboard/  the dashboard's icon and pages — Library, Settings → Adapters: a PocketBase UI extension,
+                     plain JavaScript, embedded
 internal/version/    the version, always the app's: its `npm run release` moves both
 migrations/          0001 users are profiles; 0002 the name, the rate limits, the first superuser; 0003 adapters;
                      0004 libraries, media_torrents, media_files, identities; 0005 streams' rate limit;
@@ -197,18 +198,35 @@ Go tests sit beside what they test. Everything else is PocketBase's: `serve`,
   "signed out", it refreshes the session.
 - **PocketBase is pinned.** It is pre-1.0, and minor versions break its Go API.
   Update deliberately, one version at a time, with the Go tests.
-- **The dashboard wears Foyer's icon through a UI extension**, which
-  PocketBase marks experimental (`core.ServeEvent.UIExtensions`).
-  `internal/dashboard` sets the dashboard's `favicon`, `mainLogo` and
-  `headerLogo`. A test checks that PocketBase's bundled dashboard still reads
-  them, so an upgrade that renames them fails instead of quietly showing
-  PocketBase's icon again.
+- **The dashboard's icon and pages are a UI extension**, which PocketBase
+  marks experimental (`core.ServeEvent.UIExtensions`) and documents not at
+  all. `internal/dashboard/ui` is plain JavaScript with no build step,
+  written as PocketBase's own pages are — Shablon's `t`, `store` and `watch`,
+  `app.components`, `app.pb.send`. A test holds PocketBase's bundle to every
+  `app.…` name the pages use, so an upgrade that renames one fails there
+  instead of quietly breaking a page.
+  - **`main.js` is pasted into a function** in `/_/extensions.js`: no
+    `import` or `export`. It registers Foyer's routes at once — the router
+    starts as soon as it has run — and each page's module loads with
+    `import()` when first opened.
+  - **Shablon redraws a reactive child for every store value read while it
+    builds.** Read values inside functions (`value: () => form.x`), never
+    while making elements, or a form is redrawn as it is typed in and loses
+    its focus.
+  - **No `rid` on an element whose content is not reactive**: Shablon keeps
+    the element it drew before, and drops the new one — a poster that
+    arrived later never showed.
+  - **Foyer's files are served `no-cache`** (`dashboard.Fresh`): outside
+    `--dev` PocketBase lets a browser keep `/_/` two weeks, and last
+    version's pages would call this version's routes.
 
 ## Current state
 
-**Users are profiles; the library is being built.** PocketBase v0.40.4, used
-as a Go framework: `users` as profiles with their PINs, the rate limits, the
-first superuser from `.env`, `info`, and the dashboard's icon. `go test ./...`
-proves it. The account-sync protocol, its harness and the shared fixtures are
-gone — git has them. The Dockerfile and compose file are written, and not yet
-built.
+**Users are profiles, and the library runs.** PocketBase v0.40.4, used as a
+Go framework: `users` as profiles with their PINs; Zurg's folders as
+libraries, named by TMDB, read by ffprobe and streamed through signed
+addresses; each user's watch status; the dashboard's Library and Adapters
+pages. `go test ./...` proves it, and the dashboard was driven headless in
+Chrome against a pretend Zurg and the real TMDB. The account-sync protocol,
+its harness and the shared fixtures are gone — git has them. The Dockerfile
+and compose file are written, and not yet built.

@@ -1,0 +1,143 @@
+/* Foyer's pages on PocketBase's dashboard, in its own variables:
+   --smSpacing is 20px, --fieldsGap 10px. */
+
+.foyer-posters {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: var(--smSpacing);
+}
+
+.foyer-poster {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.foyer-poster .art {
+  position: relative;
+  aspect-ratio: 2 / 3;
+  overflow: hidden;
+  border-radius: var(--borderRadius);
+  border: 1px solid var(--surfaceAlt3Color);
+  background: var(--surfaceAlt2Color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2.5em;
+  color: var(--surfaceTxtHintColor);
+}
+
+.foyer-poster:hover .art,
+.foyer-poster:focus-visible .art {
+  border-color: var(--primaryColor);
+}
+
+.foyer-poster .art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.foyer-poster .badges {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  right: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.foyer-poster .title,
+.foyer-poster small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.foyer-poster .title {
+  font-weight: 600;
+}
+
+.foyer-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: var(--smSpacing);
+}
+
+.foyer-section {
+  border: 1px solid var(--surfaceAlt3Color);
+  border-radius: var(--borderRadius);
+  padding: var(--smSpacing);
+  margin-bottom: var(--smSpacing);
+}
+
+.foyer-section > header {
+  display: flex;
+  align-items: center;
+  gap: var(--fieldsGap);
+  margin-bottom: var(--fieldsGap);
+}
+
+.foyer-section > header h5 {
+  margin: 0;
+}
+
+.foyer-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.foyer-table th,
+.foyer-table td {
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--surfaceAlt2Color);
+  vertical-align: middle;
+}
+
+.foyer-table th,
+.foyer-table td:not(.path) {
+  white-space: nowrap;
+}
+
+.foyer-table td.path {
+  width: 100%;
+  word-break: break-all;
+  font-family: var(--monospaceFontFamily, monospace);
+  font-size: 0.9em;
+}
+
+.foyer-command {
+  display: block;
+  white-space: pre-wrap;
+  padding: var(--fieldsGap);
+  border-radius: var(--borderRadius);
+  background: var(--surfaceAlt2Color);
+  font-family: var(--monospaceFontFamily, monospace);
+  font-size: 0.85em;
+  word-break: break-all;
+}
+
+.foyer-detail {
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  gap: var(--smSpacing);
+}
+
+.foyer-detail .art img {
+  width: 100%;
+  border-radius: var(--borderRadius);
+}
+
+.foyer-search {
+  width: 280px;
+}

@@ -85,8 +85,11 @@ Then make the dashboard's superuser, and a user for each person.
 - **Watch status**, each user's own, kept by Foyer by Loge's rules — with
   resume, and a series marked by its episodes. A title TMDB names later, or
   you correct, takes what was watched with it.
-- **Being built**: the dashboard's Library and Adapters pages.
-- **The dashboard** wears Foyer's icon.
+- **The dashboard** wears Foyer's icon, and is where Foyer is set up:
+  **Settings → Adapters** for Zurg, TMDB and FFmpeg — each tried where it is
+  set — and which of Zurg's folders are libraries; **Library** for every
+  title as a poster, the newest added first, a title's files and what TMDB
+  said of it, and Confirm or Set TMDB id where it guessed.
 - **`go test ./...` proves it.**
 - **The Dockerfile and compose file are written**, and not yet built.
 
