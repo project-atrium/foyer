@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/pocketbase/dbx"
 	validation "github.com/pocketbase/ozzo-validation/v4"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/router"
@@ -41,6 +42,49 @@ type Engine struct {
 	dirty map[[2]string]string
 	// scanned is told when a scan ends: there may be new files to probe.
 	scanned func()
+	// moved gives watch status from one identity to another.
+	moved func(from, to string) error
+}
+
+// OnIdentityMoved calls fn where a title's identity changed — TMDB named it
+// at last, or a superuser did — so what was watched under the old one
+// follows.
+func (e *Engine) OnIdentityMoved(fn func(from, to string) error) { e.moved = fn }
+
+// moveIdentities hands each old identity's watch status to the new one,
+// unless a title still goes by the old.
+func (e *Engine) moveIdentities(pairs map[string]string) {
+	if e.moved == nil {
+		return
+	}
+	for from, to := range pairs {
+		if from == "" || to == "" || from == to || e.identityInUse(from) {
+			continue
+		}
+		if err := e.moved(from, to); err != nil {
+			e.app.Logger().Warn("Watch status could not follow a title", "error", err.Error())
+		}
+	}
+}
+
+// identityInUse says whether any title of any library goes by an identity.
+func (e *Engine) identityInUse(identity string) bool {
+	libs, err := e.app.FindAllRecords(LibrariesCollection)
+	if err != nil {
+		return true
+	}
+	for _, lib := range libs {
+		names := []string{lib.GetString("name")}
+		if lib.GetString("kind") == Shows {
+			names = append(names, Episodes(lib.GetString("name")))
+		}
+		for _, name := range names {
+			if _, err := e.app.FindFirstRecordByFilter(name, "identity = {:identity}", dbx.Params{"identity": identity}); err == nil {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // OnScanned calls fn after every scan.

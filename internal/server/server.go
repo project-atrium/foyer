@@ -22,6 +22,7 @@ import (
 	"foyer/internal/probe"
 	"foyer/internal/routes"
 	"foyer/internal/stream"
+	"foyer/internal/watch"
 )
 
 // Server is Foyer on one PocketBase app: what Bind made, for main and the
@@ -39,6 +40,7 @@ type Server struct {
 var collections = []string{
 	adapters.Collection,
 	library.LibrariesCollection, library.TorrentsCollection, library.FilesCollection, library.IdentitiesCollection,
+	watch.Collection,
 }
 
 // Bind binds Foyer's guard, routes and dashboard pages, and starts nothing:
@@ -56,6 +58,7 @@ func Bind(app core.App, cfg config.Config) *Server {
 	}
 	s.Probes = probe.New(app, registry, s.Streams, lib, library.FilesCollection)
 	lib.OnScanned(s.Probes.Poke)
+	lib.OnIdentityMoved(func(from, to string) error { return watch.Move(app, from, to) })
 	guard.Bind(app, s.managed)
 	app.OnServe().BindFunc(func(se *core.ServeEvent) error {
 		// Never PocketBase's installer: on a server with no superuser it opens a
@@ -70,6 +73,7 @@ func Bind(app core.App, cfg config.Config) *Server {
 		se.Router.Bind(stream.Quiet())
 		s.Streams.Routes(se.Router)
 		s.Library.PlayRoutes(se.Router, s.Streams)
+		watch.Routes(se.Router, library.Managed)
 		admin := se.Router.Group("/api/foyer/admin")
 		admin.Bind(apis.RequireSuperuserAuth())
 		s.Adapters.Routes(admin)

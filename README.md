@@ -82,8 +82,10 @@ Then make the dashboard's superuser, and a user for each person.
 - **What each file is**, read by ffprobe through Foyer: its picture, codec,
   HDR, audio and subtitle tracks with their languages, chapters. The GPU is
   tried for the transcoding to come.
-- **Being built**: watch status, and the dashboard's Library and Adapters
-  pages.
+- **Watch status**, each user's own, kept by Foyer by Loge's rules — with
+  resume, and a series marked by its episodes. A title TMDB names later, or
+  you correct, takes what was watched with it.
+- **Being built**: the dashboard's Library and Adapters pages.
 - **The dashboard** wears Foyer's icon.
 - **`go test ./...` proves it.**
 - **The Dockerfile and compose file are written**, and not yet built.

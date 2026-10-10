@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/pocketbase/dbx"
@@ -137,8 +138,9 @@ func genreNames(genres []tmdb.Genre) []string {
 }
 
 // titleIdentity is a title's watch identity: TMDB's id where it is sure or a
-// superuser said; none while it is a guess; its name and year else.
-func titleIdentity(kind string, c *candidate, d decision) string {
+// superuser said; none while it is a guess; its name and year else — or,
+// where its name has no letters to key it by, the library's own name for it.
+func titleIdentity(kind, collection string, c *candidate, d decision) string {
 	switch d.matchState() {
 	case "matched", "manual":
 		if kind == Movies {
@@ -152,7 +154,10 @@ func titleIdentity(kind string, c *candidate, d decision) string {
 	if kind == Shows {
 		k = "show"
 	}
-	return identity.ByTitle(k, c.title, c.year)
+	if byTitle := identity.ByTitle(k, c.title, c.year); byTitle != "" {
+		return byTitle
+	}
+	return "item:foyer:" + collection + ":" + identity.Hash(c.title+"\n"+strconv.Itoa(c.year))
 }
 
 func newRecord(app core.App, collection string) (*core.Record, error) {
@@ -179,11 +184,11 @@ func (e *Engine) placeMovie(ctx context.Context, lib *core.Record, c *candidate,
 		}
 	}
 	name := lib.GetString("name")
-	byTitle := titleIdentity(Movies, c, decision{state: none})
+	byTitle := titleIdentity(Movies, name, c, decision{state: none})
+	moved := map[string]string{}
 	lock := e.writes(lib.Id)
 	lock.Lock()
-	defer lock.Unlock()
-	return e.app.RunInTransaction(func(tx core.App) error {
+	err := e.app.RunInTransaction(func(tx core.App) error {
 		item := findTitle(tx, name, c, d, byTitle)
 		if item == nil {
 			var err error
@@ -191,7 +196,9 @@ func (e *Engine) placeMovie(ctx context.Context, lib *core.Record, c *candidate,
 				return err
 			}
 		}
+		before := item.GetString("identity")
 		setTitle(item, Movies, c, d)
+		moved[before] = item.GetString("identity")
 		if info != nil {
 			item.Set("title", info.Title)
 			item.Set("original_title", info.OriginalTitle)
@@ -230,6 +237,13 @@ func (e *Engine) placeMovie(ctx context.Context, lib *core.Record, c *candidate,
 		}
 		return tx.Save(item)
 	})
+	lock.Unlock()
+	// Watch status follows a title whose identity changed — once the change
+	// is kept.
+	if err == nil {
+		e.moveIdentities(moved)
+	}
+	return err
 }
 
 // setTitle sets what every title has whatever TMDB said: its state, its key,
@@ -237,7 +251,7 @@ func (e *Engine) placeMovie(ctx context.Context, lib *core.Record, c *candidate,
 func setTitle(item *core.Record, kind string, c *candidate, d decision) {
 	item.Set("match_state", d.matchState())
 	item.Set("match_key", c.key)
-	item.Set("identity", titleIdentity(kind, c, d))
+	item.Set("identity", titleIdentity(kind, item.Collection().Name, c, d))
 	item.Set("metadata_at", types.NowDateTime())
 	if d.id == 0 {
 		title := c.title
@@ -276,11 +290,11 @@ func (e *Engine) placeShow(ctx context.Context, lib *core.Record, c *candidate, 
 	}
 	name := lib.GetString("name")
 	episodes := Episodes(name)
-	byTitle := titleIdentity(Shows, c, decision{state: none})
+	byTitle := titleIdentity(Shows, name, c, decision{state: none})
+	moved := map[string]string{}
 	lock := e.writes(lib.Id)
 	lock.Lock()
-	defer lock.Unlock()
-	return e.app.RunInTransaction(func(tx core.App) error {
+	err := e.app.RunInTransaction(func(tx core.App) error {
 		show := findTitle(tx, name, c, d, byTitle)
 		if show == nil {
 			var err error
@@ -288,7 +302,9 @@ func (e *Engine) placeShow(ctx context.Context, lib *core.Record, c *candidate, 
 				return err
 			}
 		}
+		before := show.GetString("identity")
 		setTitle(show, Shows, c, d)
+		moved[before] = show.GetString("identity")
 		if info != nil {
 			show.Set("title", info.Name)
 			show.Set("original_title", info.OriginalName)
@@ -359,7 +375,11 @@ func (e *Engine) placeShow(ctx context.Context, lib *core.Record, c *candidate, 
 				touched[key] = ep
 				order = append(order, key)
 			}
+			was := ep.GetString("identity")
 			setEpisode(ep, show, p, cat, f.placed.Release, showIdentity)
+			if was != "" {
+				moved[was] = ep.GetString("identity")
+			}
 			if err := tx.Save(ep); err != nil {
 				return err
 			}
@@ -384,6 +404,13 @@ func (e *Engine) placeShow(ctx context.Context, lib *core.Record, c *candidate, 
 		}
 		return tx.Save(show)
 	})
+	lock.Unlock()
+	// Watch status follows a title whose identity changed — once the change
+	// is kept.
+	if err == nil {
+		e.moveIdentities(moved)
+	}
+	return err
 }
 
 // setEpisode sets what an episode is: where it lies, what TMDB says of it,

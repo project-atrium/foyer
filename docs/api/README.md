@@ -16,6 +16,9 @@ and their rules, and how they fail.
 | --- | --- | --- |
 | `GET /api/foyer/info` | anyone | `{ serverVersion }` |
 | `POST /api/foyer/play` | users | `{ collection, id, file? }` → `{ url, expiresAt, version, versions, chapters }`: a signed address for the title's best version, or the file asked for; `404` for a title the user may not see |
+| `POST /api/foyer/watch/progress` | users | `{ collection, id, kind: started \| progress \| stopped \| end, positionMs, durationMs, paused?, session? }` → `204` |
+| `POST /api/foyer/watch/played` | users | `{ collection, id, played }` → `204`; a series marks each of its episodes |
+| `GET /api/foyer/watch/resume` | users | `?limit` (20) → `{ items: [{ collection, id, identity, title, showTitle?, season?, episode?, positionMs, durationMs, watched, lastPlayedAt }] }`, the latest first |
 | `GET`, `HEAD /api/foyer/stream/{file}?u&exp&sig` | whoever holds the address | the file's bytes, a `Range` passed on: `206` with `Content-Range`; `403` when the signature is wrong or six hours old |
 | `GET /api/foyer/admin/adapters` | superusers | every adapter: `[{ key, name, description, notice?, enabled, fields, values, status? }]`, each secret as `"******"` when set and `""` when not |
 | `PUT /api/foyer/admin/adapters/{key}` | superusers | `{ enabled, values }` → the adapter as `GET` shows it; `400` names each field that will not do, as `values.<key>` |
@@ -32,6 +35,21 @@ and their rules, and how they fail.
 | `GET /api/foyer/admin/zurg/hook` | superusers | `{ token, command }`: the line for Zurg's `on_library_update` |
 | `POST /api/foyer/zurg/updated` | Zurg, with `Authorization: Bearer <token>` | the folders that changed, one per line → `202`; `403` without the token |
 | `DELETE /api/foyer/admin/libraries/{id}` | superusers | `204`: its collections, artwork, torrents, files and identities gone; watch status stays. `409` when a collection of your own still points at it |
+
+### Watch status
+
+- **Foyer keeps each user's watch status** for its library, as a media server
+  keeps its own: one record per user and thing watched in `watch_states`,
+  keyed by `identity` — a film's every file, in any library, is one.
+- **The rules are Loge's.** A stop at 90 % of the length or more, or `end`,
+  is watched, and watched holds while it is played again; a report at 0 never
+  lowers where it got to; a playing's end sent twice counts once, by its
+  `session`. Unwatched starts again from the beginning; how often it was
+  played stays.
+- **A title the user may not see** — a guess not yet confirmed — keeps none.
+- **A title's identity that changes takes its watch status with it**: TMDB
+  naming it at last, or a superuser. Two titles become one: watched if either
+  was, played as often as both, and where the later playing left off.
 
 ### Streams
 
@@ -102,6 +120,10 @@ Password sign-in only: OAuth2, OTP, MFA and sign-in alerts are off.
 `enabled`, `config` (every value but the secrets), `secrets` (plain text, as
 typed) and `status` (the last test). Written only through the Adapters page.
 
+**`watch_states`** — what a user watched: `user`, `identity`, the title it
+was last played as (`item_collection`, `item_id`), `external_ids`, `watched`,
+`position_ms`, `duration_ms`, `play_count`, `last_played_at`.
+
 ### The library
 
 **A library is a Zurg folder**, and its collections are named after it: a
@@ -136,6 +158,7 @@ template; a name is lower-case letters, digits and underscores, never ends in
 | `adapters` | superusers | Foyer | Foyer | Foyer |
 | `libraries` | users | Foyer | Foyer | Foyer |
 | `media_torrents`, `media_files`, `identities` | superusers | Foyer | Foyer | Foyer |
+| `watch_states` | its own user's | Foyer | Foyer | Foyer |
 | a library's collections | users, but not an `uncertain` title or its episodes | Foyer | Foyer | Foyer |
 
 ### The guard

@@ -80,11 +80,13 @@ internal/media/      what a file is: Loge's MediaVersion, from a release's name 
 internal/stream/     signed stream addresses, the Range proxy, the quiet log, the loopback for tools
 internal/ffmpeg/     the tools: where, which versions, the GPU tried; the FFmpeg adapter
 internal/probe/      ffprobe's answers as versions, and the queue of files waiting for it
+internal/watch/      each user's watch status: Loge's rules, the routes, an identity's history moved
 internal/identity/   Loge's watchIdentity and identityHash, ported
 internal/dashboard/  the dashboard's icon: a PocketBase UI extension, embedded
 internal/version/    the version, always the app's: its `npm run release` moves both
 migrations/          0001 users are profiles; 0002 the name, the rate limits, the first superuser; 0003 adapters;
-                     0004 libraries, media_torrents, media_files, identities; 0005 streams' rate limit
+                     0004 libraries, media_torrents, media_files, identities; 0005 streams' rate limit;
+                     0006 watch_states
 Dockerfile           two stages: a Go build, then the binary alone
 docker-compose.yml   the server, and pb_data in a volume
 ```
@@ -139,6 +141,15 @@ Go tests sit beside what they test. Everything else is PocketBase's: `serve`,
   cleared of addresses before it is kept. Zurg failing is no file's fault: it
   costs no attempt, and five in a row pause the queue. A pack's probes redraw
   its series' lists once a batch, never once a file.
+- **Watch status is kept by identity, never by a record.** A title's record
+  comes and goes with its files; what was watched stays, under
+  `tmdb:movie:603` or `tmdb:tv:1396/s1e3`, and comes back with it. Where a
+  title's identity changes, `watch.Move` gives its history to the new one —
+  only once the change is kept, and never while another title still goes by
+  the old one. A guess has no identity, so nothing is kept for it.
+- **Watch status follows Loge's rules, on the server**: a stop at 90 % or the
+  end is watched and watched holds; a report at 0 never lowers a position; a
+  playing's end sent twice counts once. Nothing decides by a device's clock.
 - **A rate limit's place matters.** PocketBase takes the first rule whose
   prefix matches, in order: a narrower prefix goes before `/api/`.
 - **One scan at a time**, from one loop that runs only beside `serve`

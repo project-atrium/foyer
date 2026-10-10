@@ -108,6 +108,12 @@ directory, with the migrations applied, through PocketBase's real router
   the pretend Zurg read through the loopback, its film's lists redrawn, and a
   file that is no video tried again later. FFmpeg's detection, and a missing
   render device. These skip where ffmpeg is not installed.
+- **Watch status:** Loge's rules on their own — a report at 0, 89 % and 90 %,
+  the end sent twice, played again, marked and unmarked — and end to end:
+  each user keeps their own, reads only their own and writes none past the
+  rules; resume lists what was begun; a series is marked by its episodes;
+  nothing is kept for a guess; a correction takes what was watched with it,
+  and two titles become one with both playings.
 - **The guard:** Foyer's collections refuse a superuser's record writes, a
   change, a truncate, an import and a delete; `users`' rules stay.
 - **TMDB**, against a fake of its routes: Loge's matcher's own cases, ported —

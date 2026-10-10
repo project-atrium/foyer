@@ -302,6 +302,14 @@ func (e *Engine) Correct(ctx context.Context, collection, id string, tmdbID int)
 		}
 	}
 	d := decision{id: tmdbID, state: manual, reason: "a superuser"}
+	// What each file was watched as, so its watch status can follow it to
+	// wherever the correction places it.
+	was := map[string]string{}
+	for _, f := range files {
+		if r, err := e.app.FindRecordById(f.GetString("item_collection"), f.GetString("item_id")); err == nil {
+			was[f.Id] = r.GetString("identity")
+		}
+	}
 	torrents := map[string]string{}
 	var waiting []*placedFile
 	for _, f := range files {
@@ -346,6 +354,16 @@ func (e *Engine) Correct(ctx context.Context, collection, id string, tmdbID int)
 	if err != nil {
 		return err
 	}
+	moved := map[string]string{}
+	for _, f := range files {
+		fresh, err := e.app.FindRecordById(FilesCollection, f.Id)
+		if err != nil {
+			continue
+		}
+		if now, err := e.app.FindRecordById(fresh.GetString("item_collection"), fresh.GetString("item_id")); err == nil && was[f.Id] != "" {
+			moved[was[f.Id]] = now.GetString("identity")
+		}
+	}
 	// What the correction left with nothing goes.
 	lock.Lock()
 	err = e.app.RunInTransaction(func(tx core.App) error {
@@ -362,6 +380,8 @@ func (e *Engine) Correct(ctx context.Context, collection, id string, tmdbID int)
 	if err != nil {
 		return err
 	}
+	// The old titles are gone now: their identities are free to move.
+	e.moveIdentities(moved)
 	e.fetchArtwork(ctx, lib, r)
 	return nil
 }
