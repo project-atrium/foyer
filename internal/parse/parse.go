@@ -78,7 +78,7 @@ var (
 	crossEp    = regexp.MustCompile(`(?i)\b(\d{1,2})x(\d{2,3})\b`)
 	// A spaced range needs its S — "S01 - S03" — or " - 05" would be one.
 	seasonPack  = regexp.MustCompile(`(?i)\bS(\d{1,3})\b(?:(?:-S?|[ _]+-[ _]+S)(\d{1,3})\b)?`)
-	seasonWord  = regexp.MustCompile(`(?i)\b(?:Season|Series|Saison|Staffel|Temporada|Stagione)[ _]*(\d{1,3})(?:[ _]*(?:-|to|&)[ _]*(\d{1,3}))?\b`)
+	seasonWord  = regexp.MustCompile(`(?i)\b(?:Seasons?|Series|Saison|Staffel|Temporada|Stagione)[ _]*(\d{1,3})(?:[ _]*(?:-|to|&)[ _]*(\d{1,3}))?\b`)
 	ordinal     = regexp.MustCompile(`(?i)\b(\d{1,2})(?:st|nd|rd|th)[ _]+Season\b`)
 	episodeWord = regexp.MustCompile(`(?i)\b(?:Episode|Ep)\.?[ _]*(\d{1,4})(?:[ _]*[-~][ _]*(\d{1,4}))?\b`)
 	bareEp      = regexp.MustCompile(`(?i)\bE(\d{2,4})\b`)
@@ -87,13 +87,24 @@ var (
 	special     = regexp.MustCompile(`(?i)\b(OVA|OAD|OAV|ONA|Specials?)\b(?:[ _]*(\d{1,3})\b)?`)
 	movieNumber = regexp.MustCompile(`(?i)\b(?:Movie|Film|Gekijouban)[ _]*(\d{1,2})\b`)
 	packRange   = regexp.MustCompile(`\((\d{1,4})\s*-\s*(\d{1,4})(?:\+[^)]*)?\)`)
-	airDate     = regexp.MustCompile(`\b((?:19|20)\d\d)[ _-](0[1-9]|1[0-2])[ _-](0[1-9]|[12]\d|3[01])\b`)
-	yearMark    = regexp.MustCompile(`[(\[]((?:19|20)\d\d)[)\]]`)
-	yearDash    = regexp.MustCompile(`\s-\s((?:19|20)\d\d)(?:\s|$)`)
-	yearBare    = regexp.MustCompile(`\b((?:19|20)\d\d)\b`)
-	crc         = regexp.MustCompile(`\[([0-9A-Fa-f]{8})\]`)
-	groupTail   = regexp.MustCompile(`(?:\s|^)?-\s?([A-Za-z0-9][A-Za-z0-9_.]{1,24})$`)
-	bracketTag  = regexp.MustCompile(`[\[(][^\])]*[\])]`)
+	// "Black Clover 1-170": a pack's range unbracketed, its dash unspaced —
+	// " - 05" is an episode's.
+	bareRange = regexp.MustCompile(`(?:^|\s)(\d{1,4})-(\d{1,4})(?:\s|$)`)
+	// "Doctor Who S04SP1 The Next Doctor": a season's special, by its name.
+	seasonSpecial = regexp.MustCompile(`(?i)\bS(\d{1,3})[ _]?SP(\d{1,3})\b`)
+	// What may follow a pack's film number: nothing, a bracket, a dash, a
+	// year or a resolution — not more of a title, as "The Lego Movie 2 The
+	// Second Part" has.
+	afterNumber = regexp.MustCompile(`(?i)^(?:$|[(\[–—-]|(?:19|20)\d\d\b|\d{3,4}p\b)`)
+	// "Seinfeld 1989-1998": the years a series ran; the first is its year.
+	yearSpan   = regexp.MustCompile(`\b((?:19|20)\d\d)-((?:19|20)\d\d)\b`)
+	airDate    = regexp.MustCompile(`\b((?:19|20)\d\d)[ _-](0[1-9]|1[0-2])[ _-](0[1-9]|[12]\d|3[01])\b`)
+	yearMark   = regexp.MustCompile(`[(\[]((?:19|20)\d\d)[)\]]`)
+	yearDash   = regexp.MustCompile(`\s-\s((?:19|20)\d\d)(?:\s|$)`)
+	yearBare   = regexp.MustCompile(`\b((?:19|20)\d\d)\b`)
+	crc        = regexp.MustCompile(`\[([0-9A-Fa-f]{8})\]`)
+	groupTail  = regexp.MustCompile(`(?:\s|^)?-\s?([A-Za-z0-9][A-Za-z0-9_.]{1,24})$`)
+	bracketTag = regexp.MustCompile(`[\[(][^\])]*[\])]`)
 )
 
 // tech is every token that ends a title, with what it says.
@@ -385,8 +396,22 @@ func Name(raw string) Release {
 		}
 		cut(m[0])
 		masked = s[:m[0]] + strings.Repeat(" ", m[1]-m[0]) + s[m[1]:]
+	} else if m := bareRange.FindStringSubmatchIndex(s); m != nil && len(r.Episodes) == 0 && len(r.Absolute) == 0 {
+		from, _ := strconv.Atoi(s[m[2]:m[3]])
+		to, _ := strconv.Atoi(s[m[4]:m[5]])
+		if to > from && (from < 1900 || to < 1900) {
+			r.Pack = [2]int{from, to}
+			cut(m[0])
+			masked = s[:m[0]] + strings.Repeat(" ", m[1]-m[0]) + s[m[1]:]
+		}
 	}
-	if m := special.FindStringSubmatchIndex(masked); m != nil {
+	if m := seasonSpecial.FindStringSubmatchIndex(masked); m != nil && len(r.Episodes) == 0 {
+		r.Special = "special"
+		cut(m[0])
+		if r.EpisodeTitle == "" {
+			r.EpisodeTitle = trimTitle(cutTech(strings.TrimLeft(s[m[1]:], " -")))
+		}
+	} else if m := special.FindStringSubmatchIndex(masked); m != nil {
 		word := strings.ToLower(s[m[2]:m[3]])
 		if strings.HasPrefix(word, "special") {
 			r.Special = "special"
@@ -398,7 +423,7 @@ func Name(raw string) Release {
 			r.EpisodeTitle = trimTitle(cutTech(strings.TrimLeft(s[m[1]:], " -")))
 		}
 	}
-	if m := movieNumber.FindStringSubmatchIndex(masked); m != nil {
+	if m := movieNumber.FindStringSubmatchIndex(masked); m != nil && afterNumber.MatchString(strings.TrimLeft(s[m[1]:], " ._")) {
 		r.MovieNumber, _ = strconv.Atoi(s[m[2]:m[3]])
 		cut(m[0])
 		// "Movie 01 (2000) - One Piece the Movie": its own title follows.
@@ -475,6 +500,9 @@ func Name(raw string) Release {
 		r.Year, _ = strconv.Atoi(s[m[2]:m[3]])
 		cut(m[0])
 	} else if m := yearDash.FindStringSubmatchIndex(s); m != nil && m[0] > 0 {
+		r.Year, _ = strconv.Atoi(s[m[2]:m[3]])
+		cut(m[0])
+	} else if m := yearSpan.FindStringSubmatchIndex(s); m != nil && m[0] > 0 {
 		r.Year, _ = strconv.Atoi(s[m[2]:m[3]])
 		cut(m[0])
 	} else {

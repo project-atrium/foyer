@@ -137,6 +137,16 @@ func TestNames(t *testing.T) {
 		{"[Anime Time] One Piece OVA - Defeat Him! The Pirate Ganzack!.mkv", Release{Title: "One Piece", Special: "ova", EpisodeTitle: "Defeat Him! The Pirate Ganzack!"}},
 		{"[Anime Time] One Piece Special - Episode of Nami.mkv", Release{Title: "One Piece", Special: "special", EpisodeTitle: "Episode of Nami"}},
 		{"[Anime Time] One Piece Movie 01 (2000) - One Piece the Movie.mkv", Release{Title: "One Piece", Year: 2000, MovieNumber: 1, EpisodeTitle: "One Piece the Movie"}},
+		// A film's own number, not a pack's: the title goes on after it.
+		{"The.Lego.Movie.2.The.Second.Part.2019.2160p.BluRay.REMUX.HEVC.DTS-HD.TrueHD.7.1.Atmos-FGT", Release{Title: "The Lego Movie 2 The Second Part", Year: 2019, Resolution: 2160, Remux: true}},
+		{"Naruto Shippuden Movie 3 - Inheritors of the Will of Fire.mkv", Release{Title: "Naruto Shippuden", MovieNumber: 3, EpisodeTitle: "Inheritors of the Will of Fire"}},
+		// Packs as Real-Debrid's library names them.
+		{"[Bigfoot] Black Clover 1-170 [Dual Audio][1080P][H264]", Release{Title: "Black Clover", Pack: [2]int{1, 170}, Group: "Bigfoot"}},
+		{"[Qwerty14] Super Dragon Ball Heroes 01-32 (5 Movies+ 2 Specials) [1080p]", Release{Title: "Super Dragon Ball Heroes", Pack: [2]int{1, 32}}},
+		{"Doctor Who Seasons 1 to 13 Mp4 1080p", Release{Title: "Doctor Who", Seasons: []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13}}},
+		{"Doctor Who S04SP1 The Next Doctor.mp4", Release{Title: "Doctor Who", Special: "special", EpisodeTitle: "The Next Doctor"}},
+		// Years, not a pack.
+		{"Seinfeld 1989-1998 Complete 1080p", Release{Title: "Seinfeld", Year: 1989, Resolution: 1080}},
 		{"[SubsPlease] Sousou no Frieren - 01 (1080p) [A1B2C3D4].mkv", Release{Title: "Sousou no Frieren", Absolute: []int{1}, Resolution: 1080, CRC: "A1B2C3D4"}},
 		{"[G] Title - 01v2 [1080p].mkv", Release{Title: "Title", Absolute: []int{1}, Repack: true}},
 		{"[G] Title - 12-13 [1080p].mkv", Release{Title: "Title", Absolute: []int{12, 13}}},
