@@ -134,6 +134,35 @@ func TestReadsZurgsOwnListing(t *testing.T) {
 	}
 }
 
+// A pack holding an episode in two of its folders is listed with the name
+// twice, and Zurg serves one of them by it: one name is one file, its size
+// unknown where the copies differ.
+func TestANameListedTwiceIsOneFile(t *testing.T) {
+	const listing = `<?xml version="1.0" encoding="utf-8"?><d:multistatus xmlns:d="DAV:">
+<d:response><d:href>/shows/Pack/</d:href><d:propstat><d:prop><d:resourcetype><d:collection/></d:resourcetype></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>
+<d:response><d:href>Pack%20-%2001.mkv</d:href><d:propstat><d:prop><d:getcontentlength>100</d:getcontentlength><d:resourcetype></d:resourcetype></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>
+<d:response><d:href>Pack%20-%2001.mkv</d:href><d:propstat><d:prop><d:getcontentlength>300</d:getcontentlength><d:resourcetype></d:resourcetype></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>
+<d:response><d:href>Pack%20-%2002.mkv</d:href><d:propstat><d:prop><d:getcontentlength>200</d:getcontentlength><d:resourcetype></d:resourcetype></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>
+<d:response><d:href>Pack%20-%2002.mkv</d:href><d:propstat><d:prop><d:getcontentlength>200</d:getcontentlength><d:resourcetype></d:resourcetype></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>
+</d:multistatus>`
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusMultiStatus)
+		_, _ = io.WriteString(w, listing)
+	}))
+	defer server.Close()
+	client, err := zurg.New(server.URL, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	files, err := client.Walk(context.Background(), "shows", "Pack", 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) != 2 || files[0].Path != "Pack/Pack - 01.mkv" || files[0].Size != 0 || files[1].Size != 200 {
+		t.Fatalf("files %+v", files)
+	}
+}
+
 // The pretend Zurg answering as Zurg does is read as well: its folders, a
 // torrent walked, a part opened.
 func TestReadsAZurgThatAnswersAsZurgDoes(t *testing.T) {

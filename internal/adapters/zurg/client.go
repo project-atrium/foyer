@@ -245,7 +245,27 @@ func (c *Client) List(ctx context.Context, dir string) ([]Entry, error) {
 		}
 		entries = append(entries, entry)
 	}
-	return entries, nil
+	return once(entries), nil
+}
+
+// once keeps one entry per name. Zurg lists a pack's file once for every
+// folder of the pack that holds one by that name — and serves just one of
+// them by it, not the first and not saying which. Where the copies' sizes
+// differ, the size is unknown until the file itself is read.
+func once(entries []Entry) []Entry {
+	at := map[string]int{}
+	kept := entries[:0]
+	for _, e := range entries {
+		if i, seen := at[e.Name]; seen {
+			if kept[i].Size != e.Size {
+				kept[i].Size = 0
+			}
+			continue
+		}
+		at[e.Name] = len(kept)
+		kept = append(kept, e)
+	}
+	return kept
 }
 
 // resolve reads an entry's href against the folder asked for. WebDAV allows
