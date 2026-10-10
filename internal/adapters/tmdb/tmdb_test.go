@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -198,6 +199,31 @@ func TestMatchesWithoutCaseAccentsOrPunctuation(t *testing.T) {
 	})
 	if got := find(t, c, Query{Kind: Movie, Title: "amelie", Year: 2001}); got.ID != 194 {
 		t.Fatalf("got %+v", got)
+	}
+}
+
+// A release's name drops what TMDB's keeps: found all the same, once the
+// exact names find nothing — and never another year's film.
+func TestForgivesWhatAReleasesNameDrops(t *testing.T) {
+	for _, c := range []struct {
+		release, tmdb string
+		year          int
+	}{
+		{"Dont Be a Menace to South Central While Drinking Your Juice in the Hood", "Don't Be a Menace to South Central While Drinking Your Juice in the Hood", 1996},
+		{"Pirates of the Caribbean Dead Mans Chest", "Pirates of the Caribbean: Dead Man's Chest", 2006},
+		{"Gordon Gino and Fred Road Trip", "Gordon, Gino and Fred's Road Trip", 2018},
+		{"Accountant 2", "The Accountant²", 2025},
+		{"Fast and Furious", "Fast & Furious", 2009},
+	} {
+		_, client, _ := newFake(t, map[string]func(*http.Request) (int, any){
+			"GET /3/search/movie": searching(map[string][]map[string]any{c.release: {film(7, c.tmdb, strconv.Itoa(c.year)+"-06-01")}}),
+		})
+		if got := find(t, client, Query{Kind: Movie, Title: c.release, Year: c.year}); got.ID != 7 {
+			t.Errorf("%q is not %q: %+v", c.release, c.tmdb, got)
+		}
+		if got := find(t, client, Query{Kind: Movie, Title: c.release, Year: c.year + 5}); got.ID != 0 {
+			t.Errorf("%q took another year's film", c.release)
+		}
 	}
 }
 

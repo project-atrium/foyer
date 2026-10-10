@@ -5,8 +5,11 @@ import (
 	"errors"
 	"net/url"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
+
+	"golang.org/x/text/unicode/norm"
 
 	"foyer/internal/titles"
 )
@@ -113,6 +116,16 @@ func (c *Client) find(ctx context.Context, q Query, name string, keys map[string
 			}
 		}
 	}
+	if len(named) == 0 {
+		wanted := looseKeys(name)
+		for _, result := range found {
+			if slices.ContainsFunc(result.Names, func(candidate string) bool {
+				return slices.ContainsFunc(looseKeys(candidate), func(k string) bool { return slices.Contains(wanted, k) })
+			}) {
+				named = append(named, result)
+			}
+		}
+	}
 	if len(named) == 1 || (len(named) > 1 && q.Year != 0) {
 		return &named[0], nil, nil
 	}
@@ -130,6 +143,37 @@ func (c *Client) find(ctx context.Context, q Query, name string, keys map[string
 		}
 	}
 	return nil, nil, nil
+}
+
+// Foyer's own, past Loge's matcher: a release's name is typed by hand, and
+// drops what TMDB's keeps — an apostrophe ("Dont", "Dead Mans Chest"), a
+// possessive ("Fred Road Trip" for "Fred's"), an article ("Accountant 2"),
+// a superscript ("The Accountant²"), the space between. Compared only where
+// the exact names find nothing, and kept to the year as they are.
+var (
+	apostrophes = strings.NewReplacer("'", "", "’", "", "‘", "", "`", "", "´", "")
+	possessive  = regexp.MustCompile(`(?i)(\pL)['’]s\b`)
+)
+
+// looseKeys is what a name keys to with those forgiven: its apostrophes
+// dropped, or a possessive with them.
+func looseKeys(name string) []string {
+	name = strings.ReplaceAll(norm.NFKC.String(name), "&", " and ")
+	var keys []string
+	for _, v := range []string{name, possessive.ReplaceAllString(name, "$1")} {
+		key := titles.Key(apostrophes.Replace(v))
+		for _, article := range []string{"the ", "a ", "an "} {
+			if rest, ok := strings.CutPrefix(key, article); ok {
+				key = rest
+				break
+			}
+		}
+		key = strings.ReplaceAll(key, " ", "")
+		if key != "" && !slices.Contains(keys, key) {
+			keys = append(keys, key)
+		}
+	}
+	return keys
 }
 
 // within keeps the results a year either side of year — a film comes out a
