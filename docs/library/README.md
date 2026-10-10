@@ -87,10 +87,22 @@ ordering of the series, where it has one; else counts on season by season.
 
 ## What each file is
 
+With the FFmpeg adapter switched on, ffprobe reads every file — the newest
+first, two at a time unless you say more, through Foyer itself, so it never
+holds Zurg's address or password. It reads a few megabytes of each: its
+picture and quality, its codec and HDR (Dolby Vision, HDR10, HDR10+, HLG),
+its audio tracks with their languages and Atmos or DTS:X, its subtitles,
+forced and SDH, and its chapters.
+
 Until ffprobe has looked, a file is what its name says: `2160p · HDR ·
 x265` is a 4K HEVC file with HDR. A title's lists — quality, encoding,
 container, HDR, audio tracks, subtitles and their languages — are drawn from
 its files', and its `versions` say each one apart, with its path in Zurg.
+
+A file ffprobe cannot read is tried again after ten minutes, an hour and six
+hours, then left; Zurg itself failing costs it nothing, and pauses the reading
+a while. The GPU is tried on the Adapters page: transcoding comes later, and
+that is where the household learns beforehand that it is reachable.
 
 ## Telling Foyer when Zurg changes
 

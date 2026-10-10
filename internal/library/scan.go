@@ -44,6 +44,9 @@ func (e *Engine) Scan(ctx context.Context, libID string, full bool) error {
 	run := e.status.begin(lib.Id, lib.GetString("name"), full)
 	err = e.scan(ctx, lib, full, run)
 	run.finish(err)
+	if e.scanned != nil {
+		e.scanned()
+	}
 
 	lib, findErr := e.app.FindRecordById(LibrariesCollection, libID)
 	if findErr != nil {

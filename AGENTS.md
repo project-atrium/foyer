@@ -78,6 +78,8 @@ internal/library/    libraries: their collections from one template, the scan �
                      sweep, artwork — corrections, and the dashboard's library routes
 internal/media/      what a file is: Loge's MediaVersion, from a release's name or ffprobe
 internal/stream/     signed stream addresses, the Range proxy, the quiet log, the loopback for tools
+internal/ffmpeg/     the tools: where, which versions, the GPU tried; the FFmpeg adapter
+internal/probe/      ffprobe's answers as versions, and the queue of files waiting for it
 internal/identity/   Loge's watchIdentity and identityHash, ported
 internal/dashboard/  the dashboard's icon: a PocketBase UI extension, embedded
 internal/version/    the version, always the app's: its `npm run release` moves both
@@ -131,6 +133,12 @@ Go tests sit beside what they test. Everything else is PocketBase's: `serve`,
 - **A tool reads files through the loopback**, never from Zurg: a grant on
   127.0.0.1 opens one file for minutes, so ffprobe's arguments and output
   never hold Zurg's address or password.
+- **ffprobe reads through the loopback, with nothing of Foyer's
+  environment** — ffmpeg reads `http_proxy` — and only http: a file that is
+  really a playlist must not send it elsewhere. What it says on failure is
+  cleared of addresses before it is kept. Zurg failing is no file's fault: it
+  costs no attempt, and five in a row pause the queue. A pack's probes redraw
+  its series' lists once a batch, never once a file.
 - **A rate limit's place matters.** PocketBase takes the first rule whose
   prefix matches, in order: a narrower prefix goes before `/api/`.
 - **One scan at a time**, from one loop that runs only beside `serve`

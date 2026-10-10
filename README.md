@@ -79,8 +79,11 @@ Then make the dashboard's superuser, and a user for each person.
 - **Streams**: a user's player is handed a signed address for a title's
   file, good for six hours; the bytes come through Foyer, so Zurg's address
   and password never leave the server, and no address reaches a log.
-- **Being built**: ffprobe, watch status, and the dashboard's Library and
-  Adapters pages.
+- **What each file is**, read by ffprobe through Foyer: its picture, codec,
+  HDR, audio and subtitle tracks with their languages, chapters. The GPU is
+  tried for the transcoding to come.
+- **Being built**: watch status, and the dashboard's Library and Adapters
+  pages.
 - **The dashboard** wears Foyer's icon.
 - **`go test ./...` proves it.**
 - **The Dockerfile and compose file are written**, and not yet built.

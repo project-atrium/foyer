@@ -101,6 +101,13 @@ directory, with the migrations applied, through PocketBase's real router
   neither; the loopback serves a tool one file until revoked. And the proxy
   on its own: ranges, HEAD, a source's failures, a stream outlasting the
   server's deadlines, a player leaving.
+- **ffprobe:** answers mapped as Loge says a version — Dolby Vision with its
+  HDR10 fallback, HLG, Atmos, DTS:X, PGS, forced and SDH subtitles, cover art
+  left out, chapters — and the real ffprobe reading a file ffmpeg makes,
+  through an address; a failure said without it. End to end, a file behind
+  the pretend Zurg read through the loopback, its film's lists redrawn, and a
+  file that is no video tried again later. FFmpeg's detection, and a missing
+  render device. These skip where ffmpeg is not installed.
 - **The guard:** Foyer's collections refuse a superuser's record writes, a
   change, a truncate, an import and a delete; `users`' rules stay.
 - **TMDB**, against a fake of its routes: Loge's matcher's own cases, ported —

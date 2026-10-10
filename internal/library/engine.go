@@ -36,7 +36,15 @@ type Engine struct {
 	tmdbClient  *tmdb.Client
 	tmdbKey     string
 	tmdbOptions []tmdb.Option
+	// dirty are series whose episodes a probe changed: collection and id,
+	// with their library.
+	dirty map[[2]string]string
+	// scanned is told when a scan ends: there may be new files to probe.
+	scanned func()
 }
+
+// OnScanned calls fn after every scan.
+func (e *Engine) OnScanned(fn func()) { e.scanned = fn }
 
 func New(app core.App, registry *adapters.Registry) *Engine {
 	return &Engine{

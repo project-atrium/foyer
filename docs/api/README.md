@@ -63,6 +63,11 @@ and their rules, and how they fail.
   `/dav/`), a username and a password if Zurg asks for them, and how often to
   look for new media, in minutes (15 unless set). Its test lists Zurg's
   folders.
+- **FFmpeg** has the paths of `ffprobe` and `ffmpeg` (their names on the PATH
+  unless set), the render device (`/dev/dri/renderD128`) and how many files
+  are read at once (2). Switched on, ffprobe reads what each file is. Its test
+  says which versions are installed and what the GPU encoded: a few frames
+  of H.264 and HEVC through VAAPI, and through QSV on Intel.
 - **TMDB** has two fields: `key` — a Read Access Token or an API key — and
   `language`, `en-US` unless set. Its notice is the one TMDB's terms ask for.
 

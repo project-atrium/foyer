@@ -16,8 +16,10 @@ import (
 	"foyer/internal/adapters/zurg"
 	"foyer/internal/config"
 	"foyer/internal/dashboard"
+	"foyer/internal/ffmpeg"
 	"foyer/internal/guard"
 	"foyer/internal/library"
+	"foyer/internal/probe"
 	"foyer/internal/routes"
 	"foyer/internal/stream"
 )
@@ -30,6 +32,7 @@ type Server struct {
 	Adapters *adapters.Registry
 	Library  *library.Engine
 	Streams  *stream.Streamer
+	Probes   *probe.Queue
 }
 
 // collections are Foyer's own static collections: written by its code alone.
@@ -42,7 +45,7 @@ var collections = []string{
 // a test that binds it runs no background work. main asks for that with
 // Background.
 func Bind(app core.App, cfg config.Config) *Server {
-	registry := adapters.NewRegistry(app, zurg.Adapter(), tmdb.Adapter())
+	registry := adapters.NewRegistry(app, zurg.Adapter(), tmdb.Adapter(), ffmpeg.Adapter())
 	lib := library.New(app, registry)
 	s := &Server{
 		App:      app,
@@ -51,6 +54,8 @@ func Bind(app core.App, cfg config.Config) *Server {
 		Library:  lib,
 		Streams:  stream.New(app, library.FilesCollection, lib.OpenFile),
 	}
+	s.Probes = probe.New(app, registry, s.Streams, lib, library.FilesCollection)
+	lib.OnScanned(s.Probes.Poke)
 	guard.Bind(app, s.managed)
 	app.OnServe().BindFunc(func(se *core.ServeEvent) error {
 		// Never PocketBase's installer: on a server with no superuser it opens a
@@ -83,8 +88,8 @@ func Bind(app core.App, cfg config.Config) *Server {
 
 // Background is what runs beside the routes once the server serves — main
 // asks for it, a test never does: the library's collections brought up to
-// date, the loopback the tools read files through, then the scans, until
-// the server stops.
+// date, the loopback the tools read files through, then the scans and the
+// probes, until the server stops.
 func (s *Server) Background() *Server {
 	ctx, cancel := context.WithCancel(context.Background())
 	var wg sync.WaitGroup
@@ -94,6 +99,7 @@ func (s *Server) Background() *Server {
 			return err
 		}
 		wg.Go(func() { s.Library.Run(ctx) })
+		wg.Go(func() { s.Probes.Run(ctx) })
 		return se.Next()
 	})
 	s.App.OnTerminate().BindFunc(func(e *core.TerminateEvent) error {
