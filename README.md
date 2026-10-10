@@ -68,8 +68,11 @@ Then make the dashboard's superuser, and a user for each person.
 - **The account that held up to ten profiles is gone**, with the protocol
   Loge's `sync/custom-server` adapter spoke. Loge signs in to Foyer anew in
   Step 2 — a device with two profiles signs in as two users.
-- **The library is being built**: Zurg over WebDAV, TMDB, ffprobe, streams,
-  watch status, and the dashboard's Library and Adapters pages.
+- **Adapters**: TMDB's settings kept on the server, its key masked; a TMDB
+  client that names films and series as Loge does, with their details,
+  seasons and artwork.
+- **The library is being built**: Zurg over WebDAV, ffprobe, streams, watch
+  status, and the dashboard's Library and Adapters pages.
 - **The dashboard** wears Foyer's icon.
 - **`go test ./...` proves it.**
 - **The Dockerfile and compose file are written**, and not yet built.

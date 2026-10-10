@@ -74,3 +74,20 @@ directory, with the migrations applied, through PocketBase's real router
   PocketBase's installer never opens a browser.
 - **The dashboard:** the extension is served, and PocketBase's bundle still
   reads what it sets.
+- **Adapters:** the page's routes are the superusers'; a secret is masked,
+  kept when a save leaves it out, and readable by no profile; a save that
+  will not do names its fields.
+- **The guard:** Foyer's collections refuse a superuser's record writes, a
+  change, a truncate, an import and a delete; `users`' rules stay.
+- **TMDB**, against a fake of its routes: Loge's matcher's own cases, ported —
+  the key as a bearer header or in the query, a refused key latched, a year
+  either side, names in other languages, several of one name handed over —
+  and a film's details, seasons twenty to a call, episode groups, artwork.
+- **Titles:** Loge's own cases for `titleKey` and `bareTitle`.
+
+**Live TMDB**, opt-in and local only — the key from the workspace's
+`tmdb.env`, never committed and never printed:
+
+```bash
+FOYER_TMDB_LIVE_KEY="$(sed -n 's/^API_Read_Access_Token=//p' ../tmdb.env)" go test ./internal/adapters/tmdb -run TestLive -v
+```

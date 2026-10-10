@@ -66,10 +66,14 @@ main.go              .env, then pocketbase.New(); migratecmd, automigrate off; s
 go.mod               PocketBase pinned to v0.40.4, which needs Go 1.27
 internal/config/     FOYER_ADMIN_*, FOYER_TRUST_PROXY, and the .env reader; the old SC_* names refused, MAX_PROFILES and SIGNUP named as doing nothing
 internal/routes/     GET /api/foyer/info
-internal/server/     Bind: the routes, the trusted proxy, no installer, the UI extension — and the HTTP tests
+internal/server/     Bind: the guard, the routes, the trusted proxy, no installer, the UI extension — and the HTTP tests
+internal/guard/      Foyer's collections refuse every write request, a superuser's too; users' rules stay
+internal/adapters/   what Foyer connects to: settings records, fields, masked secrets, the Adapters page's routes
+  tmdb/              TMDB: Loge's matcher ported (Find), a film's and a series' details, seasons, episode groups, artwork
+internal/titles/     Loge's titleKey and bareTitle, ported to the byte
 internal/dashboard/  the dashboard's icon: a PocketBase UI extension, embedded
 internal/version/    the version, always the app's: its `npm run release` moves both
-migrations/          0001 users are profiles; 0002 the name, the rate limits, the first superuser
+migrations/          0001 users are profiles; 0002 the name, the rate limits, the first superuser; 0003 adapters
 Dockerfile           two stages: a Go build, then the binary alone
 docker-compose.yml   the server, and pb_data in a volume
 ```
@@ -79,6 +83,20 @@ Go tests sit beside what they test. Everything else is PocketBase's: `serve`,
 `/_/`, backups and the rate limiter.
 
 ## Rules that break silently
+
+- **Foyer's collections are Foyer's.** The guard refuses every request that
+  would write one — the dashboard's, a superuser's, an import, a truncate.
+  Foyer's code saves at the model level, which no request hook sees. A new
+  collection of Foyer's joins the guard's list in `internal/server`.
+- **No admin route answers 401 for a service's refusal.** The dashboard takes
+  any 401 for its own session ending and signs the superuser out: a test that
+  failed is `200 { ok: false }`.
+- **A key in an address never reaches a log or an error.** TMDB's API key
+  travels in the query, so the client's errors drop the address Go's
+  `url.Error` would print.
+- **Titles are keyed as Loge keys them.** `internal/titles` is `@loge/api`'s
+  `titleKey` and `bareTitle`, and its tests are Loge's: change one, change
+  both.
 
 - **Migrations sort by file name, as text.** `10_x.go` runs before `1_x.go`,
   so names are zero-padded: `0001_…`, `0002_…`. A server that ran one never

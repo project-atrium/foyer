@@ -5,14 +5,37 @@ package server
 import (
 	"slices"
 
+	"github.com/pocketbase/pocketbase/apis"
 	"github.com/pocketbase/pocketbase/core"
 
+	"foyer/internal/adapters"
+	"foyer/internal/adapters/tmdb"
 	"foyer/internal/config"
 	"foyer/internal/dashboard"
+	"foyer/internal/guard"
 	"foyer/internal/routes"
 )
 
-func Bind(app core.App, cfg config.Config) {
+// Server is Foyer on one PocketBase app: what Bind made, for main and the
+// tests to reach.
+type Server struct {
+	App      core.App
+	Config   config.Config
+	Adapters *adapters.Registry
+}
+
+// collections are Foyer's own static collections: written by its code alone.
+var collections = []string{adapters.Collection}
+
+// Bind binds Foyer's guard, routes and dashboard pages, and starts nothing:
+// a test that binds it runs no background work.
+func Bind(app core.App, cfg config.Config) *Server {
+	s := &Server{
+		App:      app,
+		Config:   cfg,
+		Adapters: adapters.NewRegistry(app, tmdb.Adapter()),
+	}
+	guard.Bind(app, s.managed)
 	app.OnServe().BindFunc(func(se *core.ServeEvent) error {
 		// Never PocketBase's installer: on a server with no superuser it opens a
 		// browser tab on whoever started it — one per test. The first superuser
@@ -23,6 +46,9 @@ func Bind(app core.App, cfg config.Config) {
 			return err
 		}
 		routes.Register(se)
+		admin := se.Router.Group("/api/foyer/admin")
+		admin.Bind(apis.RequireSuperuserAuth())
+		s.Adapters.Routes(admin)
 		// Read by PocketBase's own handler for UI extensions, which runs last.
 		extension, err := dashboard.Extension()
 		if err != nil {
@@ -31,6 +57,11 @@ func Bind(app core.App, cfg config.Config) {
 		se.UIExtensions = append(se.UIExtensions, extension)
 		return se.Next()
 	})
+	return s
+}
+
+func (s *Server) managed(_ core.App, name string) bool {
+	return slices.Contains(collections, name)
 }
 
 // trustProxy applies FOYER_TRUST_PROXY on every start, so `.env` stays the one

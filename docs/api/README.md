@@ -15,6 +15,24 @@ and their rules, and how they fail.
 | Route | Who | Answer |
 | --- | --- | --- |
 | `GET /api/foyer/info` | anyone | `{ serverVersion }` |
+| `GET /api/foyer/admin/adapters` | superusers | every adapter: `[{ key, name, description, notice?, enabled, fields, values, status? }]`, each secret as `"******"` when set and `""` when not |
+| `PUT /api/foyer/admin/adapters/{key}` | superusers | `{ enabled, values }` → the adapter as `GET` shows it; `400` names each field that will not do, as `values.<key>` |
+| `POST /api/foyer/admin/adapters/{key}/test` | superusers | `{ values? }`, laid over what is saved → `{ ok, message, details? }` |
+
+### The Adapters page's routes
+
+- **A field is one of** `text`, `url`, `password`, `number`, `select` or
+  `bool`, with its label, default, choices and help: the page draws every
+  form from them.
+- **A secret** — a `password` field — is stored as typed and never sent back.
+  A save that leaves it out, or sends `"******"` back, keeps it; one that
+  sends `""` clears it.
+- **A test answers `200`, whatever the service said.** A refused key is
+  `{ ok: false, message }`: the dashboard signs its superuser out on any
+  `401`, so no admin route ever answers one for a service's refusal. The last
+  test's result is kept beside the settings, once they are saved.
+- **TMDB** has two fields: `key` — a Read Access Token or an API key — and
+  `language`, `en-US` unless set. Its notice is the one TMDB's terms ask for.
 
 ## PocketBase's routes
 
@@ -43,11 +61,26 @@ its token.
 
 Password sign-in only: OAuth2, OTP, MFA and sign-in alerts are off.
 
+**`adapters`** — one record per adapter that has been saved: `key`,
+`enabled`, `config` (every value but the secrets), `secrets` (plain text, as
+typed) and `status` (the last test). Written only through the Adapters page.
+
 ### Rules
 
 | Collection | List, view | Create | Update | Delete |
 | --- | --- | --- | --- | --- |
 | `users` | its own record | superusers | its own record | superusers |
+| `adapters` | superusers | Foyer | Foyer | Foyer |
+
+### The guard
+
+Foyer's own collections are written by Foyer's code alone. A request that
+would write their records, or change, truncate, import or delete one of them,
+is refused `403` — a superuser's from the dashboard too. `users` keeps its
+records writable by the superuser, but its rules and Foyer's fields on it
+stay as the migrations made them: loosened, one profile would read another.
+The superuser's SQL console still reaches past the guard: it prevents
+accidents, not malice.
 
 ## Errors
 
