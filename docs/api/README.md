@@ -31,6 +31,10 @@ and their rules, and how they fail.
   `{ ok: false, message }`: the dashboard signs its superuser out on any
   `401`, so no admin route ever answers one for a service's refusal. The last
   test's result is kept beside the settings, once they are saved.
+- **Zurg** has its address (`http://zurg:9999`; its WebDAV is under
+  `/dav/`), a username and a password if Zurg asks for them, and how often to
+  look for new media, in minutes (15 unless set). Its test lists Zurg's
+  folders.
 - **TMDB** has two fields: `key` — a Read Access Token or an API key — and
   `language`, `en-US` unless set. Its notice is the one TMDB's terms ask for.
 

@@ -10,6 +10,7 @@ import (
 
 	"foyer/internal/adapters"
 	"foyer/internal/adapters/tmdb"
+	"foyer/internal/adapters/zurg"
 	"foyer/internal/config"
 	"foyer/internal/dashboard"
 	"foyer/internal/guard"
@@ -33,7 +34,7 @@ func Bind(app core.App, cfg config.Config) *Server {
 	s := &Server{
 		App:      app,
 		Config:   cfg,
-		Adapters: adapters.NewRegistry(app, tmdb.Adapter()),
+		Adapters: adapters.NewRegistry(app, zurg.Adapter(), tmdb.Adapter()),
 	}
 	guard.Bind(app, s.managed)
 	app.OnServe().BindFunc(func(se *core.ServeEvent) error {

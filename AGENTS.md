@@ -70,6 +70,8 @@ internal/server/     Bind: the guard, the routes, the trusted proxy, no installe
 internal/guard/      Foyer's collections refuse every write request, a superuser's too; users' rules stay
 internal/adapters/   what Foyer connects to: settings records, fields, masked secrets, the Adapters page's routes
   tmdb/              TMDB: Loge's matcher ported (Find), a film's and a series' details, seasons, episode groups, artwork
+  zurg/              Zurg over WebDAV: its folders, a torrent's files, a file's bytes with ranges
+  zurg/zurgtest/     a pretend Zurg, for the tests
 internal/titles/     Loge's titleKey and bareTitle, ported to the byte
 internal/dashboard/  the dashboard's icon: a PocketBase UI extension, embedded
 internal/version/    the version, always the app's: its `npm run release` moves both
@@ -94,6 +96,12 @@ Go tests sit beside what they test. Everything else is PocketBase's: `serve`,
 - **A key in an address never reaches a log or an error.** TMDB's API key
   travels in the query, so the client's errors drop the address Go's
   `url.Error` would print.
+- **Zurg is read over WebDAV only.** Its folders — the ones its config sorts
+  torrents into — exist only there. A torrent's files may be listed flat,
+  with ` (id)` added where two share a name, or under folders of their own:
+  walk both. Zurg answers a part with `200` and a `Content-Range` at times —
+  that is a `206` — and a whole file answered for a part is refused, or a
+  player would start again from the beginning. Never ask Zurg for gzip.
 - **Titles are keyed as Loge keys them.** `internal/titles` is `@loge/api`'s
   `titleKey` and `bareTitle`, and its tests are Loge's: change one, change
   both.

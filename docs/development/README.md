@@ -83,6 +83,9 @@ directory, with the migrations applied, through PocketBase's real router
   the key as a bearer header or in the query, a refused key latched, a year
   either side, names in other languages, several of one name handed over —
   and a film's details, seasons twenty to a call, episode groups, artwork.
+- **Zurg**, against `zurgtest`, a pretend Zurg: its folders, a torrent's
+  files flat and nested, hrefs however they are escaped, a refused sign-in
+  kept, ranges — and Zurg's `200` with a `Content-Range` read as `206`.
 - **Titles:** Loge's own cases for `titleKey` and `bareTitle`.
 
 **Live TMDB**, opt-in and local only — the key from the workspace's
