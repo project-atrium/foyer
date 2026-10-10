@@ -39,7 +39,8 @@ Once a day it walks every torrent again, to see inside them.
    matched to TMDB's season 0 by name — the whole name, or the part before
    TMDB's colon or dash: "3D2Y" is "3D2Y: Overcome Ace's Death!…" — and only
    where one episode answers; films and OVAs that came in a series' pack are
-   its extras.
+   its extras, and so is a special TMDB has no episode for — placed again by
+   every scan, should TMDB add it. Extras play as versions do.
 5. **Artwork is fetched** into PocketBase's own storage — local, or S3 as
    PocketBase's settings say: posters, backdrops, logos, episode stills.
 6. **What Zurg stopped listing** is kept for three days — Zurg's repairs take

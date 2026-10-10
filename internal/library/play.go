@@ -75,20 +75,32 @@ func (e *Engine) PlayRoutes(r *router.Router[*core.RequestEvent], streams *strea
 		}
 		var versions []media.Version
 		_ = item.UnmarshalJSONField("versions", &versions)
-		if len(versions) == 0 {
-			return re.NotFoundError("There is nothing to play here.", nil)
-		}
-		chosen := versions[0]
-		if body.File != "" {
+		var chosen media.Version
+		switch {
+		case body.File != "":
 			found := false
 			for _, v := range versions {
 				if v.File == body.File {
 					chosen, found = v, true
 				}
 			}
+			// A series' extras play too: the films in its pack, its OVAs.
+			var extras []extra
+			_ = item.UnmarshalJSONField("extras", &extras)
+			for _, x := range extras {
+				if !found && x.File == body.File {
+					if f, err := e.app.FindRecordById(FilesCollection, x.File); err == nil {
+						chosen, found = versionOf(f), true
+					}
+				}
+			}
 			if !found {
 				return re.NotFoundError("That is none of this title's files.", nil)
 			}
+		case len(versions) > 0:
+			chosen = versions[0]
+		default:
+			return re.NotFoundError("There is nothing to play here.", nil)
 		}
 		file, err := e.app.FindRecordById(FilesCollection, chosen.File)
 		if err != nil || file.GetString("item_id") != item.Id || file.GetString("missing_since") != "" {

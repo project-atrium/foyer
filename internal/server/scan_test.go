@@ -56,6 +56,7 @@ func zurgLibrary() *zurgtest.Fake {
 		"/Season 01 - First Arc/[Grp] Big Pack - 0002 - The Next.mkv",
 		"/Season 01 - First Arc/[Grp] Big Pack - 0013 - The Turn.mkv",
 		"/[Grp] Big Pack Specials/[Grp] Big Pack Special - Episode of Somebody.mkv",
+		"/[Grp] Big Pack Specials/[Grp] Big Pack OVA - Something Else Entirely.mkv",
 		"/[Grp] Big Pack Movies/[Grp] Big Pack Movie 01 (2010) - The Film.mkv",
 	} {
 		f.File(pack+file, []byte(file), tuesday)
@@ -323,9 +324,14 @@ func TestAScanLaysAPackOnItsSeriesEpisodes(t *testing.T) {
 	if !slices.Equal(got, want) {
 		t.Fatalf("episodes:\n%s", strings.Join(got, "\n"))
 	}
+	// The film is an extra; so is an OVA TMDB has no episode for.
 	var extras []map[string]any
 	_ = pack.UnmarshalJSONField("extras", &extras)
-	if len(extras) != 1 || extras[0]["kind"] != "movie" || extras[0]["title"] != "The Film" {
+	kinds := map[string]string{}
+	for _, x := range extras {
+		kinds[x["kind"].(string)] = x["title"].(string)
+	}
+	if len(extras) != 2 || kinds["movie"] != "The Film" || kinds["ova"] != "Something Else Entirely" {
 		t.Errorf("extras %v", extras)
 	}
 	if pack.GetInt("episodes_owned") != 4 || pack.GetInt("version_count") != 6 {

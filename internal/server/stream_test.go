@@ -56,6 +56,38 @@ func TestAUserPlaysATitleThroughFoyer(t *testing.T) {
 	}
 }
 
+// A series' extras play by their file: the film in its pack, and an OVA
+// TMDB has no episode for.
+func TestASeriesExtrasPlay(t *testing.T) {
+	s := scanLibrary(t)
+	alex := s.makeUser("alex", nil)
+	pack := s.title("shows", "Big Pack")
+	var extras []map[string]any
+	_ = pack.UnmarshalJSONField("extras", &extras)
+	if len(extras) != 2 {
+		t.Fatalf("extras %v", extras)
+	}
+	for _, x := range extras {
+		got := s.call(http.MethodPost, "/api/foyer/play", alex.token, map[string]any{"collection": "shows", "id": pack.Id, "file": x["file"]})
+		if got.status != http.StatusOK || got.body["version"].(map[string]any)["file"] != x["file"] {
+			t.Fatalf("%s: %d %v", x["kind"], got.status, got.body)
+		}
+		status, _, body := s.fetchRange(got.body["url"].(string), "")
+		if status != http.StatusOK || !strings.HasSuffix(body, ".mkv") {
+			t.Errorf("%s's bytes: %d %q", x["kind"], status, body)
+		}
+	}
+	// A series itself has no version to pick without a file, nor a file of
+	// another title.
+	if got := s.call(http.MethodPost, "/api/foyer/play", alex.token, map[string]any{"collection": "shows", "id": pack.Id}); got.status != http.StatusNotFound {
+		t.Errorf("a series without a file: %d", got.status)
+	}
+	film := s.title("movies", "Some Film")
+	if got := s.call(http.MethodPost, "/api/foyer/play", alex.token, map[string]any{"collection": "movies", "id": film.Id, "file": extras[0]["file"]}); got.status != http.StatusNotFound {
+		t.Errorf("another title's file: %d", got.status)
+	}
+}
+
 func TestAStreamAddressIsItsSignature(t *testing.T) {
 	s := scanLibrary(t)
 	alex := s.makeUser("alex", nil)

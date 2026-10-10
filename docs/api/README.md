@@ -15,7 +15,7 @@ and their rules, and how they fail.
 | Route | Who | Answer |
 | --- | --- | --- |
 | `GET /api/foyer/info` | anyone | `{ serverVersion }` |
-| `POST /api/foyer/play` | users | `{ collection, id, file? }` → `{ url, expiresAt, version, versions, chapters }`: a signed address for the title's best version, or the file asked for; `404` for a title the user may not see |
+| `POST /api/foyer/play` | users | `{ collection, id, file? }` → `{ url, expiresAt, version, versions, chapters }`: a signed address for the title's best version, or the file asked for — one of its versions, or of a series' `extras`; `404` for a title the user may not see |
 | `POST /api/foyer/watch/progress` | users | `{ collection, id, kind: started \| progress \| stopped \| end, positionMs, durationMs, paused?, session? }` → `204` |
 | `POST /api/foyer/watch/played` | users | `{ collection, id, played }` → `204`; a series marks each of its episodes |
 | `GET /api/foyer/watch/resume` | users | `?limit` (20) → `{ items: [{ collection, id, identity, title, showTitle?, season?, episode?, positionMs, durationMs, watched, lastPlayedAt }] }`, the latest first |
@@ -139,7 +139,7 @@ template; a name is lower-case letters, digits and underscores, never ends in
 | `media_files` | file of a torrent: its `path` under the folder, what its name says (`parsed`), which title took it (`item_collection`, `item_id`) and as what (`role`), what ffprobe found (`probe`) |
 | `identities` | title a library read: what TMDB was asked (`key`), its answer (`tmdb_id`), and how sure (`state`: sure, uncertain, none, manual) |
 | `<movies library>` | film: TMDB's names, dates, ids, rating and artwork; `versions`, one per file; `quality`, `encoding`, `container`, `hdr`, `audio_tracks`, `subtitles` and the languages, over its versions; `added` and `last_added`; `match_state` |
-| `<shows library>` | series: the same, its seasons as TMDB counts them, and its lists over its episodes |
+| `<shows library>` | series: the same, its seasons as TMDB counts them, its lists over its episodes, and `extras` — `{ file, path, kind, title, size }`: the films in its pack, and specials and OVAs TMDB has no episode for |
 | `<shows library>_episodes` | episode: its `show`, `season`, `episode`, TMDB's title, overview and still, its `versions` and lists |
 
 - **`match_state`** is `matched` (TMDB was sure), `uncertain` (a best guess),

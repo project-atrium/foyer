@@ -257,6 +257,14 @@ func refresh(app core.App, item *core.Record) error {
 			l.addVersion(v, f)
 		case "extra":
 			extras = append(extras, extraOf(f))
+		case "unmapped":
+			// A special or an OVA TMDB has no episode for is still the series':
+			// listed with its extras, and placed again by every scan, should
+			// TMDB add it.
+			var placed parse.Placed
+			if f.UnmarshalJSONField("parsed", &placed) == nil && placed.Special != "" {
+				extras = append(extras, extraOf(f))
+			}
 		}
 	}
 	slices.SortFunc(versions, func(a, b media.Version) int { return rank(b) - rank(a) })
