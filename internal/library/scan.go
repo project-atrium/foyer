@@ -177,7 +177,11 @@ func (e *Engine) scan(ctx context.Context, lib *core.Record, full bool, run *run
 		added, err := e.record(lib, known[w.entry.Name], w, plausible, now)
 		lock.Unlock()
 		if err != nil {
-			return err
+			// One torrent that will not be kept holds the library back no
+			// more: it is told, and the next scan tries it again.
+			run.note(fmt.Sprintf("%s was not kept: %v", w.entry.Name, err))
+			e.app.Logger().Warn("A torrent was not kept", "library", lib.GetString("name"), "torrent", w.entry.Name, "error", err.Error())
+			continue
 		}
 		run.update(func(p *Progress) { p.Walked++; p.NewFiles += added })
 	}

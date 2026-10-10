@@ -250,6 +250,54 @@ func scanLibrary(t *testing.T) *scanned {
 	return &scanned{harness: h, admin: admin, zurg: fake, movies: movies, tvs: tvs}
 }
 
+// A torrent that will not be kept is told and passed over: the library's
+// other titles are placed all the same, and the next scan tries it again.
+func TestATorrentThatWillNotBeKeptHoldsNothingBack(t *testing.T) {
+	h := start(t, options{})
+	admin := h.superuser()
+	fake := zurgLibrary()
+	fake.File("movies/Broken.Film.2020.1080p/Broken.Film.2020.1080p.mkv", []byte("broken"), monday)
+	fake.Dir("movies/Broken.Film.2020.1080p", monday)
+	zurgServer := httptest.NewServer(fake)
+	t.Cleanup(zurgServer.Close)
+	tmdbServer := fakeTMDB(t)
+	h.server.Library.UseTMDB(tmdb.WithBase(tmdbServer.URL+"/3", tmdbServer.URL+"/t/p"), tmdb.WithBackoff(time.Millisecond))
+	for key, values := range map[string]map[string]any{
+		"zurg": {"url": zurgServer.URL},
+		"tmdb": {"key": "a-key.for.tests", "language": "en-US"},
+	} {
+		if got := h.call(http.MethodPut, "/api/foyer/admin/adapters/"+key, admin, map[string]any{"enabled": true, "values": values}); got.status != http.StatusOK {
+			t.Fatalf("%s: %d %v", key, got.status, got.body)
+		}
+	}
+	refuse := true
+	h.app.OnRecordCreate("media_files").BindFunc(func(e *core.RecordEvent) error {
+		if refuse && strings.Contains(e.Record.GetString("path"), "Broken") {
+			return fmt.Errorf("refused for the test")
+		}
+		return e.Next()
+	})
+	movies := h.addLibrary(admin, "movies", "movies", "movies")["id"].(string)
+	if err := h.server.Library.Scan(context.Background(), movies, true); err != nil {
+		t.Fatalf("the scan gave up: %v", err)
+	}
+	if _, err := h.app.FindFirstRecordByFilter("movies", "title = 'Some Film'"); err != nil {
+		t.Fatalf("the other films were not placed: %v", err)
+	}
+	status := h.call(http.MethodGet, "/api/foyer/admin/status", admin, nil)
+	notes := fmt.Sprint(status.body["scans"].([]any)[0].(map[string]any)["notes"])
+	if !strings.Contains(notes, "Broken.Film.2020.1080p was not kept") {
+		t.Errorf("notes %s", notes)
+	}
+	refuse = false
+	if err := h.server.Library.Scan(context.Background(), movies, false); err != nil {
+		t.Fatal(err)
+	}
+	if n, _ := h.app.CountRecords("media_files", dbx.NewExp("path LIKE '%Broken%'")); n != 1 {
+		t.Errorf("the next scan kept %d of its files", n)
+	}
+}
+
 func (s *scanned) title(collection, title string) *core.Record {
 	s.t.Helper()
 	r, err := s.app.FindFirstRecordByFilter(collection, "title = {:title}", dbx.Params{"title": title})

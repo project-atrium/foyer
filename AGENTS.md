@@ -125,6 +125,9 @@ Go tests sit beside what they test. Everything else is PocketBase's: `serve`,
   (`uncertain`) waits for one, and "nothing" is asked again after a week.
   TMDB off, or its key refused, is no answer: the title is its name's until
   TMDB can be asked.
+- **One torrent never stops a scan.** One that will not be kept is told in
+  the scan's notes and left for the next scan, and the rest of the library
+  is placed.
 - **What Zurg stops listing is kept three days**, then let go with any title
   left with nothing — never on a listing that came back empty, nor when most
   of a library vanished, until the next scan agrees. Watch status stays.
@@ -174,7 +177,10 @@ Go tests sit beside what they test. Everything else is PocketBase's: `serve`,
   player would start again from the beginning. It sends every file as a
   part, one not asked for too, in chunks with no length: the proxy answers a
   player that asked for no part `200`, and gives every part its length, or a
-  player cannot seek. Never ask Zurg for gzip.
+  player cannot seek. A pack holding a file of one name in several of its
+  folders is listed with that name once per folder, and Zurg serves one of
+  them by it, not saying which: one name is one file, its size unknown where
+  the copies differ. Never ask Zurg for gzip.
 - **A release's name is read, never trusted.** `internal/parse` reads what
   the uploader typed; the library checks it against TMDB, and a superuser
   corrects the rest. A season folder never takes a number counted from the
@@ -237,5 +243,5 @@ addresses; each user's watch status; the dashboard's Library and Adapters
 pages. `go test ./...` proves it, and the dashboard was driven headless in
 Chrome against a pretend Zurg and the real TMDB. The account-sync protocol,
 its harness and the shared fixtures are gone — git has them. The image —
-Debian with Jellyfin's ffmpeg — and its compose files, the GPU's too, are
-written, and not yet built.
+Debian with Jellyfin's ffmpeg — was built and run on arm64 under Colima,
+against the household's real Zurg; the GPU's override is untried on a GPU.
