@@ -102,6 +102,7 @@ func TestNames(t *testing.T) {
 		{"Doctor.Who.2005.S01E01.Rose.1080p.mkv", Release{Title: "Doctor Who", Year: 2005, Seasons: []int{1}, Episodes: []int{1}, EpisodeTitle: "Rose"}},
 		{"The.4400.S01E01.mkv", Release{Title: "The 4400", Seasons: []int{1}, Episodes: []int{1}}},
 		{"S.W.A.T.2017.S01E01.720p.mkv", Release{Title: "S.W.A.T.", Year: 2017, Seasons: []int{1}, Episodes: []int{1}}},
+		{"Twin.Title.mkv", Release{Title: "Twin Title"}},
 		{"Se7en.1995.REMASTERED.1080p.mkv", Release{Title: "Se7en", Year: 1995, Edition: "Remastered"}},
 		{"Spider-Man.No.Way.Home.2021.mkv", Release{Title: "Spider-Man No Way Home", Year: 2021}},
 		{"Dune.Part.Two.2024.2160p.mkv", Release{Title: "Dune Part Two", Year: 2024}},

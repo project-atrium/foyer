@@ -33,9 +33,9 @@ var (
 type Placed struct {
 	Release
 	// Torrent is the torrent's name, read: a pack's title and year are there.
-	Torrent Release
+	Torrent Release `json:"torrent"`
 	// Folder is what the folder nearest the file holds.
-	Folder Folder
+	Folder Folder `json:"folder,omitempty"`
 }
 
 // classify reads a folder's name.

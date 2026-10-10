@@ -21,6 +21,14 @@ and their rules, and how they fail.
 | `GET /api/foyer/admin/zurg/folders` | superusers | `{ ok, message?, folders: [{ folder, library? }] }`: Zurg's folders, each with the library it is, and libraries whose folder Zurg no longer lists |
 | `POST /api/foyer/admin/libraries` | superusers | `{ folder, name, kind: "movies" \| "shows", enabled }` → the library, its collections made; `400` names what will not do |
 | `PATCH /api/foyer/admin/libraries/{id}` | superusers | `{ enabled }` → the library |
+| `GET /api/foyer/admin/status` | superusers | `{ scans: [{ library, name, full, phase, running, torrents, walked, newFiles, missing, removed, titles, artwork, error?, notes? }] }`, kept in memory |
+| `POST /api/foyer/admin/scan` | superusers | `{ library?, full? }` → `202`: a scan of that library, or of all |
+| `GET /api/foyer/admin/library` | superusers | `?page&perPage&library&state&q` → `{ page, perPage, totalItems, counts, items: [{ collectionId, collectionName, library, kind, id, title, year, poster, matchState, lastAdded, versionCount, quality }] }`, every library's titles newest added first |
+| `GET /api/foyer/admin/library/{collection}/{id}` | superusers | `{ item, library, files, seasons, identity }`: a title, its files and what TMDB answered |
+| `POST /api/foyer/admin/library/{collection}/{id}/confirm` | superusers | `204`: a guess confirmed |
+| `POST /api/foyer/admin/library/{collection}/{id}/match` | superusers | `{ tmdbId }` → `204`: the title is that one, merged into a title already holding it; `502` when TMDB cannot say |
+| `GET /api/foyer/admin/zurg/hook` | superusers | `{ token, command }`: the line for Zurg's `on_library_update` |
+| `POST /api/foyer/zurg/updated` | Zurg, with `Authorization: Bearer <token>` | the folders that changed, one per line → `202`; `403` without the token |
 | `DELETE /api/foyer/admin/libraries/{id}` | superusers | `204`: its collections, artwork, torrents, files and identities gone; watch status stays. `409` when a collection of your own still points at it |
 
 ### The Adapters page's routes

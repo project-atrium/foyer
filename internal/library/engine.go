@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	validation "github.com/pocketbase/ozzo-validation/v4"
@@ -14,6 +15,7 @@ import (
 	"github.com/pocketbase/pocketbase/tools/router"
 
 	"foyer/internal/adapters"
+	"foyer/internal/adapters/tmdb"
 	"foyer/internal/adapters/zurg"
 )
 
@@ -22,10 +24,31 @@ import (
 type Engine struct {
 	app      core.App
 	adapters *adapters.Registry
+	status   status
+	images   *http.Client
+	queue    chan request
+	now      func() time.Time
+
+	mu          sync.Mutex
+	scanning    map[string]bool
+	locks       map[string]*sync.Mutex
+	vanishing   map[string]time.Time
+	tmdbClient  *tmdb.Client
+	tmdbKey     string
+	tmdbOptions []tmdb.Option
 }
 
 func New(app core.App, registry *adapters.Registry) *Engine {
-	return &Engine{app: app, adapters: registry}
+	return &Engine{
+		app:       app,
+		adapters:  registry,
+		images:    &http.Client{Timeout: 30 * time.Second},
+		queue:     make(chan request, 16),
+		now:       time.Now,
+		scanning:  map[string]bool{},
+		locks:     map[string]*sync.Mutex{},
+		vanishing: map[string]time.Time{},
+	}
 }
 
 // errOff is an adapter the household has not switched on.
@@ -89,6 +112,8 @@ func viewOf(r *core.Record) libraryView {
 // Zurg's refusal is an answer, never a 401: the dashboard signs its
 // superuser out on any.
 func (e *Engine) Routes(admin *router.RouterGroup[*core.RequestEvent]) {
+	e.hookRoute(admin)
+	e.gridRoutes(admin)
 	admin.GET("/zurg/folders", func(re *core.RequestEvent) error {
 		libs, err := e.app.FindAllRecords(LibrariesCollection)
 		if err != nil {

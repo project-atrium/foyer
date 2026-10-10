@@ -3,7 +3,10 @@
 package server
 
 import (
+	"context"
 	"slices"
+	"sync"
+	"time"
 
 	"github.com/pocketbase/pocketbase/apis"
 	"github.com/pocketbase/pocketbase/core"
@@ -59,6 +62,7 @@ func Bind(app core.App, cfg config.Config) *Server {
 		admin.Bind(apis.RequireSuperuserAuth())
 		s.Adapters.Routes(admin)
 		s.Library.Routes(admin)
+		s.Library.HookRoutes(se.Router)
 		// Read by PocketBase's own handler for UI extensions, which runs last.
 		extension, err := dashboard.Extension()
 		if err != nil {
@@ -72,11 +76,25 @@ func Bind(app core.App, cfg config.Config) *Server {
 
 // Background is what runs beside the routes once the server serves — main
 // asks for it, a test never does: the library's collections brought up to
-// date at start.
+// date, then its scans, until the server stops.
 func (s *Server) Background() *Server {
+	ctx, cancel := context.WithCancel(context.Background())
+	var wg sync.WaitGroup
 	s.App.OnServe().BindFunc(func(se *core.ServeEvent) error {
 		s.Library.EnsureAll()
+		wg.Go(func() { s.Library.Run(ctx) })
 		return se.Next()
+	})
+	s.App.OnTerminate().BindFunc(func(e *core.TerminateEvent) error {
+		cancel()
+		// A scan stops at its next request; the database closes after.
+		done := make(chan struct{})
+		go func() { wg.Wait(); close(done) }()
+		select {
+		case <-done:
+		case <-time.After(10 * time.Second):
+		}
+		return e.Next()
 	})
 	return s
 }

@@ -74,7 +74,10 @@ internal/adapters/   what Foyer connects to: settings records, fields, masked se
   zurg/zurgtest/     a pretend Zurg, for the tests
 internal/titles/     Loge's titleKey and bareTitle, ported to the byte
 internal/parse/      release names: title, year, season and episode, numbers counted from the start, what the file is
-internal/library/    libraries: their collections from one template, Ensure, the dashboard's library routes
+internal/library/    libraries: their collections from one template, the scan — walk, name, identify, place,
+                     sweep, artwork — corrections, and the dashboard's library routes
+internal/media/      what a file is: Loge's MediaVersion, from a release's name or ffprobe
+internal/identity/   Loge's watchIdentity and identityHash, ported
 internal/dashboard/  the dashboard's icon: a PocketBase UI extension, embedded
 internal/version/    the version, always the app's: its `npm run release` moves both
 migrations/          0001 users are profiles; 0002 the name, the rate limits, the first superuser; 0003 adapters;
@@ -104,6 +107,21 @@ Go tests sit beside what they test. Everything else is PocketBase's: `serve`,
   collections' rules — and its files by `media_files` being the superusers'
   alone. Whatever a user reads of a title — its versions, their paths — is on
   the title itself.
+- **No network inside a transaction.** Zurg, TMDB and the artwork servers are
+  asked first; then one transaction writes. A file field's save uploads to
+  storage — S3 too — so artwork is saved on its own, outside any. A library's
+  writes — its scan, its artwork, a probe's results — take its lock, so none
+  overwrites what another changed.
+- **TMDB is asked once per title**, and the answer kept in `identities` by the
+  title's key: a superuser's word (`manual`) is never asked again, a guess
+  (`uncertain`) waits for one, and "nothing" is asked again after a week.
+  TMDB off, or its key refused, is no answer: the title is its name's until
+  TMDB can be asked.
+- **What Zurg stops listing is kept three days**, then let go with any title
+  left with nothing — never on a listing that came back empty, nor when most
+  of a library vanished, until the next scan agrees. Watch status stays.
+- **One scan at a time**, from one loop that runs only beside `serve`
+  (`Background`): SQLite has one writer, and nothing a test binds starts it.
 - **No admin route answers 401 for a service's refusal.** The dashboard takes
   any 401 for its own session ending and signs the superuser out: a test that
   failed is `200 { ok: false }`.

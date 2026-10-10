@@ -83,6 +83,17 @@ directory, with the migrations applied, through PocketBase's real router
   `Ensure` is idempotent and repairs; removing a library takes its
   collections and files, and one made again gets an id of its own; Zurg's
   folders come with their libraries.
+- **A scan, end to end**, against a pretend Zurg and a pretend TMDB, with
+  names shaped like the household's: one film in two torrents is one film
+  with two versions, dated by its first and newest file; a guess is uncertain
+  and a title TMDB never heard of its name's; a pack counted from its start
+  is laid on the series TMDB numbers so, past its "Season 01" folder, three
+  copies of one episode its versions, its special matched by name and its
+  film an extra; two series of one name told apart by their episodes; the
+  grid newest first; a second scan walks only what changed; a torrent gone
+  for the grace period takes its film; a correction sticks, and merges;
+  Zurg's webhook wants its token. And the episode mapping and the matching
+  policy on their own.
 - **The guard:** Foyer's collections refuse a superuser's record writes, a
   change, a truncate, an import and a delete; `users`' rules stay.
 - **TMDB**, against a fake of its routes: Loge's matcher's own cases, ported —

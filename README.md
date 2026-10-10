@@ -71,8 +71,13 @@ Then make the dashboard's superuser, and a user for each person.
 - **Adapters**: Zurg's and TMDB's settings kept on the server, their
   secrets masked; Zurg read over WebDAV; a TMDB client that names films and
   series as Loge does, with their details, seasons and artwork.
-- **The library is being built**: the scanner, ffprobe, streams, watch
-  status, and the dashboard's Library and Adapters pages.
+- **The library**: each Zurg folder you choose is a library, scanned every
+  15 minutes and when Zurg says: films and series named by TMDB, episodes laid
+  as TMDB numbers them — anime packs counted from the start included — with
+  their artwork, dates and what each file's name says it is. A guess stays
+  hidden from users until you confirm it; corrections stick.
+- **Being built**: ffprobe, streams, watch status, and the dashboard's
+  Library and Adapters pages.
 - **The dashboard** wears Foyer's icon.
 - **`go test ./...` proves it.**
 - **The Dockerfile and compose file are written**, and not yet built.

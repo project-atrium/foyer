@@ -19,9 +19,10 @@ import (
 // harness is the server on a temporary data directory: PocketBase with
 // Foyer's migrations, hooks and routes, called through its real router.
 type harness struct {
-	t   *testing.T
-	app *tests.TestApp
-	mux http.Handler
+	t      *testing.T
+	app    *tests.TestApp
+	mux    http.Handler
+	server *server.Server
 }
 
 type options struct {
@@ -39,7 +40,7 @@ func start(t *testing.T, opts options) *harness {
 	if !opts.limits {
 		app.Settings().RateLimits.Enabled = false
 	}
-	server.Bind(app, config.Config{})
+	bound := server.Bind(app, config.Config{})
 
 	router, err := apis.NewRouter(app)
 	if err != nil {
@@ -54,7 +55,7 @@ func start(t *testing.T, opts options) *harness {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	return &harness{t: t, app: app, mux: mux}
+	return &harness{t: t, app: app, mux: mux, server: bound}
 }
 
 type answer struct {

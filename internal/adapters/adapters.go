@@ -317,7 +317,9 @@ func (r *Registry) Save(key string, enabled bool, sent map[string]any) (Settings
 		record = core.NewRecord(collection)
 		record.Set("key", key)
 	}
+	// A secret Foyer made itself — a token no field asks for — is kept.
 	config, secrets := map[string]any{}, map[string]any{}
+	_ = record.UnmarshalJSONField("secrets", &secrets)
 	for _, f := range a.Fields {
 		v, ok := s.Values[f.Key]
 		if !ok {
@@ -342,6 +344,43 @@ func (r *Registry) Save(key string, enabled bool, sent map[string]any) (Settings
 		fn(key)
 	}
 	return s, nil
+}
+
+// Secret is a secret an adapter keeps that no field asks for: a token Foyer
+// made. Empty when there is none.
+func (r *Registry) Secret(key, name string) (string, error) {
+	record, err := r.record(key)
+	if err != nil || record == nil {
+		return "", err
+	}
+	secrets := map[string]any{}
+	_ = record.UnmarshalJSONField("secrets", &secrets)
+	v, _ := secrets[name].(string)
+	return v, nil
+}
+
+// SetSecret keeps such a secret, saving the adapter, off, if it never was.
+func (r *Registry) SetSecret(key, name, value string) error {
+	if _, ok := r.Adapter(key); !ok {
+		return fmt.Errorf("no adapter %q", key)
+	}
+	record, err := r.record(key)
+	if err != nil {
+		return err
+	}
+	if record == nil {
+		collection, err := r.app.FindCollectionByNameOrId(Collection)
+		if err != nil {
+			return err
+		}
+		record = core.NewRecord(collection)
+		record.Set("key", key)
+	}
+	secrets := map[string]any{}
+	_ = record.UnmarshalJSONField("secrets", &secrets)
+	secrets[name] = value
+	record.Set("secrets", secrets)
+	return r.app.Save(record)
 }
 
 // Test runs the adapter's test on what the page sent, laid over what is

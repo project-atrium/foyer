@@ -10,17 +10,17 @@ import (
 // `shows` with `shows_episodes` — are not here: Foyer makes them from a
 // template, one set per Zurg folder chosen as a library (internal/library).
 //
-// - libraries: which Zurg folder is which library, and how its scans went.
-//   Users may read them, to know what there is.
-// - media_torrents: each folder Zurg lists under a library's folder — a
-//   torrent — and when Foyer first saw it, or saw it last.
-// - media_files: each file of a torrent, what its name says, which title
-//   took it, and what ffprobe found. Superusers only: users read a title's
-//   versions on the title itself, and a title not yet confirmed must not
-//   show through its files.
-// - identities: what TMDB was asked and answered for each title a library
-//   read, so a decision outlives the records it made, and a superuser's
-//   correction stays corrected.
+//   - libraries: which Zurg folder is which library, and how its scans went.
+//     Users may read them, to know what there is.
+//   - media_torrents: each folder Zurg lists under a library's folder — a
+//     torrent — and when Foyer first saw it, or saw it last.
+//   - media_files: each file of a torrent, what its name says, which title
+//     took it, and what ffprobe found. Superusers only: users read a title's
+//     versions on the title itself, and a title not yet confirmed must not
+//     show through its files.
+//   - identities: what TMDB was asked and answered for each title a library
+//     read, so a decision outlives the records it made, and a superuser's
+//     correction stays corrected.
 //
 // Written by Foyer's code alone: the guard refuses even a superuser's writes
 // from the API.

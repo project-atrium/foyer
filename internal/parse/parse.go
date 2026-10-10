@@ -20,49 +20,49 @@ import (
 
 // Release is what one name says. A number never said is 0.
 type Release struct {
-	Title string
-	Year  int
+	Title string `json:"title,omitempty"`
+	Year  int    `json:"year,omitempty"`
 	// Alternate is the title with a year it may have swallowed — "Class of
 	// 1984" — to try when the title alone finds nothing.
-	Alternate string
+	Alternate string `json:"alternate,omitempty"`
 
-	Seasons  []int
-	Episodes []int
+	Seasons  []int `json:"seasons,omitempty"`
+	Episodes []int `json:"episodes,omitempty"`
 	// Absolute is an episode counted from the series' start, as anime
 	// releases number them. Counted says the name numbered it so, after a
 	// dash; an "Episode 5" with no season may yet belong to a season folder.
-	Absolute []int
-	Counted  bool
+	Absolute []int `json:"absolute,omitempty"`
+	Counted  bool  `json:"counted,omitempty"`
 	// Pack is a range a pack's name covers, "(0001-1071)": a hint, never an
 	// episode.
-	Pack         [2]int
-	EpisodeTitle string
+	Pack         [2]int `json:"pack,omitempty"`
+	EpisodeTitle string `json:"episode_title,omitempty"`
 	// Special is "special", "ova" or "recap", from the name or a folder.
-	Special     string
-	MovieNumber int
-	AirDate     string
+	Special     string `json:"special,omitempty"`
+	MovieNumber int    `json:"movie_number,omitempty"`
+	AirDate     string `json:"air_date,omitempty"`
 
-	Resolution int
-	Source     string
-	Remux      bool
-	VideoCodec string
-	BitDepth   int
-	HDR        []string
-	Audio      []string
-	Channels   string
-	Edition    string
-	Repack     bool
-	Upscaled   bool
-	DualAudio  bool
-	MultiSub   bool
-	Group      string
-	CRC        string
-	Container  string
-	Sample     bool
-	Extra      string
+	Resolution int      `json:"resolution,omitempty"`
+	Source     string   `json:"source,omitempty"`
+	Remux      bool     `json:"remux,omitempty"`
+	VideoCodec string   `json:"video_codec,omitempty"`
+	BitDepth   int      `json:"bit_depth,omitempty"`
+	HDR        []string `json:"hdr,omitempty"`
+	Audio      []string `json:"audio,omitempty"`
+	Channels   string   `json:"channels,omitempty"`
+	Edition    string   `json:"edition,omitempty"`
+	Repack     bool     `json:"repack,omitempty"`
+	Upscaled   bool     `json:"upscaled,omitempty"`
+	DualAudio  bool     `json:"dual_audio,omitempty"`
+	MultiSub   bool     `json:"multi_sub,omitempty"`
+	Group      string   `json:"group,omitempty"`
+	CRC        string   `json:"crc,omitempty"`
+	Container  string   `json:"container,omitempty"`
+	Sample     bool     `json:"sample,omitempty"`
+	Extra      string   `json:"extra,omitempty"`
 	// Anime counts what marks an anime release: a group in brackets first,
 	// numbers counted from the start, dual audio, an anime service.
-	Anime int
+	Anime int `json:"anime,omitempty"`
 }
 
 var (
@@ -550,7 +550,7 @@ func separate(s string) string {
 	if !strings.Contains(s, " ") && strings.Contains(s, "_") {
 		s = strings.ReplaceAll(s, "_", " ")
 	}
-	if !strings.Contains(s, " ") && strings.Count(s, ".") >= 2 {
+	if !strings.Contains(s, " ") && strings.Contains(s, ".") {
 		s = codecDot.ReplaceAllString(s, "H$1")
 		s = channelDot.ReplaceAllString(s, "${1}_$2")
 		s = strings.ReplaceAll(s, ".", " ")
