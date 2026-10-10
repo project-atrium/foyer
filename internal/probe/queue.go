@@ -20,9 +20,10 @@ import (
 const (
 	probeTimeout = 90 * time.Second
 	grantFor     = 10 * time.Minute
-	// perMinute bounds what the probes ask of Zurg, and so of Real-Debrid.
+	// perMinute bounds what the probes ask of the share — and of Real-Debrid,
+	// behind Zurg.
 	perMinute = 30
-	// pause is how long the queue rests when Zurg keeps failing: its own
+	// pause is how long the queue rests when the share keeps failing: its own
 	// trouble, which no file is to blame for.
 	pause = 5 * time.Minute
 )

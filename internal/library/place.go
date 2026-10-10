@@ -29,17 +29,17 @@ func (e *Engine) placeWaiting(ctx context.Context, lib *core.Record, full bool, 
 	if err != nil || len(files) == 0 {
 		return err
 	}
-	torrents, err := e.app.FindAllRecords(TorrentsCollection, dbx.HashExp{"library": lib.Id})
+	entries, err := e.app.FindAllRecords(EntriesCollection, dbx.HashExp{"library": lib.Id})
 	if err != nil {
 		return err
 	}
 	names := map[string]string{}
-	for _, t := range torrents {
+	for _, t := range entries {
 		names[t.Id] = t.GetString("name")
 	}
 	var waiting []*placedFile
 	for _, f := range files {
-		pf := &placedFile{record: f, torrent: names[f.GetString("torrent")]}
+		pf := &placedFile{record: f, entry: names[f.GetString("entry")]}
 		if err := f.UnmarshalJSONField("parsed", &pf.placed); err != nil {
 			continue
 		}

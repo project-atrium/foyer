@@ -59,14 +59,14 @@ go run ./dev/fakezurg -addr 127.0.0.1:9999 <folder>
   where only a torrent's biggest file shows; and all of them to `__all__`.
 - Names, sizes and dates come from the records — a torrent's folder dated
   when Real-Debrid added it. Their links and hashes are never read.
-- It answers as Zurg does (`zurgtest`'s `AsZurg`, which the server's tests
+- It answers as Zurg does (`webdavtest`'s `AsZurg`, which the server's tests
   use too): relative hrefs, dates in `UTC`, every file sent as a part in
   chunks with no length.
 - Every file is the same four seconds of 1080p made with ffmpeg — Japanese
   audio, English subtitles, two chapters — so ffprobe has something to read;
   `-sample` serves a video of your own instead.
-- Set Zurg on the Adapters page to `http://127.0.0.1:9999`. `-user` and
-  `-password` make it ask for them.
+- Set WebDAV on the Adapters page to `http://127.0.0.1:9999/dav`. `-user`
+  and `-password` make it ask for them.
 - **Records from a real Zurg hold the household's Real-Debrid links.** Keep
   them out of the repository: the tests' names are made up.
 
@@ -157,9 +157,10 @@ directory, with the migrations applied, through PocketBase's real router
   the key as a bearer header or in the query, a refused key latched, a year
   either side, names in other languages, several of one name handed over —
   and a film's details, seasons twenty to a call, episode groups, artwork.
-- **Zurg**, against `zurgtest`, a pretend Zurg: its folders, a torrent's
-  files flat and nested, hrefs however they are escaped, a refused sign-in
-  kept, ranges — and Zurg's `200` with a `Content-Range` read as `206`.
+- **WebDAV**, against `webdavtest`, a pretend share that can answer as Zurg
+  does: its folders, an entry's files flat and nested, hrefs however they
+  are escaped or relative, a name listed twice, a refused sign-in kept,
+  ranges — and Zurg's `200` with a `Content-Range` read as `206`.
 - **Titles:** Loge's own cases for `titleKey` and `bareTitle`.
 - **Release names**, a table of some fifty: scene names, dotted and dashed;
   numeric titles and years inside titles; season packs and ranges; anime

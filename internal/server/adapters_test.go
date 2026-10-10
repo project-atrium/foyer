@@ -102,7 +102,7 @@ func TestAnUnknownAdapterIsNotFound(t *testing.T) {
 func TestFoyersCollectionsRefuseEvenASuperusersWrites(t *testing.T) {
 	h := start(t, options{})
 	admin := h.superuser()
-	if got := h.call(http.MethodPost, "/api/collections/adapters/records", admin, map[string]any{"key": "zurg"}); got.status != http.StatusForbidden {
+	if got := h.call(http.MethodPost, "/api/collections/adapters/records", admin, map[string]any{"key": "webdav"}); got.status != http.StatusForbidden {
 		t.Errorf("a record: %d %v", got.status, got.body)
 	}
 	if got := h.call(http.MethodPatch, "/api/collections/adapters", admin, map[string]any{"listRule": ""}); got.status != http.StatusForbidden {
@@ -125,7 +125,7 @@ func TestFoyersCollectionsRefuseEvenASuperusersWrites(t *testing.T) {
 		t.Fatal(err)
 	}
 	record := core.NewRecord(collection)
-	record.Set("key", "zurg")
+	record.Set("key", "webdav")
 	if err := h.app.Save(record); err != nil {
 		t.Fatalf("a model save: %v", err)
 	}

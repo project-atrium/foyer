@@ -1,7 +1,7 @@
 # CLAUDE.md — foyer
 
 The household's own server: PocketBase, used as a Go framework — its users are
-the household's profiles, and its library is growing from Zurg.
+the household's profiles, and its library comes from a WebDAV share — Zurg's.
 
 ## Reading protocol — before you plan, edit or run anything
 
@@ -34,7 +34,7 @@ to ten profiles is gone, and with it the protocol Loge's `sync/custom-server`
 spoke; Step 2 redesigns how Loge signs in — a device with two profiles signs
 in as two users, and a user's PIN is on its own record.
 
-**Secrets are plain text on this server.** Zurg's password, the TMDB key and
+**Secrets are plain text on this server.** The share's password, the TMDB key and
 the PINs are stored as typed; a user's password is PocketBase's bcrypt hash.
 So `pb_data`, its backups and a superuser login are as sensitive as every
 secret the household gave it. Say so wherever it matters, and never quietly

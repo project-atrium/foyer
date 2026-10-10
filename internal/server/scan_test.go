@@ -20,7 +20,7 @@ import (
 	"github.com/pocketbase/pocketbase/core"
 
 	"foyer/internal/adapters/tmdb"
-	"foyer/internal/adapters/zurg/zurgtest"
+	"foyer/internal/adapters/webdav/webdavtest"
 )
 
 // A household's library in miniature: every name invented, shaped like the
@@ -31,8 +31,8 @@ var (
 	friday  = monday.Add(4 * 24 * time.Hour)
 )
 
-func zurgLibrary() *zurgtest.Fake {
-	f := zurgtest.New()
+func zurgLibrary() *webdavtest.Fake {
+	f := webdavtest.New()
 	// As the real Zurg answers: bare relative hrefs, dates in UTC, every
 	// file sent as a part with no length.
 	f.AsZurg = true
@@ -218,7 +218,7 @@ func fakeTMDB(t *testing.T) *httptest.Server {
 type scanned struct {
 	*harness
 	admin       string
-	zurg        *zurgtest.Fake
+	zurg        *webdavtest.Fake
 	movies, tvs string
 }
 
@@ -233,8 +233,8 @@ func scanLibrary(t *testing.T) *scanned {
 	h.server.Library.UseTMDB(tmdb.WithBase(tmdbServer.URL+"/3", tmdbServer.URL+"/t/p"), tmdb.WithBackoff(time.Millisecond))
 	h.server.Library.SetClock(func() time.Time { return friday.Add(time.Hour) })
 	for key, values := range map[string]map[string]any{
-		"zurg": {"url": zurgServer.URL},
-		"tmdb": {"key": "a-key.for.tests", "language": "en-US"},
+		"webdav": {"url": zurgServer.URL + "/dav"},
+		"tmdb":   {"key": "a-key.for.tests", "language": "en-US"},
 	} {
 		if got := h.call(http.MethodPut, "/api/foyer/admin/adapters/"+key, admin, map[string]any{"enabled": true, "values": values}); got.status != http.StatusOK {
 			t.Fatalf("%s: %d %v", key, got.status, got.body)
@@ -250,9 +250,9 @@ func scanLibrary(t *testing.T) *scanned {
 	return &scanned{harness: h, admin: admin, zurg: fake, movies: movies, tvs: tvs}
 }
 
-// A torrent that will not be kept is told and passed over: the library's
+// An entry that will not be kept is told and passed over: the library's
 // other titles are placed all the same, and the next scan tries it again.
-func TestATorrentThatWillNotBeKeptHoldsNothingBack(t *testing.T) {
+func TestAnEntryThatWillNotBeKeptHoldsNothingBack(t *testing.T) {
 	h := start(t, options{})
 	admin := h.superuser()
 	fake := zurgLibrary()
@@ -263,8 +263,8 @@ func TestATorrentThatWillNotBeKeptHoldsNothingBack(t *testing.T) {
 	tmdbServer := fakeTMDB(t)
 	h.server.Library.UseTMDB(tmdb.WithBase(tmdbServer.URL+"/3", tmdbServer.URL+"/t/p"), tmdb.WithBackoff(time.Millisecond))
 	for key, values := range map[string]map[string]any{
-		"zurg": {"url": zurgServer.URL},
-		"tmdb": {"key": "a-key.for.tests", "language": "en-US"},
+		"webdav": {"url": zurgServer.URL + "/dav"},
+		"tmdb":   {"key": "a-key.for.tests", "language": "en-US"},
 	} {
 		if got := h.call(http.MethodPut, "/api/foyer/admin/adapters/"+key, admin, map[string]any{"enabled": true, "values": values}); got.status != http.StatusOK {
 			t.Fatalf("%s: %d %v", key, got.status, got.body)
@@ -491,21 +491,21 @@ func TestASuperusersCorrectionSticks(t *testing.T) {
 	}
 }
 
-func TestZurgsWebhookNeedsItsToken(t *testing.T) {
+func TestTheWebhookNeedsItsToken(t *testing.T) {
 	s := scanLibrary(t)
-	hook := s.call(http.MethodGet, "/api/foyer/admin/zurg/hook", s.admin, nil)
+	hook := s.call(http.MethodGet, "/api/foyer/admin/webdav/hook", s.admin, nil)
 	token, _ := hook.body["token"].(string)
 	if hook.status != http.StatusOK || len(token) < 20 || !strings.Contains(hook.body["command"].(string), token) {
 		t.Fatalf("hook: %d %v", hook.status, hook.body)
 	}
-	if got := s.call(http.MethodPost, "/api/foyer/zurg/updated", "Bearer wrong", nil); got.status != http.StatusForbidden {
+	if got := s.call(http.MethodPost, "/api/foyer/webdav/updated", "Bearer wrong", nil); got.status != http.StatusForbidden {
 		t.Fatalf("a wrong token: %d", got.status)
 	}
-	if got := s.call(http.MethodPost, "/api/foyer/zurg/updated", "Bearer "+token, nil); got.status != http.StatusAccepted {
+	if got := s.call(http.MethodPost, "/api/foyer/webdav/updated", "Bearer "+token, nil); got.status != http.StatusAccepted {
 		t.Fatalf("the token: %d %v", got.status, got.body)
 	}
 	// Asked again, the same token: Zurg's config keeps working.
-	if again := s.call(http.MethodGet, "/api/foyer/admin/zurg/hook", s.admin, nil); again.body["token"] != token {
+	if again := s.call(http.MethodGet, "/api/foyer/admin/webdav/hook", s.admin, nil); again.body["token"] != token {
 		t.Fatal("a new token every time")
 	}
 }

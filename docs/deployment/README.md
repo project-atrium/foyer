@@ -88,11 +88,12 @@ Leave them as they are.
 `FOYER_TRUST_PROXY` is not a setting the migrations write: the server applies it
 on every start, so `.env` stays the one place it is set.
 
-## Zurg
+## Zurg, or another WebDAV share
 
-Foyer reads Zurg over its WebDAV, at the address set on the Adapters page —
-`http://zurg:9999` where both are in one compose project. Every stream comes
-through Foyer, so Zurg needs to be reachable from Foyer alone, never from the
+Foyer reads a WebDAV share at the address set on the Adapters page — its
+WebDAV root: `http://zurg:9999/dav` where Foyer and Zurg are in one compose
+project, rclone's or a NAS's wherever it serves. Every stream comes through
+Foyer, so the share needs to be reachable from Foyer alone, never from the
 household's devices.
 
 **Scanning as soon as Zurg changes.** Zurg runs its `on_library_update`
@@ -103,7 +104,7 @@ Foyer scans those. Use the address Zurg reaches Foyer by. The line uses
 scans every library:
 
 ```yaml
-on_library_update: wget -qO- --header='Authorization: Bearer <token>' --post-data='' http://foyer:8090/api/foyer/zurg/updated
+on_library_update: wget -qO- --header='Authorization: Bearer <token>' --post-data='' http://foyer:8090/api/foyer/webdav/updated
 ```
 
 Without it, Foyer looks every 15 minutes, as the Adapters page sets.

@@ -24,7 +24,7 @@ import (
 	"strings"
 	"time"
 
-	"foyer/internal/adapters/zurg/zurgtest"
+	"foyer/internal/adapters/webdav/webdavtest"
 	"foyer/internal/parse"
 )
 
@@ -79,7 +79,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	fake := zurgtest.New()
+	fake := webdavtest.New()
 	fake.User, fake.Password, fake.AsZurg = *user, *password, true
 	counts := map[string]int{}
 	for _, folder := range []string{"__all__", "anime", "shows", "movies"} {

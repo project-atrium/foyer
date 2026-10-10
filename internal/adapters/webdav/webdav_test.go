@@ -1,4 +1,4 @@
-package zurg_test
+package webdav_test
 
 import (
 	"context"
@@ -12,17 +12,17 @@ import (
 	"time"
 
 	"foyer/internal/adapters"
-	"foyer/internal/adapters/zurg"
-	"foyer/internal/adapters/zurg/zurgtest"
+	"foyer/internal/adapters/webdav"
+	"foyer/internal/adapters/webdav/webdavtest"
 )
 
 var added = time.Date(2026, 1, 25, 20, 43, 7, 0, time.UTC)
 
 // library is a Zurg with a film and a season pack — names invented, shaped
 // like the household's — the pack's files under folders of their own.
-func library(t *testing.T) (*zurgtest.Fake, *zurg.Client) {
+func library(t *testing.T) (*webdavtest.Fake, *webdav.Client) {
 	t.Helper()
-	fake := zurgtest.New()
+	fake := webdavtest.New()
 	fake.Dir("__all__", added)
 	fake.File("movies/Some.Film.2022.1080p.BluRay.x264-GRP/Some.Film.2022.1080p.BluRay.x264-GRP.mkv", []byte("film"), added)
 	fake.File("shows/[Group] Some Show (01-26) [1080p]/Season 01/[Group] Some Show - 01.mkv", []byte("one"), added.Add(time.Hour))
@@ -30,7 +30,7 @@ func library(t *testing.T) (*zurgtest.Fake, *zurg.Client) {
 	fake.File("shows/[Group] Some Show (01-26) [1080p]/Extras #1/Making of 100% & more.mkv", []byte("extra"), added)
 	server := httptest.NewServer(fake)
 	t.Cleanup(server.Close)
-	client, err := zurg.New(server.URL, "", "")
+	client, err := webdav.New(server.URL+"/dav", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,7 +111,7 @@ func TestReadsZurgsOwnListing(t *testing.T) {
 		_, _ = io.WriteString(w, listing)
 	}))
 	defer server.Close()
-	client, err := zurg.New(server.URL, "", "")
+	client, err := webdav.New(server.URL+"/dav", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,7 +119,7 @@ func TestReadsZurgsOwnListing(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got := map[string]zurg.Entry{}
+	got := map[string]webdav.Entry{}
 	for _, e := range entries {
 		got[e.Name] = e
 	}
@@ -150,7 +150,7 @@ func TestANameListedTwiceIsOneFile(t *testing.T) {
 		_, _ = io.WriteString(w, listing)
 	}))
 	defer server.Close()
-	client, err := zurg.New(server.URL, "", "")
+	client, err := webdav.New(server.URL+"/dav", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -206,7 +206,7 @@ func TestReadsAListingWhateverItsHrefsLookLike(t *testing.T) {
 		_, _ = io.WriteString(w, listing)
 	}))
 	defer server.Close()
-	client, err := zurg.New(server.URL+"/dav", "", "")
+	client, err := webdav.New(server.URL+"/dav", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -214,7 +214,7 @@ func TestReadsAListingWhateverItsHrefsLookLike(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got := map[string]zurg.Entry{}
+	got := map[string]webdav.Entry{}
 	for _, e := range entries {
 		got[e.Name] = e
 	}
@@ -233,7 +233,7 @@ func TestReadsAListingWhateverItsHrefsLookLike(t *testing.T) {
 }
 
 func TestARefusedSignInIsKeptAndAsksNothingMore(t *testing.T) {
-	fake := zurgtest.New()
+	fake := webdavtest.New()
 	fake.User, fake.Password = "zurg", "right"
 	fake.Dir("movies", added)
 	requests := 0
@@ -242,14 +242,14 @@ func TestARefusedSignInIsKeptAndAsksNothingMore(t *testing.T) {
 		fake.ServeHTTP(w, r)
 	}))
 	defer server.Close()
-	wrong, _ := zurg.New(server.URL, "zurg", "wrong")
-	if _, err := wrong.List(context.Background(), ""); !errors.Is(err, zurg.ErrRefused) {
+	wrong, _ := webdav.New(server.URL+"/dav", "zurg", "wrong")
+	if _, err := wrong.List(context.Background(), ""); !errors.Is(err, webdav.ErrRefused) {
 		t.Fatalf("got %v", err)
 	}
-	if _, err := wrong.List(context.Background(), "movies"); !errors.Is(err, zurg.ErrRefused) || requests != 1 {
+	if _, err := wrong.List(context.Background(), "movies"); !errors.Is(err, webdav.ErrRefused) || requests != 1 {
 		t.Fatalf("again: %v after %d requests", err, requests)
 	}
-	right, _ := zurg.New(server.URL, "zurg", "right")
+	right, _ := webdav.New(server.URL+"/dav", "zurg", "right")
 	if entries, err := right.List(context.Background(), ""); err != nil || len(entries) != 1 {
 		t.Fatalf("right: %v %v", entries, err)
 	}
@@ -290,29 +290,35 @@ func TestAWholeFileAnsweredForAPartWillNotDo(t *testing.T) {
 	fake, client := library(t)
 	fake.IgnoreRange = true
 	_, err := client.Open(context.Background(), "movies", "Some.Film.2022.1080p.BluRay.x264-GRP/Some.Film.2022.1080p.BluRay.x264-GRP.mkv", http.Header{"Range": {"bytes=2-"}}, false)
-	if !errors.Is(err, zurg.ErrRangeIgnored) {
+	if !errors.Is(err, webdav.ErrRangeIgnored) {
 		t.Fatalf("got %v", err)
 	}
 }
 
 func TestAFileZurgNoLongerHasIsNotFound(t *testing.T) {
 	_, client := library(t)
-	if _, err := client.Open(context.Background(), "movies", "gone/gone.mkv", http.Header{}, false); !errors.Is(err, zurg.ErrNotFound) {
+	if _, err := client.Open(context.Background(), "movies", "gone/gone.mkv", http.Header{}, false); !errors.Is(err, webdav.ErrNotFound) {
 		t.Fatalf("got %v", err)
 	}
 }
 
-func TestTheAdaptersTestNamesZurgsFolders(t *testing.T) {
-	fake := zurgtest.New()
+// The address is the share's WebDAV root as given; one where nothing lists
+// a folder is told where Zurg's is.
+func TestTheAdaptersTestNamesTheSharesFolders(t *testing.T) {
+	fake := webdavtest.New()
 	fake.Dir("movies", added)
 	fake.Dir("shows", added)
 	server := httptest.NewServer(fake)
 	defer server.Close()
-	result := zurg.Adapter().Test(context.Background(), adapters.Settings{Values: map[string]any{"url": server.URL}})
+	result := webdav.Adapter().Test(context.Background(), adapters.Settings{Values: map[string]any{"url": server.URL + "/dav"}})
 	if !result.OK || !strings.Contains(result.Message, "2 folders") {
 		t.Fatalf("result %+v", result)
 	}
-	refused := zurg.Adapter().Test(context.Background(), adapters.Settings{Values: map[string]any{"url": "http://127.0.0.1:1"}})
+	beside := webdav.Adapter().Test(context.Background(), adapters.Settings{Values: map[string]any{"url": server.URL}})
+	if beside.OK || !strings.Contains(beside.Message, "http://zurg:9999/dav") {
+		t.Fatalf("the server's root, not its share: %+v", beside)
+	}
+	refused := webdav.Adapter().Test(context.Background(), adapters.Settings{Values: map[string]any{"url": "http://127.0.0.1:1"}})
 	if refused.OK {
 		t.Fatalf("an address with nothing behind it: %+v", refused)
 	}

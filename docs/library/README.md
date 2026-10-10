@@ -20,9 +20,10 @@ read.
 
 ## A scan
 
-Foyer looks at each library every 15 minutes (the Zurg adapter's interval),
-at once when Zurg's `on_library_update` tells it, and when you press Scan now.
-Once a day it walks every torrent again, to see inside them.
+Foyer looks at each library every 15 minutes (the WebDAV adapter's
+interval), at once when Zurg's `on_library_update` tells it, and when you
+press Scan now. Once a day it walks every entry again — a torrent on Zurg, a
+folder or a file elsewhere — to see inside them.
 
 1. **Zurg's folder is listed**, over WebDAV. A torrent Foyer has not seen is
    walked — its folders too, however deep Zurg shows them — and its video
@@ -110,7 +111,7 @@ the episode is laid there.
 
 With the FFmpeg adapter switched on, ffprobe reads every file — the newest
 first, two at a time unless you say more, through Foyer itself, so it never
-holds Zurg's address or password. It reads a few megabytes of each: its
+holds the share's address or password. It reads a few megabytes of each: its
 picture and quality, its codec and HDR (Dolby Vision, HDR10, HDR10+, HLG),
 its audio tracks with their languages and Atmos or DTS:X, its subtitles,
 forced and SDH, and its chapters.
@@ -125,12 +126,13 @@ hours, then left; Zurg itself failing costs it nothing, and pauses the reading
 a while. The GPU is tried on the Adapters page: transcoding comes later, and
 that is where the household learns beforehand that it is reachable.
 
-## Telling Foyer when Zurg changes
+## Telling Foyer when the share changes
 
-Settings → Adapters shows a line for Zurg's config, with a token of its own:
+Settings → Adapters shows a line for Zurg's config, with a token of its own
+— any other share's tools can post the folders that changed the same way:
 
 ```yaml
-on_library_update: printf '%s\n' "$@" | curl -fsS -m 10 -X POST -H 'Authorization: Bearer <token>' --data-binary @- http://foyer:8090/api/foyer/zurg/updated
+on_library_update: printf '%s\n' "$@" | curl -fsS -m 10 -X POST -H 'Authorization: Bearer <token>' --data-binary @- http://foyer:8090/api/foyer/webdav/updated
 ```
 
 Zurg runs it with the folders that changed; Foyer scans those libraries at

@@ -102,8 +102,8 @@ func TestDecidesAmongSeveralOfOneName(t *testing.T) {
 }
 
 func TestAYearBesideALaterSeasonIsNotTheSeries(t *testing.T) {
-	files := []*placedFile{{torrent: "Show.2021.S03", placed: parse.Placed{Release: parse.Release{Title: "Show", Year: 2021, Seasons: []int{3}, Episodes: []int{1}}}}}
-	files[0].placed.Torrent = parse.Release{Title: "Show", Year: 2021, Seasons: []int{3}}
+	files := []*placedFile{{entry: "Show.2021.S03", placed: parse.Placed{Release: parse.Release{Title: "Show", Year: 2021, Seasons: []int{3}, Episodes: []int{1}}}}}
+	files[0].placed.Entry = parse.Release{Title: "Show", Year: 2021, Seasons: []int{3}}
 	got := plan(Shows, files)
 	if len(got) != 1 || got[0].year != 0 || got[0].key != "show|show|0" {
 		t.Fatalf("%+v", got[0])
@@ -111,8 +111,8 @@ func TestAYearBesideALaterSeasonIsNotTheSeries(t *testing.T) {
 }
 
 func TestTwoTorrentsOfOneFilmAreOneTitle(t *testing.T) {
-	film := func(torrent string) *placedFile {
-		return &placedFile{torrent: torrent, placed: parse.Placed{Release: parse.Release{Title: "Some Film", Year: 2022}}}
+	film := func(entry string) *placedFile {
+		return &placedFile{entry: entry, placed: parse.Placed{Release: parse.Release{Title: "Some Film", Year: 2022}}}
 	}
 	got := plan(Movies, []*placedFile{film("a"), film("b")})
 	if len(got) != 1 || len(got[0].files) != 2 {
@@ -125,7 +125,7 @@ func TestTwoTorrentsOfOneFilmAreOneTitle(t *testing.T) {
 func TestAPacksUnnumberedFilesAreItsOwn(t *testing.T) {
 	pack := "Attack on Titan (2013) Season 1-4 S01-S04 (1080p)"
 	file := func(path string) *placedFile {
-		return &placedFile{torrent: pack, placed: parse.Path(pack+"/"+path, nil)}
+		return &placedFile{entry: pack, placed: parse.Path(pack+"/"+path, nil)}
 	}
 	got := plan(Shows, []*placedFile{
 		file("Attack on Titan (2013) - S01E01 - To You, in 2000 Years.mkv"),

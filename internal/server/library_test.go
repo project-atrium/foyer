@@ -9,7 +9,7 @@ import (
 
 	"github.com/pocketbase/pocketbase/core"
 
-	"foyer/internal/adapters/zurg/zurgtest"
+	"foyer/internal/adapters/webdav/webdavtest"
 	"foyer/internal/library"
 )
 
@@ -179,8 +179,8 @@ func TestRemovingALibraryTakesItsCollectionsAndFiles(t *testing.T) {
 	admin := h.superuser()
 	body := h.addLibrary(admin, "shows", "shows", "shows")
 	id := body["id"].(string)
-	torrent := h.save("media_torrents", map[string]any{"library": id, "name": "Some Show"})
-	h.save("media_files", map[string]any{"library": id, "torrent": torrent.Id, "path": "Some Show/1.mkv"})
+	entry := h.save("media_entries", map[string]any{"library": id, "name": "Some Show"})
+	h.save("media_files", map[string]any{"library": id, "entry": entry.Id, "path": "Some Show/1.mkv"})
 	before, _ := h.app.FindCollectionByNameOrId("shows")
 	if got := h.call(http.MethodDelete, "/api/foyer/admin/libraries/"+id, admin, nil); got.status != http.StatusNoContent {
 		t.Fatalf("%d %v", got.status, got.body)
@@ -202,25 +202,25 @@ func TestRemovingALibraryTakesItsCollectionsAndFiles(t *testing.T) {
 	}
 }
 
-func TestZurgsFoldersComeWithTheirLibraries(t *testing.T) {
+func TestTheSharesFoldersComeWithTheirLibraries(t *testing.T) {
 	h := start(t, options{})
 	admin := h.superuser()
-	fake := zurgtest.New()
+	fake := webdavtest.New()
 	for _, folder := range []string{"__all__", "__unplayable__", "movies", "shows"} {
 		fake.Dir(folder, time.Now())
 	}
 	server := httptest.NewServer(fake)
 	defer server.Close()
 
-	// Before Zurg is set up, the page is told why there is nothing.
-	if got := h.call(http.MethodGet, "/api/foyer/admin/zurg/folders", admin, nil); got.status != http.StatusOK || got.body["ok"] != false || got.body["message"] == "" {
+	// Before the share is set up, the page is told why there is nothing.
+	if got := h.call(http.MethodGet, "/api/foyer/admin/webdav/folders", admin, nil); got.status != http.StatusOK || got.body["ok"] != false || got.body["message"] == "" {
 		t.Fatalf("unset: %d %v", got.status, got.body)
 	}
-	if got := h.call(http.MethodPut, "/api/foyer/admin/adapters/zurg", admin, map[string]any{"enabled": true, "values": map[string]any{"url": server.URL}}); got.status != http.StatusOK {
-		t.Fatalf("saving zurg: %d %v", got.status, got.body)
+	if got := h.call(http.MethodPut, "/api/foyer/admin/adapters/webdav", admin, map[string]any{"enabled": true, "values": map[string]any{"url": server.URL + "/dav"}}); got.status != http.StatusOK {
+		t.Fatalf("saving the share: %d %v", got.status, got.body)
 	}
 	h.addLibrary(admin, "movies", "movies", "movies")
-	got := h.call(http.MethodGet, "/api/foyer/admin/zurg/folders", admin, nil)
+	got := h.call(http.MethodGet, "/api/foyer/admin/webdav/folders", admin, nil)
 	folders, _ := got.body["folders"].([]any)
 	if got.status != http.StatusOK || got.body["ok"] != true || len(folders) != 4 {
 		t.Fatalf("%d %v", got.status, got.body)

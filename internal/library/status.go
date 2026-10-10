@@ -16,7 +16,7 @@ type Progress struct {
 	Running    bool       `json:"running"`
 	StartedAt  time.Time  `json:"startedAt"`
 	FinishedAt *time.Time `json:"finishedAt,omitempty"`
-	Torrents   int        `json:"torrents"`
+	Entries    int        `json:"entries"`
 	Walked     int        `json:"walked"`
 	NewFiles   int        `json:"newFiles"`
 	Missing    int        `json:"missing"`

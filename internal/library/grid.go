@@ -310,17 +310,17 @@ func (e *Engine) Correct(ctx context.Context, collection, id string, tmdbID int)
 			was[f.Id] = r.GetString("identity")
 		}
 	}
-	torrents := map[string]string{}
+	entries := map[string]string{}
 	var waiting []*placedFile
 	for _, f := range files {
-		t, ok := torrents[f.GetString("torrent")]
+		t, ok := entries[f.GetString("entry")]
 		if !ok {
-			if r, err := e.app.FindRecordById(TorrentsCollection, f.GetString("torrent")); err == nil {
+			if r, err := e.app.FindRecordById(EntriesCollection, f.GetString("entry")); err == nil {
 				t = r.GetString("name")
 			}
-			torrents[f.GetString("torrent")] = t
+			entries[f.GetString("entry")] = t
 		}
-		pf := &placedFile{record: f, torrent: t}
+		pf := &placedFile{record: f, entry: t}
 		_ = f.UnmarshalJSONField("parsed", &pf.placed)
 		waiting = append(waiting, pf)
 	}

@@ -15,9 +15,9 @@ import (
 // placedFile is a file waiting for its title: its record, and what its name
 // and place say.
 type placedFile struct {
-	record  *core.Record
-	torrent string
-	placed  parse.Placed
+	record *core.Record
+	entry  string
+	placed parse.Placed
 }
 
 // role is what a file is to its title.
@@ -57,8 +57,8 @@ func matchKey(kind tmdb.Kind, title string, year int) string {
 }
 
 // plan groups a library's waiting files into titles: a movies library's
-// files by their title and year — two torrents of one film are one title —
-// and a shows library's by their torrent, each file an episode, a special
+// files by their title and year — two entries of one film are one title —
+// and a shows library's by their entry, each file an episode, a special
 // or an extra of it.
 func plan(kind string, files []*placedFile) []*candidate {
 	byKey := map[string]*candidate{}
@@ -77,17 +77,17 @@ func plan(kind string, files []*placedFile) []*candidate {
 		existing.evidence.anime = max(existing.evidence.anime, f.placed.Anime)
 	}
 
-	byTorrent := map[string][]*placedFile{}
-	var torrents []string
+	byEntry := map[string][]*placedFile{}
+	var entries []string
 	for _, f := range files {
-		if _, ok := byTorrent[f.torrent]; !ok {
-			torrents = append(torrents, f.torrent)
+		if _, ok := byEntry[f.entry]; !ok {
+			entries = append(entries, f.entry)
 		}
-		byTorrent[f.torrent] = append(byTorrent[f.torrent], f)
+		byEntry[f.entry] = append(byEntry[f.entry], f)
 	}
 
-	for _, torrent := range torrents {
-		group := byTorrent[torrent]
+	for _, entry := range entries {
+		group := byEntry[entry]
 		if kind == Movies {
 			planMovies(group, add)
 		} else {
@@ -103,7 +103,7 @@ func plan(kind string, files []*placedFile) []*candidate {
 			for _, n := range r.Absolute {
 				c.evidence.maxAbsolute = max(c.evidence.maxAbsolute, n)
 			}
-			c.evidence.maxAbsolute = max(c.evidence.maxAbsolute, f.placed.Torrent.Pack[1])
+			c.evidence.maxAbsolute = max(c.evidence.maxAbsolute, f.placed.Entry.Pack[1])
 			if len(r.Seasons) == 1 && r.Seasons[0] >= 1 {
 				for _, n := range r.Episodes {
 					c.evidence.perSeason[r.Seasons[0]] = max(c.evidence.perSeason[r.Seasons[0]], n)
@@ -115,7 +115,7 @@ func plan(kind string, files []*placedFile) []*candidate {
 	return candidates
 }
 
-// planMovies: a torrent's main files are one film, or several where their
+// planMovies: an entry's main files are one film, or several where their
 // names say several; what came with them is theirs.
 func planMovies(group []*placedFile, add func(*candidate, *placedFile)) {
 	var main, extras []*placedFile
@@ -130,8 +130,8 @@ func planMovies(group []*placedFile, add func(*candidate, *placedFile)) {
 	for _, f := range main {
 		title, year, alternate := f.placed.Title, f.placed.Year, f.placed.Alternate
 		if len(main) == 1 || title == "" {
-			// A torrent's own name is the film's, where the file's says less.
-			if t := f.placed.Torrent; t.Title != "" && (title == "" || len(main) == 1 && year == 0 && t.Year != 0) {
+			// An entry's own name is the film's, where the file's says less.
+			if t := f.placed.Entry; t.Title != "" && (title == "" || len(main) == 1 && year == 0 && t.Year != 0) {
 				title, year, alternate = t.Title, t.Year, t.Alternate
 			}
 		}
@@ -143,18 +143,18 @@ func planMovies(group []*placedFile, add func(*candidate, *placedFile)) {
 	}
 	for _, f := range extras {
 		if first == nil {
-			// Extras alone: their torrent's film, as its name says.
-			t := f.placed.Torrent
+			// Extras alone: their entry's film, as its name says.
+			t := f.placed.Entry
 			first = &candidate{kind: tmdb.Movie, title: t.Title, year: t.Year, key: matchKey(tmdb.Movie, t.Title, t.Year)}
 		}
 		add(first, f)
 	}
 }
 
-// planShows: one series per torrent — the pack's name where it says one,
+// planShows: one series per entry — the pack's name where it says one,
 // else its files' — unless its files name several series of their own.
 func planShows(group []*placedFile, add func(*candidate, *placedFile)) {
-	torrent := group[0].placed.Torrent
+	entry := group[0].placed.Entry
 	byTitle := map[string][]*placedFile{}
 	var keys []string
 	for _, f := range group {
@@ -164,11 +164,11 @@ func planShows(group []*placedFile, add func(*candidate, *placedFile)) {
 		}
 		byTitle[key] = append(byTitle[key], f)
 	}
-	torrentKey := titles.Key(torrent.Title)
+	entryKey := titles.Key(entry.Title)
 	related := func(key string) bool {
-		return torrentKey != "" && (key == "" || strings.Contains(key, torrentKey) || strings.Contains(torrentKey, key))
+		return entryKey != "" && (key == "" || strings.Contains(key, entryKey) || strings.Contains(entryKey, key))
 	}
-	// Several series in one torrent only where each holds a fair share of it
+	// Several series in one entry only where each holds a fair share of it
 	// — numbered episodes, two at least: a pack's "Start Credit (Part 1)" and
 	// "(Part 2)" are its own, not a series.
 	var own []string
@@ -183,8 +183,8 @@ func planShows(group []*placedFile, add func(*candidate, *placedFile)) {
 			own = append(own, key)
 		}
 	}
-	if len(own) == 0 || torrentKey == "" && len(keys) == 1 {
-		title, year := torrent.Title, torrent.Year
+	if len(own) == 0 || entryKey == "" && len(keys) == 1 {
+		title, year := entry.Title, entry.Year
 		if title == "" {
 			title, year = largest(byTitle, keys)
 		}
@@ -205,13 +205,13 @@ func planShows(group []*placedFile, add func(*candidate, *placedFile)) {
 		}
 		delete(byTitle, key)
 	}
-	// What is left belongs to the torrent's own series.
+	// What is left belongs to the entry's own series.
 	var rest []*placedFile
 	for _, key := range keys {
 		rest = append(rest, byTitle[key]...)
 	}
 	if len(rest) > 0 {
-		title, year := torrent.Title, torrent.Year
+		title, year := entry.Title, entry.Year
 		if title == "" {
 			title, year = rest[0].placed.Title, rest[0].placed.Year
 		}
@@ -231,7 +231,7 @@ func showCandidate(title string, year int, files []*placedFile) *candidate {
 				year = 0
 			}
 		}
-		for _, s := range f.placed.Torrent.Seasons {
+		for _, s := range f.placed.Entry.Seasons {
 			if s >= 2 {
 				year = 0
 			}

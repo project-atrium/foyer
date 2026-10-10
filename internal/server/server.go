@@ -13,7 +13,7 @@ import (
 
 	"foyer/internal/adapters"
 	"foyer/internal/adapters/tmdb"
-	"foyer/internal/adapters/zurg"
+	"foyer/internal/adapters/webdav"
 	"foyer/internal/config"
 	"foyer/internal/dashboard"
 	"foyer/internal/ffmpeg"
@@ -39,7 +39,7 @@ type Server struct {
 // collections are Foyer's own static collections: written by its code alone.
 var collections = []string{
 	adapters.Collection,
-	library.LibrariesCollection, library.TorrentsCollection, library.FilesCollection, library.IdentitiesCollection,
+	library.LibrariesCollection, library.EntriesCollection, library.FilesCollection, library.IdentitiesCollection,
 	watch.Collection,
 }
 
@@ -47,7 +47,7 @@ var collections = []string{
 // a test that binds it runs no background work. main asks for that with
 // Background.
 func Bind(app core.App, cfg config.Config) *Server {
-	registry := adapters.NewRegistry(app, zurg.Adapter(), tmdb.Adapter(), ffmpeg.Adapter())
+	registry := adapters.NewRegistry(app, webdav.Adapter(), tmdb.Adapter(), ffmpeg.Adapter())
 	lib := library.New(app, registry)
 	s := &Server{
 		App:      app,

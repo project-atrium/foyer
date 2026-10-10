@@ -12,15 +12,17 @@ workspace root `AGENTS.md` and `../.claude/architecture.md` first, then
 **One Foyer is one household, and a PocketBase user is one profile** —
 Alex, Sarah, Kids. The household's superuser makes them in the dashboard.
 
-Foyer is becoming the household's media server: its library from Zurg, named
-by TMDB and probed by ffprobe, watch status per user, and streams for Loge.
+Foyer is becoming the household's media server: its library from a WebDAV
+share — Zurg's above all — named by TMDB and probed by ffprobe, watch status
+per user, and streams for Loge.
 `README.md`'s "Current state" says how far that has got.
 
 ## What this is not
 
 - **Not required.** Loge works without it: a device's account can be local.
-- **Not where files are renamed, moved or stored.** Media stays in Zurg;
-  Foyer reads it, names it in its own records, and streams it through.
+- **Not where files are renamed, moved or stored.** Media stays on the
+  share — in Zurg; Foyer reads it, names it in its own records, and streams
+  it through.
 - **Not a place for what belongs to a device.** Players, sync settings and
   caches never reach it.
 - **Not the account Loge's `sync/custom-server` speaks to — not any more.**
@@ -70,8 +72,8 @@ internal/server/     Bind: the guard, the routes, the trusted proxy, no installe
 internal/guard/      Foyer's collections refuse every write request, a superuser's too; users' rules stay
 internal/adapters/   what Foyer connects to: settings records, fields, masked secrets, the Adapters page's routes
   tmdb/              TMDB: Loge's matcher ported (Find), a film's and a series' details, seasons, episode groups, artwork
-  zurg/              Zurg over WebDAV: its folders, a torrent's files, a file's bytes with ranges
-  zurg/zurgtest/     a pretend Zurg, for the tests
+  webdav/            a WebDAV share — Zurg's above all: its folders, an entry's files, a file's bytes with ranges
+  webdav/webdavtest/ a pretend share, answering as Zurg does where asked, for the tests
 internal/titles/     Loge's titleKey and bareTitle, ported to the byte
 internal/parse/      release names: title, year, season and episode, numbers counted from the start, what the file is
 internal/library/    libraries: their collections from one template, the scan — walk, name, identify, place,
@@ -86,7 +88,7 @@ internal/dashboard/  the dashboard's icon and pages — Library, Settings → Ad
                      plain JavaScript, embedded
 internal/version/    the version, always the app's: its `npm run release` moves both
 migrations/          0001 users are profiles; 0002 the name, the rate limits, the first superuser; 0003 adapters;
-                     0004 libraries, media_torrents, media_files, identities; 0005 streams' rate limit;
+                     0004 libraries, media_entries, media_files, identities; 0005 streams' rate limit;
                      0006 watch_states
 dev/fakezurg/        a pretend Zurg for running Foyer here, from Zurg's .zurgtorrent records; never in the image
 Dockerfile           two stages: a Go build, then Debian with Jellyfin's ffmpeg and the binary
@@ -115,8 +117,8 @@ Go tests sit beside what they test. Everything else is PocketBase's: `serve`,
   collections' rules — and its files by `media_files` being the superusers'
   alone. Whatever a user reads of a title — its versions, their paths — is on
   the title itself.
-- **No network inside a transaction.** Zurg, TMDB and the artwork servers are
-  asked first; then one transaction writes. A file field's save uploads to
+- **No network inside a transaction.** The share, TMDB and the artwork
+  servers are asked first; then one transaction writes. A file field's save uploads to
   storage — S3 too — so artwork is saved on its own, outside any. A library's
   writes — its scan, its artwork, a probe's results — take its lock, so none
   overwrites what another changed.
@@ -128,9 +130,10 @@ Go tests sit beside what they test. Everything else is PocketBase's: `serve`,
 - **One torrent never stops a scan.** One that will not be kept is told in
   the scan's notes and left for the next scan, and the rest of the library
   is placed.
-- **What Zurg stops listing is kept three days**, then let go with any title
-  left with nothing — never on a listing that came back empty, nor when most
-  of a library vanished, until the next scan agrees. Watch status stays.
+- **What the share stops listing is kept three days** — Zurg's repairs take
+  files away for a while — then let go with any title left with nothing;
+  never on a listing that came back empty, nor when most of a library
+  vanished, until the next scan agrees. Watch status stays.
 - **A stream outlives PocketBase's deadlines.** Its server reads and writes
   with five-minute deadlines, which would end a film five minutes in; the
   proxy lifts both, and a write that stalls half an hour ends it instead.
@@ -138,16 +141,16 @@ Go tests sit beside what they test. Everything else is PocketBase's: `serve`,
   whoever holds it for six hours. `stream.Quiet` runs inside PocketBase's
   activity logger and answers every stream request itself — a refusal, a
   429, a panic — so the logger has nothing to keep. A test reads the log.
-- **A tool reads files through the loopback**, never from Zurg: a grant on
-  127.0.0.1 opens one file for minutes, so ffprobe's arguments and output
-  never hold Zurg's address or password.
+- **A tool reads files through the loopback**, never from the share: a grant
+  on 127.0.0.1 opens one file for minutes, so ffprobe's arguments and output
+  never hold the share's address or password.
 - **ffprobe reads through the loopback, with nothing of Foyer's
   environment** but the PATH and libva's `LIBVA_` settings — ffmpeg reads
-  `http_proxy` — and only http: a file that is
-  really a playlist must not send it elsewhere. What it says on failure is
-  cleared of addresses before it is kept. Zurg failing is no file's fault: it
-  costs no attempt, and five in a row pause the queue. A pack's probes redraw
-  its series' lists once a batch, never once a file.
+  `http_proxy` — and only http: a file that is really a playlist must not
+  send it elsewhere. What it says on failure is cleared of addresses before
+  it is kept. The share failing is no file's fault: it costs no attempt, and
+  five in a row pause the queue. A pack's probes redraw its series' lists
+  once a batch, never once a file.
 - **Watch status is kept by identity, never by a record.** A title's record
   comes and goes with its files; what was watched stays, under
   `tmdb:movie:603` or `tmdb:tv:1396/s1e3`, and comes back with it. Where a
@@ -167,8 +170,10 @@ Go tests sit beside what they test. Everything else is PocketBase's: `serve`,
 - **A key in an address never reaches a log or an error.** TMDB's API key
   travels in the query, so the client's errors drop the address Go's
   `url.Error` would print.
-- **Zurg is read over WebDAV only.** Its folders — the ones its config sorts
-  torrents into — exist only there. A torrent's files may be listed flat,
+- **A library is read from a WebDAV share** — Zurg's above all, whose
+  folders, the ones its config sorts torrents into, exist only there. The
+  address is the share's WebDAV root, Zurg's `/dav` included: nothing is
+  added to it. An entry — a torrent on Zurg — may have its files listed flat,
   with ` (id)` added where two share a name, or under folders of their own:
   walk both. Zurg writes a child's href as its bare escaped name — read
   against the folder asked for, a colon and all — and its dates in `UTC`, not
@@ -237,8 +242,8 @@ Go tests sit beside what they test. Everything else is PocketBase's: `serve`,
 ## Current state
 
 **Users are profiles, and the library runs.** PocketBase v0.40.4, used as a
-Go framework: `users` as profiles with their PINs; Zurg's folders as
-libraries, named by TMDB, read by ffprobe and streamed through signed
+Go framework: `users` as profiles with their PINs; a WebDAV share's folders
+— Zurg's — as libraries, named by TMDB, read by ffprobe and streamed through signed
 addresses; each user's watch status; the dashboard's Library and Adapters
 pages. `go test ./...` proves it, and the dashboard was driven headless in
 Chrome against a pretend Zurg and the real TMDB. The account-sync protocol,

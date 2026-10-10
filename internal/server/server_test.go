@@ -53,7 +53,7 @@ func TestTheServerIsFoyer(t *testing.T) {
 	for _, rule := range settings.RateLimits.Rules {
 		labels = append(labels, rule.Label)
 	}
-	if settings.Meta.AppName != "Foyer" || !slices.Equal(labels, []string{"*:authWithPassword", "*:authRefresh", "/api/foyer/stream/", "/api/foyer/zurg/", "/api/"}) {
+	if settings.Meta.AppName != "Foyer" || !slices.Equal(labels, []string{"*:authWithPassword", "*:authRefresh", "/api/foyer/stream/", "/api/foyer/webdav/", "/api/"}) {
 		t.Fatalf("name %q, rate limit rules %v", settings.Meta.AppName, labels)
 	}
 }

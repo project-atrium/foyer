@@ -14,9 +14,9 @@ import (
 
 // twin serves files to the tools Foyer runs itself — ffprobe now, ffmpeg
 // later — on 127.0.0.1 alone, by addresses that open one file for minutes.
-// The tools never see Zurg's address or its password, in their arguments or
-// in what they print; and nothing they read passes PocketBase's limiter or
-// its request log.
+// The tools never see the share's address or its password, in their
+// arguments or in what they print; and nothing they read passes PocketBase's
+// limiter or its request log.
 type twin struct {
 	listener net.Listener
 	server   *http.Server

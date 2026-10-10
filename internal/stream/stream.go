@@ -1,6 +1,6 @@
 // Package stream hands a file's bytes on as its source answers them: the
-// part a player asks for, through Foyer, so Zurg's address and password never
-// leave the server. An address is signed — a player sends no headers — and
+// part a player asks for, through Foyer, so the share's address and password
+// never leave the server. An address is signed — a player sends no headers — and
 // good for hours, not days; and it never lands in a log, since it opens the
 // file to whoever holds it.
 package stream

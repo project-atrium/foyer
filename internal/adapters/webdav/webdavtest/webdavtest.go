@@ -1,7 +1,8 @@
-// Package zurgtest is a pretend Zurg: a WebDAV tree under /dav/, as Zurg
+// Package webdavtest is a pretend WebDAV share: a tree under /dav/, as Zurg
 // serves its library, for tests and for `dev/fakezurg`. It answers PROPFIND
-// at depths 0 and 1, and GET and HEAD with ranges.
-package zurgtest
+// at depths 0 and 1, and GET and HEAD with ranges — and, with AsZurg, every
+// way Zurg answers otherwise.
+package webdavtest
 
 import (
 	"bytes"

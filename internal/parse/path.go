@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-// Folder is what a folder inside a torrent holds, by its name.
+// Folder is what a folder inside an entry holds, by its name.
 type Folder string
 
 const (
@@ -29,11 +29,12 @@ var (
 )
 
 // Placed is a file read where it lies: its own name filled in from the
-// folders it is in and its torrent's name.
+// folders it is in and its entry's name.
 type Placed struct {
 	Release
-	// Torrent is the torrent's name, read: a pack's title and year are there.
-	Torrent Release `json:"torrent"`
+	// Entry is the name of the entry the file is under — a torrent on Zurg,
+	// a folder elsewhere — read: a pack's title and year are there.
+	Entry Release `json:"entry"`
 	// Folder is what the folder nearest the file holds.
 	Folder Folder `json:"folder,omitempty"`
 }
@@ -58,22 +59,22 @@ func classify(name string) (Folder, int) {
 	return Plain, 0
 }
 
-// Path reads a file under a library folder: path is "<torrent>/<folders…>/
+// Path reads a file under a library folder: path is "<entry>/<folders…>/
 // <file>", as Zurg lists it, or a loose file's name alone. siblings are the
 // names beside the file, for Zurg's collision suffix.
 func Path(path string, siblings []string) Placed {
 	segments := strings.Split(strings.Trim(path, "/"), "/")
 	file := StripCollision(segments[len(segments)-1], siblings)
-	var torrent string
+	var entry string
 	var folders []string
 	if len(segments) > 1 {
-		torrent = segments[0]
+		entry = segments[0]
 		folders = segments[1 : len(segments)-1]
 	}
 
 	p := Placed{Release: Name(file)}
-	if torrent != "" {
-		p.Torrent = Name(torrent)
+	if entry != "" {
+		p.Entry = Name(entry)
 	}
 	season := -1
 	var hints []Release
@@ -120,13 +121,13 @@ func Path(path string, siblings []string) Placed {
 		}
 	}
 	// A season pack's one season, where the file names none.
-	if len(r.Seasons) == 0 && len(p.Torrent.Seasons) == 1 && len(r.Absolute) > 0 && !r.Counted {
-		r.Seasons, r.Episodes, r.Absolute = p.Torrent.Seasons, r.Absolute, nil
+	if len(r.Seasons) == 0 && len(p.Entry.Seasons) == 1 && len(r.Absolute) > 0 && !r.Counted {
+		r.Seasons, r.Episodes, r.Absolute = p.Entry.Seasons, r.Absolute, nil
 	}
 
 	// What the file is: its own name first, then its folders', then the
-	// torrent's.
-	for _, h := range append(reverse(hints), p.Torrent) {
+	// entry's.
+	for _, h := range append(reverse(hints), p.Entry) {
 		if r.Year == 0 && h.Year != 0 && len(h.Seasons) == 0 {
 			r.Year = h.Year
 		}
@@ -157,11 +158,11 @@ func Path(path string, siblings []string) Placed {
 		}
 	}
 	if r.Group == "" {
-		r.Group = p.Torrent.Group
+		r.Group = p.Entry.Group
 	}
-	r.Anime = max(r.Anime, p.Torrent.Anime)
+	r.Anime = max(r.Anime, p.Entry.Anime)
 	if r.Title == "" {
-		r.Title = p.Torrent.Title
+		r.Title = p.Entry.Title
 	}
 	return p
 }

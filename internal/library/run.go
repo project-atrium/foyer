@@ -16,17 +16,18 @@ import (
 	"github.com/pocketbase/pocketbase/tools/security"
 
 	"foyer/internal/adapters/tmdb"
-	"foyer/internal/adapters/zurg"
+	"foyer/internal/adapters/webdav"
 )
 
 const (
 	// defaultInterval is how often a library is looked at, in minutes, where
-	// the Zurg adapter says nothing.
+	// the WebDAV adapter says nothing.
 	defaultInterval = 15
-	// fullEvery is how often every torrent is walked again, to catch files
+	// fullEvery is how often every entry is walked again, to catch files
 	// that changed inside one.
 	fullEvery = 24 * time.Hour
-	// hookSecret is the Zurg adapter's secret its on_library_update sends.
+	// hookSecret is the token the share's webhook sends: Zurg's
+	// on_library_update, or any script.
 	hookSecret = "webhook"
 )
 
@@ -75,7 +76,7 @@ func (e *Engine) Trigger(library string, full bool) {
 	}
 }
 
-// Run scans as asked and as due — each library at the Zurg adapter's
+// Run scans as asked and as due — each library at the WebDAV adapter's
 // interval, walking everything once a day — until ctx ends. One scan at a
 // time: SQLite has one writer, and a household's watch status must not
 // wait behind two.
@@ -113,7 +114,7 @@ func (e *Engine) scanAsked(ctx context.Context, r request) {
 
 func (e *Engine) due(ctx context.Context) {
 	interval := defaultInterval
-	if s, err := e.adapters.Settings(zurg.Key); err == nil && s.Int("interval") > 0 {
+	if s, err := e.adapters.Settings(webdav.Key); err == nil && s.Int("interval") > 0 {
 		interval = s.Int("interval")
 	}
 	now := e.now()
@@ -133,28 +134,30 @@ func (e *Engine) scanLogged(ctx context.Context, lib *core.Record, full bool) {
 	}
 }
 
-// hookToken is the token Zurg's on_library_update sends, made once.
+// hookToken is the token the share's webhook sends, made once.
 func (e *Engine) hookToken() (string, error) {
-	token, err := e.adapters.Secret(zurg.Key, hookSecret)
+	token, err := e.adapters.Secret(webdav.Key, hookSecret)
 	if err != nil || token != "" {
 		return token, err
 	}
 	token = security.RandomString(32)
-	return token, e.adapters.SetSecret(zurg.Key, hookSecret, token)
+	return token, e.adapters.SetSecret(webdav.Key, hookSecret, token)
 }
 
-// HookRoutes mounts the route Zurg's on_library_update calls: a scan of the
-// libraries whose folders changed, at once instead of at the next interval.
+// HookRoutes mounts the route the share's webhook calls — Zurg's
+// on_library_update, or any script that posts the folders changed: a scan
+// of the libraries whose folders changed, at once instead of at the next
+// interval.
 // The token goes in a header — in the address, PocketBase's request log
 // would keep it.
 func (e *Engine) HookRoutes(r *router.Router[*core.RequestEvent]) {
-	r.POST("/api/foyer/zurg/updated", func(re *core.RequestEvent) error {
-		want, err := e.adapters.Secret(zurg.Key, hookSecret)
+	r.POST("/api/foyer/webdav/updated", func(re *core.RequestEvent) error {
+		want, err := e.adapters.Secret(webdav.Key, hookSecret)
 		got, _ := strings.CutPrefix(re.Request.Header.Get("Authorization"), "Bearer ")
 		if err != nil || want == "" || subtle.ConstantTimeCompare([]byte(got), []byte(want)) != 1 {
 			return re.ForbiddenError("", nil)
 		}
-		// One updated folder per line, as Zurg names them.
+		// One updated folder per line, as the share names them.
 		changed := map[string]bool{}
 		scanner := bufio.NewScanner(http.MaxBytesReader(re.Response, re.Request.Body, 1<<20))
 		for scanner.Scan() {
@@ -178,9 +181,9 @@ func (e *Engine) HookRoutes(r *router.Router[*core.RequestEvent]) {
 }
 
 // hookRoute is the superusers' route that shows the token, and the line to
-// put in Zurg's config.
+// put in Zurg's config, or any script's.
 func (e *Engine) hookRoute(admin *router.RouterGroup[*core.RequestEvent]) {
-	admin.GET("/zurg/hook", func(re *core.RequestEvent) error {
+	admin.GET("/webdav/hook", func(re *core.RequestEvent) error {
 		token, err := e.hookToken()
 		if err != nil {
 			return re.InternalServerError("", err)
@@ -189,7 +192,7 @@ func (e *Engine) hookRoute(admin *router.RouterGroup[*core.RequestEvent]) {
 		if re.Request.TLS != nil {
 			scheme = "https"
 		}
-		address := scheme + "://" + re.Request.Host + "/api/foyer/zurg/updated"
+		address := scheme + "://" + re.Request.Host + "/api/foyer/webdav/updated"
 		return re.JSON(http.StatusOK, map[string]string{
 			"token": token,
 			"command": `printf '%s\n' "$@" | curl -fsS -m 10 -X POST -H 'Authorization: Bearer ` + token +

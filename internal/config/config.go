@@ -1,5 +1,5 @@
 // Package config reads the server's settings from its environment, once, at
-// start. What a household tunes after that — Zurg, TMDB, ffmpeg — lives in
+// start. What a household tunes after that — WebDAV, TMDB, ffmpeg — lives in
 // Foyer's own records, set on the dashboard's Adapters page.
 package config
 

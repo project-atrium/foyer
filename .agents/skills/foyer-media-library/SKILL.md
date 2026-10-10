@@ -1,6 +1,6 @@
 ---
 name: foyer-media-library
-description: Foyer's media library, end to end — Zurg read over WebDAV, release names parsed, TMDB asked once per title, a library's collections made from one template, artwork in PocketBase's storage, ffprobe through the loopback, signed streams, watch status kept by identity, and the dashboard's Library and Adapters pages. Use when changing a scan, the parser, matching or episode mapping, a library collection's template, probing, streams, watch status, an admin route or a dashboard page — or when finding out why a title is missing, misnamed, hidden or will not play.
+description: Foyer's media library, end to end — a WebDAV share read, Zurg's above all, release names parsed, TMDB asked once per title, a library's collections made from one template, artwork in PocketBase's storage, ffprobe through the loopback, signed streams, watch status kept by identity, and the dashboard's Library and Adapters pages. Use when changing a scan, the parser, matching or episode mapping, a library collection's template, probing, streams, watch status, an admin route or a dashboard page — or when finding out why a title is missing, misnamed, hidden or will not play.
 ---
 
 # Foyer's media library
@@ -26,14 +26,14 @@ ported, with Loge's own test cases.
 ## How a file becomes a title
 
 ```
-zurg.List / Walk          the folder, each torrent's files           adapters/zurg
+webdav.List / Walk        the folder, each entry's files             adapters/webdav
 library/scan.go           media_files written, new ones pending      outside any transaction: network first
 parse.Path / Name         title, year, numbers, what the file is     pure, table-tested
 library/plan.go           files grouped into candidate titles
 library/match.go          identities: TMDB asked once per key        sure, uncertain, none, manual
 library/place.go          the title, its episodes, its files linked  one transaction, the library's lock
 library/mapping.go        an episode's place: release, offset, absolute, cumulative, group, special
-library/sweep.go          what Zurg stopped listing, after 72 hours
+library/sweep.go          what the share stopped listing, after 72 hours
 library/artwork.go        posters, backdrops, logos, stills          saved one record at a time
 probe/queue.go            ffprobe through the loopback → versions    then the title's lists redrawn
 library/play.go, stream/  a signed address; the Range proxy
@@ -83,7 +83,7 @@ go run ./dev/fakezurg -addr 127.0.0.1:9999 <folder of .zurgtorrent records>
 FOYER_ADMIN_EMAIL=… FOYER_ADMIN_PASSWORD=… go run . serve --dir <a temporary folder> --http 127.0.0.1:8090
 ```
 
-Then the dashboard: Settings → Adapters — Zurg at `http://127.0.0.1:9999`,
+Then the dashboard: Settings → Adapters — WebDAV at `http://127.0.0.1:9999/dav`,
 TMDB's key, FFmpeg, each tested — **Make a library** of `movies` and
 `shows`, and **Library**. Drive it headless — Chrome with its own profile and
 a free debugging port — never in a window on the owner's screen. And check:
@@ -107,4 +107,4 @@ a free debugging port — never in a window on the owner's screen. And check:
   its name against TMDB's season 0, whole or by the part before TMDB's
   colon or dash.
 - **not playing** — `probe_state` and `probe_error`; the stream answers
-  `404` for a file Zurg no longer has and `502` while Zurg fails.
+  `404` for a file the share no longer has and `502` while it fails.

@@ -231,7 +231,7 @@ func Adapter() adapters.Adapter {
 			{Key: "device", Label: "Render device", Type: adapters.Text, Default: "/dev/dri/renderD128",
 				Help: "The GPU, for transcoding to come. In Docker, pass it in with the compose override."},
 			{Key: "concurrency", Label: "Files read at once", Type: adapters.Number, Default: 2, Min: 1, Max: 8,
-				Help: "Each read asks Zurg — and Real-Debrid — for a few megabytes."},
+				Help: "Each read asks the share — and Real-Debrid, behind Zurg — for a few megabytes."},
 		},
 		Test: func(ctx context.Context, s adapters.Settings) adapters.Result {
 			d := Detect(ctx, FromSettings(s))

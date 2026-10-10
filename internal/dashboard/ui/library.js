@@ -242,7 +242,7 @@ export function pageLibrary(route) {
                 null,
                 t.strong(null, `Scanning ${s.name}`),
                 ` — ${s.phase}`,
-                s.torrents ? `, ${s.walked} of ${s.torrents} torrents walked` : '',
+                s.entries ? `, ${s.walked} of ${s.entries} entries walked` : '',
                 s.titles ? `, ${s.titles} titles placed` : '',
               ),
             ),
@@ -259,7 +259,7 @@ export function pageLibrary(route) {
             { className: 'block txt-center txt-hint p-base' },
             data.libraries.length
               ? 'Nothing here yet. A scan fills the library.'
-              : t.span(null, 'No library yet: choose Zurg folders under ', t.a({ href: '#/settings/adapters' }, 'Settings → Adapters'), '.'),
+              : t.span(null, 'No library yet: choose the share\'s folders under ', t.a({ href: '#/settings/adapters' }, 'Settings → Adapters'), '.'),
           );
         },
         t.div({ className: 'foyer-posters' }, () => data.items.map(posterCard)),

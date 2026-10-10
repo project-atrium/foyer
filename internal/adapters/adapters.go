@@ -1,4 +1,4 @@
-// Package adapters keeps what Foyer connects to — Zurg, TMDB, ffmpeg — and
+// Package adapters keeps what Foyer connects to — WebDAV, TMDB, ffmpeg — and
 // how the household set each up: one record per adapter in `adapters`, edited
 // on the dashboard's Adapters page and nowhere else.
 //

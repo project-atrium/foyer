@@ -21,14 +21,14 @@ Foyer is growing into the one place for that:
 
 - **Profiles are its users.** One Foyer is one household; each person signs
   in as themselves, with a PIN as a child lock if they want one.
-- **Your library, from Zurg.** Each Zurg folder you choose — `movies`,
-  `shows` — becomes a collection of films or series, named by TMDB, with
-  posters, the right release dates, and what each file is: its quality, its
-  codecs, its audio and subtitle languages. Nothing is renamed or moved: the
-  files stay where Zurg has them.
+- **Your library, from Zurg** — or any WebDAV share: rclone's, a NAS's.
+  Each folder you choose — `movies`, `shows` — becomes a collection of films
+  or series, named by TMDB, with posters, the right release dates, and what
+  each file is: its quality, its codecs, its audio and subtitle languages.
+  Nothing is renamed or moved: the files stay where the share has them.
 - **What you watched**, per person, kept by Foyer.
-- **Streams for Loge**, through Foyer, so Zurg's address and password never
-  leave the server.
+- **Streams for Loge**, through Foyer, so the share's address and password
+  never leave the server.
 
 ## What it will and will not do
 
@@ -68,17 +68,19 @@ Then make the dashboard's superuser, and a user for each person.
 - **The account that held up to ten profiles is gone**, with the protocol
   Loge's `sync/custom-server` adapter spoke. Loge signs in to Foyer anew in
   Step 2 — a device with two profiles signs in as two users.
-- **Adapters**: Zurg's and TMDB's settings kept on the server, their
-  secrets masked; Zurg read over WebDAV; a TMDB client that names films and
-  series as Loge does, with their details, seasons and artwork.
-- **The library**: each Zurg folder you choose is a library, scanned every
-  15 minutes and when Zurg says: films and series named by TMDB, episodes laid
-  as TMDB numbers them — anime packs counted from the start included — with
-  their artwork, dates and what each file's name says it is. A guess stays
+- **Adapters**: a WebDAV share's settings and TMDB's kept on the server,
+  their secrets masked; the share read over WebDAV — Zurg's, its ways
+  included, or any other; a TMDB client that names films and series as Loge
+  does, with their details, seasons and artwork.
+- **The library**: each of the share's folders you choose is a library,
+  scanned every 15 minutes and when Zurg says: films and series named by
+  TMDB, episodes laid as TMDB numbers them — anime packs counted from the
+  start included — with their artwork, dates and what each file's name says
+  it is. A guess stays
   hidden from users until you confirm it; corrections stick.
 - **Streams**: a user's player is handed a signed address for a title's
-  file, good for six hours; the bytes come through Foyer, so Zurg's address
-  and password never leave the server, and no address reaches a log.
+  file, good for six hours; the bytes come through Foyer, so the share's
+  address and password never leave the server, and no address reaches a log.
 - **What each file is**, read by ffprobe through Foyer: its picture, codec,
   HDR, audio and subtitle tracks with their languages, chapters. The GPU is
   tried for the transcoding to come.
@@ -86,8 +88,8 @@ Then make the dashboard's superuser, and a user for each person.
   resume, and a series marked by its episodes. A title TMDB names later, or
   you correct, takes what was watched with it.
 - **The dashboard** wears Foyer's icon, and is where Foyer is set up:
-  **Settings → Adapters** for Zurg, TMDB and FFmpeg — each tried where it is
-  set — and which of Zurg's folders are libraries; **Library** for every
+  **Settings → Adapters** for WebDAV, TMDB and FFmpeg — each tried where it
+  is set — and which of the share's folders are libraries; **Library** for every
   title as a poster, the newest added first, a title's files and what TMDB
   said of it, and Confirm or Set TMDB id where it guessed.
 - **`go test ./...` proves it.**

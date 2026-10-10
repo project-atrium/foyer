@@ -23,7 +23,7 @@ and their rules, and how they fail.
 | `GET /api/foyer/admin/adapters` | superusers | every adapter: `[{ key, name, description, notice?, enabled, fields, values, status? }]`, each secret as `"******"` when set and `""` when not |
 | `PUT /api/foyer/admin/adapters/{key}` | superusers | `{ enabled, values }` → the adapter as `GET` shows it; `400` names each field that will not do, as `values.<key>` |
 | `POST /api/foyer/admin/adapters/{key}/test` | superusers | `{ values? }`, laid over what is saved → `{ ok, message, details? }` |
-| `GET /api/foyer/admin/zurg/folders` | superusers | `{ ok, message?, folders: [{ folder, library? }] }`: Zurg's folders, each with the library it is, and libraries whose folder Zurg no longer lists |
+| `GET /api/foyer/admin/webdav/folders` | superusers | `{ ok, message?, folders: [{ folder, library? }] }`: the share's folders, each with the library it is, and libraries whose folder Zurg no longer lists |
 | `POST /api/foyer/admin/libraries` | superusers | `{ folder, name, kind: "movies" \| "shows", enabled }` → the library, its collections made; `400` names what will not do |
 | `PATCH /api/foyer/admin/libraries/{id}` | superusers | `{ enabled }` → the library |
 | `GET /api/foyer/admin/status` | superusers | `{ scans: [{ library, name, full, phase, running, torrents, walked, newFiles, missing, removed, titles, artwork, error?, notes? }] }`, kept in memory |
@@ -32,8 +32,8 @@ and their rules, and how they fail.
 | `GET /api/foyer/admin/library/{collection}/{id}` | superusers | `{ item, library, files, seasons, identity }`: a title, its files and what TMDB answered |
 | `POST /api/foyer/admin/library/{collection}/{id}/confirm` | superusers | `204`: a guess confirmed |
 | `POST /api/foyer/admin/library/{collection}/{id}/match` | superusers | `{ tmdbId }` → `204`: the title is that one, merged into a title already holding it; `502` when TMDB cannot say |
-| `GET /api/foyer/admin/zurg/hook` | superusers | `{ token, command }`: the line for Zurg's `on_library_update` |
-| `POST /api/foyer/zurg/updated` | Zurg, with `Authorization: Bearer <token>` | the folders that changed, one per line → `202`; `403` without the token |
+| `GET /api/foyer/admin/webdav/hook` | superusers | `{ token, command }`: the line for Zurg's `on_library_update`, or any script |
+| `POST /api/foyer/webdav/updated` | the share — Zurg's `on_library_update` — with `Authorization: Bearer <token>` | the folders that changed, one per line → `202`, every library for none; `403` without the token |
 | `DELETE /api/foyer/admin/libraries/{id}` | superusers | `204`: its collections, artwork, torrents, files and identities gone; watch status stays. `409` when a collection of your own still points at it |
 
 ### Watch status
@@ -57,7 +57,7 @@ and their rules, and how they fail.
   headers. It is signed with a key drawn from the `users` collection's
   file-token secret — regenerating that secret in the dashboard (users →
   Options → Tokens) ends every address at once, and signs nobody out.
-- **Bytes come through Foyer**, so Zurg's address and password never leave
+- **Bytes come through Foyer**, so the share's address and password never leave
   the server. A `Range`, `If-Range` or HEAD is passed on; Zurg's `200` with
   a `Content-Range` is a `206`; a player that leaves stops Zurg's answer.
 - **No stream address is ever logged**, a refused one neither: it opens the
@@ -77,10 +77,11 @@ and their rules, and how they fail.
   `{ ok: false, message }`: the dashboard signs its superuser out on any
   `401`, so no admin route ever answers one for a service's refusal. The last
   test's result is kept beside the settings, once they are saved.
-- **Zurg** has its address (`http://zurg:9999`; its WebDAV is under
-  `/dav/`), a username and a password if Zurg asks for them, and how often to
-  look for new media, in minutes (15 unless set). Its test lists Zurg's
-  folders.
+- **WebDAV** has the share's address — its WebDAV root, as Zurg's is
+  `http://zurg:9999/dav` — a username and a password if the share asks for
+  them, and how often to look for new media, in minutes (15 unless set). Its
+  test lists the share's folders, and names Zurg's `/dav` where nothing
+  answers as WebDAV.
 - **FFmpeg** has the paths of `ffprobe` and `ffmpeg` (their names on the PATH
   unless set), the render device (`/dev/dri/renderD128`) and how many files
   are read at once (2). Switched on, ffprobe reads what each file is. Its test
@@ -135,8 +136,8 @@ template; a name is lower-case letters, digits and underscores, never ends in
 | Collection | One record per |
 | --- | --- |
 | `libraries` | library: `name`, `kind`, `folder`, `enabled`, its last scans and their error |
-| `media_torrents` | folder Zurg lists in a library's folder — a torrent — or a file lying there loose |
-| `media_files` | file of a torrent: its `path` under the folder, what its name says (`parsed`), which title took it (`item_collection`, `item_id`) and as what (`role`), what ffprobe found (`probe`) |
+| `media_entries` | entry the share lists in a library's folder — a torrent on Zurg, a folder or a file elsewhere — and whether it is a file lying there loose |
+| `media_files` | file of an entry (`entry`): its `path` under the folder, what its name says (`parsed`), which title took it (`item_collection`, `item_id`) and as what (`role`), what ffprobe found (`probe`) |
 | `identities` | title a library read: what TMDB was asked (`key`), its answer (`tmdb_id`), and how sure (`state`: sure, uncertain, none, manual) |
 | `<movies library>` | film: TMDB's names, dates, ids, rating and artwork; `versions`, one per file; `quality`, `encoding`, `container`, `hdr`, `audio_tracks`, `subtitles` and the languages, over its versions; `added` and `last_added`; `match_state` |
 | `<shows library>` | series: the same, its seasons as TMDB counts them, its lists over its episodes, and `extras` — `{ file, path, kind, title, size }`: the films in its pack, and specials and OVAs TMDB has no episode for |
@@ -157,7 +158,7 @@ template; a name is lower-case letters, digits and underscores, never ends in
 | `users` | its own record | superusers | its own record | superusers |
 | `adapters` | superusers | Foyer | Foyer | Foyer |
 | `libraries` | users | Foyer | Foyer | Foyer |
-| `media_torrents`, `media_files`, `identities` | superusers | Foyer | Foyer | Foyer |
+| `media_entries`, `media_files`, `identities` | superusers | Foyer | Foyer | Foyer |
 | `watch_states` | its own user's | Foyer | Foyer | Foyer |
 | a library's collections | users, but not an `uncertain` title or its episodes | Foyer | Foyer | Foyer |
 

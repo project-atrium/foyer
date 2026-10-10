@@ -237,7 +237,7 @@ func StripCollision(name string, siblings []string) string {
 	return name
 }
 
-// Name reads one name: a file's, a folder's or a torrent's.
+// Name reads one name: a file's, a folder's or an entry's.
 func Name(raw string) Release {
 	var r Release
 	s := strings.TrimSpace(raw)

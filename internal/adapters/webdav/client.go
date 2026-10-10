@@ -1,8 +1,13 @@
-// Package zurg reads Zurg — a Real-Debrid library served over WebDAV — the
-// way a media server's scanner would: its folders, the torrents in each, the
-// files in a torrent, and a file's bytes. Zurg's folders, the ones its config
-// sorts torrents into, exist only in this view, so WebDAV is the way in.
-package zurg
+// Package webdav reads a WebDAV share the way a media server's scanner
+// would: its folders, the entries in each, the files under an entry, and a
+// file's bytes. Any share will do — rclone's, a NAS's — and Zurg's above
+// all: a Real-Debrid library, whose folders, the ones its config sorts
+// torrents into, exist only in this view. A torrent is an entry there.
+//
+// Zurg answers its own way, and every way is read here, for any share:
+// hrefs relative, dates in UTC, a name listed once per folder of a pack,
+// a part sent whole or without its length.
+package webdav
 
 import (
 	"bytes"
@@ -20,21 +25,24 @@ import (
 )
 
 var (
-	// ErrRefused is Zurg turning down the username or password. It stays
-	// refused until they change.
-	ErrRefused = errors.New("Zurg did not accept the username or password")
-	// ErrNotFound is a folder or file Zurg does not have, or no longer has.
-	ErrNotFound = errors.New("Zurg has no such folder or file")
-	// ErrUnavailable is Zurg failing, or not answering.
-	ErrUnavailable = errors.New("Zurg cannot be reached")
+	// ErrRefused is the share turning down the username or password. It
+	// stays refused until they change.
+	ErrRefused = errors.New("the share did not accept the username or password")
+	// ErrNotFound is a folder or file the share does not have, or no longer
+	// has.
+	ErrNotFound = errors.New("the share has no such folder or file")
+	// ErrNotWebDAV is an address where nothing lists a folder.
+	ErrNotWebDAV = errors.New("nothing answers as WebDAV there")
+	// ErrUnavailable is the share failing, or not answering.
+	ErrUnavailable = errors.New("the share cannot be reached")
 	// ErrRangeIgnored is a file answered whole when only a part was asked
 	// for: passed on, a player would start again from the beginning.
-	ErrRangeIgnored = errors.New("Zurg answered with the whole file where a part was asked for")
+	ErrRangeIgnored = errors.New("the share answered with the whole file where a part was asked for")
 )
 
 const (
-	// atOnce bounds Zurg's listings: it answers from memory, but a scan walks
-	// thousands of folders.
+	// atOnce bounds a share's listings: Zurg answers from memory, but a scan
+	// walks thousands of folders.
 	atOnce      = 4
 	listTimeout = 60 * time.Second
 	// maxListing is what one listing may weigh.
@@ -50,14 +58,14 @@ type Entry struct {
 }
 
 // File is a file under a library folder: its path from the folder, every
-// segment as Zurg names it.
+// segment as the share names it.
 type File struct {
 	Path     string
 	Size     int64
 	Modified time.Time
 }
 
-// Client is one Zurg, reached with one username and password.
+// Client is one WebDAV share, reached with one username and password.
 type Client struct {
 	base     *url.URL
 	user     string
@@ -70,18 +78,14 @@ type Client struct {
 	latched bool
 }
 
-// New takes Zurg's address as the household knows it — `http://zurg:9999`,
-// or its WebDAV address itself — and reaches its WebDAV under `/dav/`.
+// New takes the share's address: its WebDAV root, as Zurg's is
+// `http://zurg:9999/dav`.
 func New(address, user, password string) (*Client, error) {
 	base, err := url.Parse(strings.TrimSpace(address))
 	if err != nil || (base.Scheme != "http" && base.Scheme != "https") || base.Host == "" {
-		return nil, errors.New("Zurg's address must be an http or https address")
+		return nil, errors.New("the share's address must be an http or https address")
 	}
-	base.Path = strings.TrimRight(base.Path, "/")
-	if !strings.HasSuffix(base.Path, "/dav") {
-		base.Path += "/dav"
-	}
-	base.Path += "/"
+	base.Path = strings.TrimRight(base.Path, "/") + "/"
 	base.RawQuery, base.Fragment, base.User = "", "", nil
 	transport := &http.Transport{
 		Proxy:               http.ProxyFromEnvironment,
@@ -163,7 +167,7 @@ type multistatus struct {
 	} `xml:"response"`
 }
 
-// List is what a folder holds: "" is Zurg's root, with its folders. The
+// List is what a folder holds: "" is the share's root, with its folders. The
 // folder's own entry is left out, and so is a name that cannot be a path's
 // segment.
 func (c *Client) List(ctx context.Context, dir string) ([]Entry, error) {
@@ -200,6 +204,8 @@ func (c *Client) List(ctx context.Context, dir string) ([]Entry, error) {
 		return nil, ErrRefused
 	case response.StatusCode == http.StatusNotFound:
 		return nil, ErrNotFound
+	case response.StatusCode == http.StatusMethodNotAllowed:
+		return nil, ErrNotWebDAV
 	case response.StatusCode != http.StatusMultiStatus:
 		return nil, fmt.Errorf("%w (%d)", ErrUnavailable, response.StatusCode)
 	}
@@ -343,8 +349,8 @@ func (c *Client) Walk(ctx context.Context, folder, entry string, depth int) ([]F
 	return files, nil
 }
 
-// Open asks Zurg for a file's bytes — the part a Range names, or all of
-// them — following Zurg wherever it sends the request. Zurg answers a part
+// Open asks the share for a file's bytes — the part a Range names, or all
+// of them — following it wherever it sends the request. Zurg answers a part
 // with 200 and a Content-Range at times; that is a 206 here. A part asked for
 // and the whole file answered is ErrRangeIgnored.
 func (c *Client) Open(ctx context.Context, folder, path string, header http.Header, head bool) (*http.Response, error) {

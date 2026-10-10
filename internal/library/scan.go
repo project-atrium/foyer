@@ -13,25 +13,26 @@ import (
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/types"
 
-	"foyer/internal/adapters/zurg"
+	"foyer/internal/adapters/webdav"
 	"foyer/internal/parse"
 )
 
 const (
-	// grace is how long a file Zurg stopped listing is kept: Zurg's repairs
-	// take files away for a while.
+	// grace is how long a file the share stopped listing is kept: Zurg's
+	// repairs take files away for a while.
 	grace = 72 * time.Hour
-	// walkDepth is how deep a torrent's folders are walked.
+	// walkDepth is how deep an entry's folders are walked.
 	walkDepth = 3
 )
 
 // ErrScanning is a scan asked for while one runs: the running one is enough.
 var ErrScanning = errors.New("this library is being scanned already")
 
-// Scan reads a library from Zurg and brings its collections up to what Zurg
-// holds: new torrents walked and their files named, files Zurg stopped
-// listing let go after a grace period, artwork fetched. A full scan walks
-// every torrent; otherwise only new and changed ones.
+// Scan reads a library from the share and brings its collections up to
+// what it holds: new entries walked and their files named — an entry is a
+// torrent on Zurg, a folder or a file elsewhere — files it stopped listing
+// let go after a grace period, artwork fetched. A full scan walks every
+// entry; otherwise only new and changed ones.
 func (e *Engine) Scan(ctx context.Context, libID string, full bool) error {
 	lib, err := e.app.FindRecordById(LibrariesCollection, libID)
 	if err != nil {
@@ -93,13 +94,13 @@ func (e *Engine) writes(id string) *sync.Mutex {
 }
 
 type walked struct {
-	entry zurg.Entry
-	files []zurg.File
+	entry webdav.Entry
+	files []webdav.File
 	err   error
 }
 
 func (e *Engine) scan(ctx context.Context, lib *core.Record, full bool, run *run) error {
-	client, err := e.zurg()
+	client, err := e.share()
 	if err != nil {
 		return err
 	}
@@ -109,12 +110,12 @@ func (e *Engine) scan(ctx context.Context, lib *core.Record, full bool, run *run
 	if err != nil {
 		return err
 	}
-	torrents, err := e.app.FindAllRecords(TorrentsCollection, dbx.HashExp{"library": lib.Id})
+	records, err := e.app.FindAllRecords(EntriesCollection, dbx.HashExp{"library": lib.Id})
 	if err != nil {
 		return err
 	}
 	known := map[string]*core.Record{}
-	for _, t := range torrents {
+	for _, t := range records {
 		known[t.GetString("name")] = t
 	}
 	listed := map[string]bool{}
@@ -123,8 +124,8 @@ func (e *Engine) scan(ctx context.Context, lib *core.Record, full bool, run *run
 	}
 	now := e.now().UTC()
 
-	// Zurg lists nothing while it starts, and less while it repairs: what it
-	// stopped listing is let go only when it says so twice.
+	// A share lists nothing while it starts, and Zurg less while it repairs:
+	// what it stopped listing is let go only when it says so twice.
 	var vanished []*core.Record
 	for name, t := range known {
 		if !listed[name] && t.GetString("missing_since") == "" {
@@ -132,14 +133,14 @@ func (e *Engine) scan(ctx context.Context, lib *core.Record, full bool, run *run
 		}
 	}
 	if len(entries) == 0 && len(known) > 0 {
-		return errors.New("Zurg listed nothing in this folder; nothing is taken away until it lists it again")
+		return errors.New("the share listed nothing in this folder; nothing is taken away until it lists it again")
 	}
 	if len(known) >= 10 && 2*len(vanished) > len(known) && !e.confirmVanish(lib.Id, now) {
-		run.note(fmt.Sprintf("Zurg stopped listing %d of %d torrents; nothing is taken away until the next scan agrees", len(vanished), len(known)))
+		run.note(fmt.Sprintf("The share stopped listing %d of %d entries; nothing is taken away until the next scan agrees", len(vanished), len(known)))
 		vanished = nil
 	}
 
-	var walk []zurg.Entry
+	var walk []webdav.Entry
 	for _, entry := range entries {
 		t, ok := known[entry.Name]
 		switch {
@@ -148,7 +149,7 @@ func (e *Engine) scan(ctx context.Context, lib *core.Record, full bool, run *run
 			walk = append(walk, entry)
 		}
 	}
-	run.update(func(p *Progress) { p.Torrents = len(entries) })
+	run.update(func(p *Progress) { p.Entries = len(entries) })
 
 	run.phase("walking")
 	plausible := plausibleDates(entries, now)
@@ -160,7 +161,7 @@ func (e *Engine) scan(ctx context.Context, lib *core.Record, full bool, run *run
 			if entry.Dir {
 				w.files, w.err = client.Walk(ctx, folder, entry.Name, walkDepth)
 			} else {
-				w.files = []zurg.File{{Path: entry.Name, Size: entry.Size, Modified: entry.Modified}}
+				w.files = []webdav.File{{Path: entry.Name, Size: entry.Size, Modified: entry.Modified}}
 			}
 			results[i] = w
 		})
@@ -177,10 +178,10 @@ func (e *Engine) scan(ctx context.Context, lib *core.Record, full bool, run *run
 		added, err := e.record(lib, known[w.entry.Name], w, plausible, now)
 		lock.Unlock()
 		if err != nil {
-			// One torrent that will not be kept holds the library back no
-			// more: it is told, and the next scan tries it again.
+			// One entry that will not be kept holds the library back no more:
+			// it is told, and the next scan tries it again.
 			run.note(fmt.Sprintf("%s was not kept: %v", w.entry.Name, err))
-			e.app.Logger().Warn("A torrent was not kept", "library", lib.GetString("name"), "torrent", w.entry.Name, "error", err.Error())
+			e.app.Logger().Warn("An entry was not kept", "library", lib.GetString("name"), "entry", w.entry.Name, "error", err.Error())
 			continue
 		}
 		run.update(func(p *Progress) { p.Walked++; p.NewFiles += added })
@@ -193,7 +194,7 @@ func (e *Engine) scan(ctx context.Context, lib *core.Record, full bool, run *run
 				if err := tx.Save(t); err != nil {
 					return err
 				}
-				files, err := tx.FindAllRecords(FilesCollection, dbx.HashExp{"torrent": t.Id})
+				files, err := tx.FindAllRecords(FilesCollection, dbx.HashExp{"entry": t.Id})
 				if err != nil {
 					return err
 				}
@@ -228,7 +229,7 @@ func (e *Engine) scan(ctx context.Context, lib *core.Record, full bool, run *run
 	return nil
 }
 
-// confirmVanish says whether Zurg dropped most of a library twice, ten
+// confirmVanish says whether the share dropped most of a library twice, ten
 // minutes or more apart.
 func (e *Engine) confirmVanish(id string, now time.Time) bool {
 	e.mu.Lock()
@@ -245,9 +246,10 @@ func (e *Engine) confirmVanish(id string, now time.Time) bool {
 	return true
 }
 
-// plausibleDates says whether a listing's dates are its torrents' own: not
-// all one second — Zurg's clock, not Real-Debrid's — where there are many.
-func plausibleDates(entries []zurg.Entry, now time.Time) bool {
+// plausibleDates says whether a listing's dates are its entries' own: not
+// all one second — the share's clock, not when anything came — where there
+// are many. Zurg's are when Real-Debrid added each torrent.
+func plausibleDates(entries []webdav.Entry, now time.Time) bool {
 	if len(entries) < 10 {
 		return true
 	}
@@ -266,15 +268,15 @@ func plausible(t, now time.Time) bool {
 	return !t.IsZero() && t.Year() >= 2008 && t.Before(now.Add(24*time.Hour))
 }
 
-// record keeps one torrent as Zurg listed it: its files, new ones waiting to
-// be named and probed, ones it no longer lists marked missing. It answers how
-// many files were new.
+// record keeps one entry as the share listed it: its files, new ones waiting
+// to be named and probed, ones it no longer lists marked missing. It answers
+// how many files were new.
 func (e *Engine) record(lib, existing *core.Record, w walked, datesPlausible bool, now time.Time) (int, error) {
 	added := 0
 	err := e.app.RunInTransaction(func(tx core.App) error {
 		t := existing
 		if t == nil {
-			collection, err := tx.FindCollectionByNameOrId(TorrentsCollection)
+			collection, err := tx.FindCollectionByNameOrId(EntriesCollection)
 			if err != nil {
 				return err
 			}
@@ -300,7 +302,7 @@ func (e *Engine) record(lib, existing *core.Record, w walked, datesPlausible boo
 			return nil
 		}
 
-		existing, err := tx.FindAllRecords(FilesCollection, dbx.HashExp{"torrent": t.Id})
+		existing, err := tx.FindAllRecords(FilesCollection, dbx.HashExp{"entry": t.Id})
 		if err != nil {
 			return err
 		}
@@ -332,7 +334,7 @@ func (e *Engine) record(lib, existing *core.Record, w walked, datesPlausible boo
 			if r == nil {
 				r = core.NewRecord(collection)
 				r.Set("library", lib.Id)
-				r.Set("torrent", t.Id)
+				r.Set("entry", t.Id)
 				r.Set("path", f.Path)
 				r.Set("name", name)
 				r.Set("role", "pending")

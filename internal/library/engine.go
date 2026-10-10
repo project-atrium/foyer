@@ -17,7 +17,7 @@ import (
 
 	"foyer/internal/adapters"
 	"foyer/internal/adapters/tmdb"
-	"foyer/internal/adapters/zurg"
+	"foyer/internal/adapters/webdav"
 )
 
 // Engine is the library: its collections, its scans, and the routes the
@@ -106,16 +106,16 @@ func New(app core.App, registry *adapters.Registry) *Engine {
 // errOff is an adapter the household has not switched on.
 var errOff = errors.New("switched off on the Adapters page")
 
-// zurg is a client for Zurg as the Adapters page has it set.
-func (e *Engine) zurg() (*zurg.Client, error) {
-	s, err := e.adapters.Settings(zurg.Key)
+// share is a client for the WebDAV share as the Adapters page has it set.
+func (e *Engine) share() (*webdav.Client, error) {
+	s, err := e.adapters.Settings(webdav.Key)
 	if err != nil {
 		return nil, err
 	}
 	if !s.Enabled {
-		return nil, fmt.Errorf("Zurg is %w", errOff)
+		return nil, fmt.Errorf("WebDAV is %w", errOff)
 	}
-	return zurg.New(s.String("url"), s.String("username"), s.String("password"))
+	return webdav.New(s.String("url"), s.String("username"), s.String("password"))
 }
 
 // EnsureAll brings every library's collections to the template, at start.
@@ -161,12 +161,12 @@ func viewOf(r *core.Record) libraryView {
 }
 
 // Routes mounts the dashboard's library routes on the superusers' group.
-// Zurg's refusal is an answer, never a 401: the dashboard signs its
+// The share's refusal is an answer, never a 401: the dashboard signs its
 // superuser out on any.
 func (e *Engine) Routes(admin *router.RouterGroup[*core.RequestEvent]) {
 	e.hookRoute(admin)
 	e.gridRoutes(admin)
-	admin.GET("/zurg/folders", func(re *core.RequestEvent) error {
+	admin.GET("/webdav/folders", func(re *core.RequestEvent) error {
 		libs, err := e.app.FindAllRecords(LibrariesCollection)
 		if err != nil {
 			return re.InternalServerError("", err)
@@ -184,11 +184,11 @@ func (e *Engine) Routes(admin *router.RouterGroup[*core.RequestEvent]) {
 			Message string   `json:"message,omitempty"`
 			Folders []folder `json:"folders"`
 		}{Folders: []folder{}}
-		client, err := e.zurg()
+		client, err := e.share()
 		if err == nil {
 			ctx, cancel := context.WithTimeout(re.Request.Context(), 30*time.Second)
 			defer cancel()
-			var entries []zurg.Entry
+			var entries []webdav.Entry
 			if entries, err = client.List(ctx, ""); err == nil {
 				answer.OK = true
 				for _, entry := range entries {
@@ -205,9 +205,10 @@ func (e *Engine) Routes(admin *router.RouterGroup[*core.RequestEvent]) {
 			}
 		}
 		if err != nil {
-			answer.Message = err.Error() + "."
+			answer.Message = sentence(err)
 		}
-		// A library whose folder Zurg no longer lists is shown all the same.
+		// A library whose folder the share no longer lists is shown all the
+		// same.
 		for _, v := range byFolder {
 			answer.Folders = append(answer.Folders, folder{Folder: v.Folder, Library: &v})
 		}
@@ -262,12 +263,12 @@ func (e *Engine) Routes(admin *router.RouterGroup[*core.RequestEvent]) {
 	})
 }
 
-// Add makes a library of a Zurg folder, and its collections.
+// Add makes a library of one of the share's folders, and its collections.
 func (e *Engine) Add(folder, name, kind string, enabled bool) (*core.Record, error) {
 	folder, name = strings.TrimSpace(folder), strings.TrimSpace(name)
 	errs := validation.Errors{}
 	if folder == "" || strings.Contains(folder, "/") {
-		errs["folder"] = validation.NewError("validation_required", "A library is one of Zurg's folders.")
+		errs["folder"] = validation.NewError("validation_required", "A library is one of the share's folders.")
 	} else if _, err := e.app.FindFirstRecordByData(LibrariesCollection, "folder", folder); err == nil {
 		errs["folder"] = validation.NewError("foyer_taken", "That folder is a library already.")
 	}
@@ -304,4 +305,13 @@ func (e *Engine) Add(folder, name, kind string, enabled bool) (*core.Record, err
 		return nil, err
 	}
 	return lib, nil
+}
+
+// sentence is an error as the dashboard shows it: a sentence of its own.
+func sentence(err error) string {
+	s := err.Error()
+	if s == "" {
+		return s
+	}
+	return strings.ToUpper(s[:1]) + s[1:] + "."
 }

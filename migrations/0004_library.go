@@ -8,13 +8,15 @@ import (
 
 // The library's bookkeeping. A library's own collections — `movies`, or
 // `shows` with `shows_episodes` — are not here: Foyer makes them from a
-// template, one set per Zurg folder chosen as a library (internal/library).
+// template, one set per folder of the WebDAV share chosen as a library
+// (internal/library).
 //
-//   - libraries: which Zurg folder is which library, and how its scans went.
-//     Users may read them, to know what there is.
-//   - media_torrents: each folder Zurg lists under a library's folder — a
-//     torrent — and when Foyer first saw it, or saw it last.
-//   - media_files: each file of a torrent, what its name says, which title
+//   - libraries: which of the share's folders is which library, and how its
+//     scans went. Users may read them, to know what there is.
+//   - media_entries: each entry the share lists under a library's folder — a
+//     torrent on Zurg, a folder or a file elsewhere — and when Foyer first
+//     saw it, or saw it last.
+//   - media_files: each file of an entry, what its name says, which title
 //     took it, and what ffprobe found. Superusers only: users read a title's
 //     versions on the title itself, and a title not yet confirmed must not
 //     show through its files.
@@ -48,11 +50,11 @@ func init() {
 			return err
 		}
 
-		torrents := core.NewBaseCollection("media_torrents")
-		torrents.Fields.Add(
+		entries := core.NewBaseCollection("media_entries")
+		entries.Fields.Add(
 			&core.RelationField{Name: "library", CollectionId: libraries.Id, MaxSelect: 1, Required: true, CascadeDelete: true},
 			&core.TextField{Name: "name", Required: true, Max: 1024},
-			// A file lying in the folder itself, with no torrent folder round it.
+			// A file lying in the folder itself, with no folder of its own.
 			&core.BoolField{Name: "loose"},
 			&core.DateField{Name: "modified"},
 			&core.DateField{Name: "first_seen"},
@@ -61,16 +63,16 @@ func init() {
 			&core.AutodateField{Name: "created", OnCreate: true},
 			&core.AutodateField{Name: "updated", OnCreate: true, OnUpdate: true},
 		)
-		torrents.AddIndex("idx_media_torrents_library_name", true, "`library`, `name`", "")
-		if err := app.Save(torrents); err != nil {
+		entries.AddIndex("idx_media_entries_library_name", true, "`library`, `name`", "")
+		if err := app.Save(entries); err != nil {
 			return err
 		}
 
 		files := core.NewBaseCollection("media_files")
 		files.Fields.Add(
 			&core.RelationField{Name: "library", CollectionId: libraries.Id, MaxSelect: 1, Required: true, CascadeDelete: true},
-			&core.RelationField{Name: "torrent", CollectionId: torrents.Id, MaxSelect: 1, Required: true, CascadeDelete: true},
-			// Under the library's folder: "<torrent>/<folders…>/<file>", as Zurg lists it.
+			&core.RelationField{Name: "entry", CollectionId: entries.Id, MaxSelect: 1, Required: true, CascadeDelete: true},
+			// Under the library's folder: "<entry>/<folders…>/<file>", as the share lists it.
 			&core.TextField{Name: "path", Required: true, Max: 4096},
 			&core.TextField{Name: "name", Max: 1024},
 			&core.NumberField{Name: "size", OnlyInt: true},
@@ -99,7 +101,7 @@ func init() {
 			&core.AutodateField{Name: "updated", OnCreate: true, OnUpdate: true},
 		)
 		files.AddIndex("idx_media_files_library_path", true, "`library`, `path`", "")
-		files.AddIndex("idx_media_files_torrent", false, "`torrent`", "")
+		files.AddIndex("idx_media_files_entry", false, "`entry`", "")
 		files.AddIndex("idx_media_files_item", false, "`item_collection`, `item_id`", "")
 		files.AddIndex("idx_media_files_match_key", false, "`library`, `match_key`", "")
 		files.AddIndex("idx_media_files_probe", false, "`probe_state`, `probe_next_at`", "")

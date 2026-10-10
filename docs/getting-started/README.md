@@ -63,14 +63,15 @@ Everything else is set on the dashboard, under **Settings → Adapters**. Each
 adapter is switched on with **Enabled**, tried with **Test**, and kept with
 **Save changes**.
 
-1. **Zurg** — its address, such as `http://zurg:9999`, and its username and
-   password if it asks for them.
+1. **WebDAV** — the share's address: its WebDAV root, as Zurg's is
+   `http://zurg:9999/dav`, rclone's or a NAS's wherever it serves. And its
+   username and password if it asks for them.
 2. **TMDB** — your own key, from themoviedb.org → Settings → API: the API
    Read Access Token or the API key. And the language titles and artwork
    are asked in.
 3. **FFmpeg** — where ffprobe and ffmpeg are, if not on the PATH. Its test
    says what it found, and whether the GPU answers.
-4. **Libraries**, under Zurg: its folders. **Make a library** of each you
+4. **Libraries**, under WebDAV: the share's folders. **Make a library** of each you
    want, as movies or as shows; it is scanned at once. A folder that is not
    one — `__all__`, a download folder — is never read.
 5. **Scan as soon as Zurg changes**: paste the `on_library_update` shown

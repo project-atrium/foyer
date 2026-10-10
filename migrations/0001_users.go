@@ -4,7 +4,7 @@
 //
 // Never edit one that has run on a server; fix forward with a new one. A
 // library's collections are not here: Foyer makes those itself, one set per
-// Zurg folder (internal/library).
+// folder of the WebDAV share (internal/library).
 package migrations
 
 import (

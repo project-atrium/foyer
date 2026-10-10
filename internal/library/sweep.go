@@ -7,7 +7,7 @@ import (
 	"github.com/pocketbase/pocketbase/core"
 )
 
-// sweep lets go of files Zurg has not listed for the grace period, and of
+// sweep lets go of files the share has not listed for the grace period, and of
 // titles left with nothing: a film with no file, an episode with none, a
 // series with no episode and nothing that came with it. Watch status stays,
 // keyed by what was watched, for when the title comes back.
@@ -18,11 +18,11 @@ func (e *Engine) sweep(lib *core.Record, now time.Time, run *run) error {
 	if err != nil {
 		return err
 	}
-	torrents, err := e.app.FindRecordsByFilter(TorrentsCollection, "library = {:library} && missing_since != '' && missing_since < {:cutoff}", "", 0, 0, params)
+	entries, err := e.app.FindRecordsByFilter(EntriesCollection, "library = {:library} && missing_since != '' && missing_since < {:cutoff}", "", 0, 0, params)
 	if err != nil {
 		return err
 	}
-	if len(gone) == 0 && len(torrents) == 0 {
+	if len(gone) == 0 && len(entries) == 0 {
 		return nil
 	}
 	lock := e.writes(lib.Id)
@@ -41,7 +41,7 @@ func (e *Engine) sweep(lib *core.Record, now time.Time, run *run) error {
 				return err
 			}
 		}
-		for _, t := range torrents {
+		for _, t := range entries {
 			if err := tx.Delete(t); err != nil {
 				return err
 			}

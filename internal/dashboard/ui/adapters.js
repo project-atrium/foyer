@@ -1,5 +1,5 @@
 // The Adapters page, under Settings: each adapter's form drawn from the
-// fields it describes, and Zurg's folders made into libraries.
+// fields it describes, and the WebDAV share's folders made into libraries.
 const masked = '******';
 
 function send(path, options = {}) {
@@ -45,7 +45,7 @@ function settingsSidebar() {
   );
 }
 
-const icons = { zurg: 'ri-hard-drive-3-line', tmdb: 'ri-movie-2-line', ffmpeg: 'ri-cpu-line' };
+const icons = { webdav: 'ri-hard-drive-3-line', tmdb: 'ri-movie-2-line', ffmpeg: 'ri-cpu-line' };
 
 export function pageAdapters(route) {
   app.store.title = 'Adapters';
@@ -87,7 +87,7 @@ export function pageAdapters(route) {
         }
         return t.div(
           null,
-          t.p({ className: 'txt-lg m-b-base' }, 'What Foyer connects to. Zurg lists the household\'s files, TMDB names them, and FFmpeg says what each one is.'),
+          t.p({ className: 'txt-lg m-b-base' }, 'What Foyer connects to. A WebDAV share — Zurg\'s — lists the household\'s files, TMDB names them, and FFmpeg says what each one is.'),
           t.div(
             { className: 'alert warning m-b-base' },
             'Passwords and keys are kept on this server as typed: anyone who signs in as a superuser, or holds a copy of pb_data or a backup, has them.',
@@ -240,7 +240,7 @@ function adapterPanel(view, open) {
         ),
       ),
     ),
-    key == 'zurg' ? libraries(() => form.init) : null,
+    key == 'webdav' ? libraries(() => form.init) : null,
   );
 }
 
@@ -337,16 +337,16 @@ function detection(d) {
   );
 }
 
-// libraries is Zurg's folders, each a library or not yet, and the command
-// that has Zurg tell Foyer of every change. saved changes as Zurg's
-// settings are saved, so the folders are listed again.
+// libraries is the share's folders, each a library or not yet, and the
+// command that has Zurg tell Foyer of every change. saved changes as the
+// share's settings are saved, so the folders are listed again.
 function libraries(saved) {
   const data = store({ loading: false, ok: false, message: '', folders: [], hook: null });
 
   async function load() {
     data.loading = true;
     try {
-      const answer = await send('/api/foyer/admin/zurg/folders');
+      const answer = await send('/api/foyer/admin/webdav/folders');
       data.ok = answer.ok;
       data.message = answer.message || '';
       data.folders = answer.folders || [];
@@ -358,7 +358,7 @@ function libraries(saved) {
 
   async function loadHook() {
     try {
-      data.hook = await send('/api/foyer/admin/zurg/hook');
+      data.hook = await send('/api/foyer/admin/webdav/hook');
     } catch (err) {
       failed(err);
     }
@@ -388,7 +388,7 @@ function libraries(saved) {
       t.div(
         null,
         t.p(null, `Remove the library ${lib.name}?`),
-        t.p({ className: 'txt-hint' }, `Its collections — ${collections} — go, with their artwork. Zurg's files stay where they are, and what each user watched stays, ready for the library to come back.`),
+        t.p({ className: 'txt-hint' }, `Its collections — ${collections} — go, with their artwork. The share's files stay where they are, and what each user watched stays, ready for the library to come back.`),
       ),
       async () => {
         try {
@@ -432,18 +432,18 @@ function libraries(saved) {
         t.span({ className: 'txt' }, 'Scan all'),
       ),
     ),
-    t.p({ className: 'txt-hint' }, "Each of Zurg's folders can be a library: movies, or shows with their episodes. A folder that is not one — a download folder, say — is never read."),
+    t.p({ className: 'txt-hint' }, "Each of the share's folders can be a library: movies, or shows with their episodes. A folder that is not one — Zurg's __all__, a download folder — is never read."),
     () => (data.message ? t.div({ className: 'alert danger' }, data.message) : null),
     () => {
       if (data.loading && !data.folders.length) {
         return t.div({ className: 'block txt-center' }, t.span({ className: 'loader' }));
       }
       if (!data.folders.length) {
-        return data.ok ? t.p({ className: 'txt-hint' }, 'Zurg lists no folders.') : null;
+        return data.ok ? t.p({ className: 'txt-hint' }, 'The share lists no folders.') : null;
       }
       return t.table(
         { className: 'foyer-table' },
-        t.thead(null, t.tr(null, t.th(null, 'Zurg folder'), t.th(null, 'Library'), t.th(null, 'Last scan'), t.th(null, ''))),
+        t.thead(null, t.tr(null, t.th(null, 'Folder'), t.th(null, 'Library'), t.th(null, 'Last scan'), t.th(null, ''))),
         t.tbody(null, data.folders.map((f) => folderRow(f))),
       );
     },
@@ -451,10 +451,10 @@ function libraries(saved) {
       data.hook
         ? t.div(
             { className: 'm-t-base' },
-            t.h6(null, 'Scan as soon as Zurg changes'),
+            t.h6(null, 'Scan as soon as the share changes'),
             t.p(
               { className: 'txt-hint txt-sm' },
-              "Zurg runs on_library_update after every change. Give it this in its config.yml, with the address Zurg reaches Foyer by in place of this page's own:",
+              "Zurg runs on_library_update after every change: give it this in its config.yml, with the address Zurg reaches Foyer by in place of this page's own. Any other share's tools can post the folders that changed the same way.",
             ),
             t.div(
               { className: 'flex' },

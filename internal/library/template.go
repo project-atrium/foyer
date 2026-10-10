@@ -1,7 +1,8 @@
-// Package library turns Zurg's folders into the household's library: one set
-// of collections per folder chosen as a library — a movies folder `x` is the
-// collection `x`; a shows folder `x` is `x` with `x_episodes` — kept in shape
-// from one template here, never from the dashboard.
+// Package library turns a WebDAV share's folders — Zurg's above all — into
+// the household's library: one set of collections per folder chosen as a
+// library — a movies folder `x` is the collection `x`; a shows folder `x` is
+// `x` with `x_episodes` — kept in shape from one template here, never from
+// the dashboard.
 package library
 
 import (
@@ -29,7 +30,7 @@ const (
 // Collections Foyer keeps for the library, beside each library's own.
 const (
 	LibrariesCollection  = "libraries"
-	TorrentsCollection   = "media_torrents"
+	EntriesCollection    = "media_entries"
 	FilesCollection      = "media_files"
 	IdentitiesCollection = "identities"
 )
@@ -46,7 +47,7 @@ var (
 	namePattern = regexp.MustCompile(`^[a-z][a-z0-9_]{0,39}$`)
 	// reserved are names a library may never take: PocketBase's, Foyer's,
 	// and what their records' tables would collide with.
-	reserved = []string{"users", "adapters", "libraries", "media_torrents", "media_files", "identities", "watch_states"}
+	reserved = []string{"users", "adapters", "libraries", "media_entries", "media_files", "identities", "watch_states"}
 )
 
 // Episodes is the collection of a shows library's episodes.
@@ -282,7 +283,7 @@ func Ensure(app core.App, lib *core.Record) error {
 }
 
 // Remove deletes a library: its collections — PocketBase removes their files
-// — and its record, with its torrents, files and identities. Watch status
+// — and its record, with its entries, files and identities. Watch status
 // stays, keyed by what was watched.
 func Remove(app core.App, lib *core.Record) error {
 	name := lib.GetString("name")

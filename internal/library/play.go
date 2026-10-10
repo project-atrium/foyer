@@ -11,25 +11,25 @@ import (
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/router"
 
-	"foyer/internal/adapters/zurg"
+	"foyer/internal/adapters/webdav"
 	"foyer/internal/media"
 	"foyer/internal/stream"
 )
 
-// OpenFile opens a library file's bytes from Zurg: the stream's source, and
+// OpenFile opens a library file's bytes from the share: the stream's source, and
 // the loopback's.
 func (e *Engine) OpenFile(ctx context.Context, file *core.Record, header http.Header, head bool) (*http.Response, error) {
 	lib, err := e.app.FindRecordById(LibrariesCollection, file.GetString("library"))
 	if err != nil {
 		return nil, stream.ErrGone
 	}
-	client, err := e.zurg()
+	client, err := e.share()
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", stream.ErrSource, err)
 	}
 	response, err := client.Open(ctx, lib.GetString("folder"), file.GetString("path"), header, head)
 	switch {
-	case errors.Is(err, zurg.ErrNotFound):
+	case errors.Is(err, webdav.ErrNotFound):
 		return nil, stream.ErrGone
 	case err != nil:
 		return nil, fmt.Errorf("%w: %w", stream.ErrSource, err)
