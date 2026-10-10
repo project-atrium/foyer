@@ -168,10 +168,18 @@ func planShows(group []*placedFile, add func(*candidate, *placedFile)) {
 	related := func(key string) bool {
 		return torrentKey != "" && (key == "" || strings.Contains(key, torrentKey) || strings.Contains(torrentKey, key))
 	}
-	// Several series in one torrent only where each holds a fair share of it.
+	// Several series in one torrent only where each holds a fair share of it
+	// — numbered episodes, two at least: a pack's "Start Credit (Part 1)" and
+	// "(Part 2)" are its own, not a series.
 	var own []string
 	for _, key := range keys {
-		if !related(key) && key != "" && len(byTitle[key]) >= 2 {
+		numbered := 0
+		for _, f := range byTitle[key] {
+			if len(f.placed.Episodes) > 0 || len(f.placed.Absolute) > 0 {
+				numbered++
+			}
+		}
+		if !related(key) && key != "" && numbered >= 2 {
 			own = append(own, key)
 		}
 	}

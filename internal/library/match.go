@@ -3,6 +3,7 @@ package library
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/pocketbase/pocketbase/tools/types"
 
 	"foyer/internal/adapters/tmdb"
+	"foyer/internal/titles"
 )
 
 const (
@@ -123,6 +125,9 @@ func (e *Engine) ask(ctx context.Context, c *candidate, client *tmdb.Client) (de
 	if c.alternate != "" {
 		queries = append(queries, tmdb.Query{Kind: c.kind, Title: c.alternate, Year: c.year})
 	}
+	for _, half := range halves(c.title) {
+		queries = append(queries, tmdb.Query{Kind: c.kind, Title: half, Year: c.year})
+	}
 	for _, q := range queries {
 		found, err := client.Find(ctx, q)
 		if err != nil {
@@ -141,6 +146,26 @@ func (e *Engine) ask(ctx context.Context, c *candidate, client *tmdb.Client) (de
 		return decide(c.kind, infos, c.evidence), infos, nil
 	}
 	return decision{state: none, reason: "TMDB has nothing by this name"}, nil, nil
+}
+
+// halves are what a title "X - Y" is asked as once the whole finds nothing:
+// "Truman Show - The Truman Show" is a name written twice, a series' name
+// before a film's another. The last first: it is the fuller.
+func halves(title string) []string {
+	first, rest, found := strings.Cut(title, " - ")
+	if !found {
+		return nil
+	}
+	if i := strings.LastIndex(rest, " - "); i >= 0 {
+		rest = rest[i+3:]
+	}
+	var out []string
+	for _, half := range []string{strings.TrimSpace(rest), strings.TrimSpace(first)} {
+		if len(titles.Key(half)) >= 3 && !slices.Contains(out, half) {
+			out = append(out, half)
+		}
+	}
+	return out
 }
 
 func (e *Engine) describe(ctx context.Context, kind tmdb.Kind, named []tmdb.Found, client *tmdb.Client) ([]candidateInfo, error) {

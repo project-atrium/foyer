@@ -31,7 +31,11 @@ Once a day it walks every torrent again, to see inside them.
    the episode counted from the series' start, what the file is. A season
    pack's name gives its files' title; a season folder gives a number a file
    names without one — never a number counted from the start, since a pack's
-   "Season 01" can hold episode 62.
+   "Season 01" can hold episode 62. A pack's range — "(0001-1071)", "Black
+   Clover 1-170", "Seasons 1 to 13" — ends its title, and so do the years a
+   series ran ("1989-1998"). A file in a pack without the series' name in
+   its own — "Start Credit (Part 1)" — is the pack's; another series in the
+   same torrent needs numbered episodes of its own.
 3. **Each title is asked of TMDB once**, and the answer remembered
    (`identities`): never asked again for a title it named.
 4. **Each title is written**: a film with its files as its versions; a series
@@ -68,6 +72,15 @@ file says; else when Foyer first saw it.
 | unmatched | TMDB had nothing: the title is its name's, without artwork | yes |
 | manual | you said what it is | yes |
 
+**Matching a name.** TMDB is searched with the title and year, as Loge
+searches it, and a result taken where its name is the same once case,
+accents and punctuation are set aside. Where none is, Foyer forgives what a
+release's name drops: an apostrophe ("Dont", "Dead Mans Chest"), a
+possessive ("Fred" for "Fred's"), an article, a superscript ("Accountant 2"
+is "The Accountant²"). A title written "X - Y" is then asked as each half —
+"Truman Show - The Truman Show" is The Truman Show. All of it within a year
+of the one the name gives.
+
 **Telling titles of one name apart.** Two series are called One Piece: the
 anime, with over a thousand episodes, and the live action, with seventeen. A
 pack running to episode 1071 can only be the first. Where the episodes do not
@@ -87,6 +100,11 @@ numbers some series that way inside their seasons — One Piece's season 21 is
 episodes 892 to 1088 — and others from one each season. Foyer looks for the
 episode in the season that holds that number; else in TMDB's absolute
 ordering of the series, where it has one; else counts on season by season.
+
+A release's second season may be TMDB's first, run on: Solo Leveling's
+`S02E01` is TMDB's `S01E13`, after the twelve the release holds of its
+first. Where TMDB has no such season and the season before runs that far,
+the episode is laid there.
 
 ## What each file is
 

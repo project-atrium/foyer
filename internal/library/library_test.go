@@ -1,6 +1,8 @@
 package library
 
 import (
+	"fmt"
+	"slices"
 	"testing"
 
 	"foyer/internal/adapters/tmdb"
@@ -33,6 +35,10 @@ func TestPlacesEpisodesWhereTMDBHasThem(t *testing.T) {
 	absolute.seasons[0][23] = tmdb.EpisodeInfo{Season: 0, Number: 23, Name: "Recapping Fierce Fights! Zoro vs. a Lead Performer!"}
 	// Most series' way: each season from one.
 	perSeason := newCatalog([]tmdb.Season{season(1, span(1, 10)...), season(2, span(1, 10)...)}, nil)
+	// Solo Leveling's way: two cours in TMDB's one season of 25, the files
+	// holding twelve of its first season.
+	cours := newCatalog([]tmdb.Season{season(1, span(1, 25)...)}, nil)
+	cours.held = map[int]int{1: 12, 2: 13}
 	// A series whose absolute ordering TMDB keeps apart.
 	grouped := newCatalog([]tmdb.Season{season(1, span(1, 10)...), season(2, span(1, 10)...)},
 		[]tmdb.EpisodeRef{{Season: 1, Number: 1}, {Season: 2, Number: 5}})
@@ -57,6 +63,8 @@ func TestPlacesEpisodesWhereTMDBHasThem(t *testing.T) {
 		{"a special sharing TMDB's head", absolute, parse.Release{Special: "special", EpisodeTitle: "Episode of East Blue - Luffy and His 4 Crewmates's Big Adventure"}, placement{season: 0, episode: 15, by: "special"}, true},
 		{"a special's name two of TMDB's begin", absolute, parse.Release{Special: "special", EpisodeTitle: "Recapping Fierce Fights"}, placement{}, false},
 		{"several episodes in one file", perSeason, parse.Release{Seasons: []int{1}, Episodes: []int{1, 2}}, placement{season: 1, episode: 1, end: 2, by: "release"}, true},
+		{"a second cour TMDB keeps in one season", cours, parse.Release{Seasons: []int{2}, Episodes: []int{1}}, placement{season: 1, episode: 13, by: "cour"}, true},
+		{"a second cour past TMDB's season", cours, parse.Release{Seasons: []int{2}, Episodes: []int{14}}, placement{}, false},
 		{"no series to look in", nil, parse.Release{Absolute: []int{5}}, placement{season: 1, episode: 5, absolute: 5, by: "unknown"}, true},
 	} {
 		got, ok := place(c.cat, c.release)
@@ -109,5 +117,43 @@ func TestTwoTorrentsOfOneFilmAreOneTitle(t *testing.T) {
 	got := plan(Movies, []*placedFile{film("a"), film("b")})
 	if len(got) != 1 || len(got[0].files) != 2 {
 		t.Fatalf("%d candidates", len(got))
+	}
+}
+
+// A pack's files without its series' name in theirs — "Start Credit (Part
+// 1)" — are its own; only numbered episodes of another series make a second.
+func TestAPacksUnnumberedFilesAreItsOwn(t *testing.T) {
+	pack := "Attack on Titan (2013) Season 1-4 S01-S04 (1080p)"
+	file := func(path string) *placedFile {
+		return &placedFile{torrent: pack, placed: parse.Path(pack+"/"+path, nil)}
+	}
+	got := plan(Shows, []*placedFile{
+		file("Attack on Titan (2013) - S01E01 - To You, in 2000 Years.mkv"),
+		file("Attack on Titan (2013) - S01E02 - That Day.mkv"),
+		file("Start Credit (Part 1).mkv"),
+		file("Start Credit (Part 2).mkv"),
+		file("Other Show - S01E01.mkv"),
+		file("Other Show - S01E02.mkv"),
+	})
+	var titles []string
+	for _, c := range got {
+		titles = append(titles, fmt.Sprintf("%s ×%d", c.title, len(c.files)))
+	}
+	slices.Sort(titles)
+	if !slices.Equal(titles, []string{"Attack on Titan ×4", "Other Show ×2"}) {
+		t.Fatalf("candidates %v", titles)
+	}
+}
+
+func TestATitleWrittenTwiceIsAskedByItsHalves(t *testing.T) {
+	for title, want := range map[string][]string{
+		"Truman Show - The Truman Show": {"The Truman Show", "Truman Show"},
+		"Sherlock - A - The Bride":      {"The Bride", "Sherlock"},
+		"The Truman Show":               nil,
+		"X - Y":                         nil,
+	} {
+		if got := halves(title); !slices.Equal(got, want) {
+			t.Errorf("%q: %q, want %q", title, got, want)
+		}
 	}
 }

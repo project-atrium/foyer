@@ -281,6 +281,7 @@ func (e *Engine) placeShow(ctx context.Context, lib *core.Record, c *candidate, 
 			if err != nil {
 				return errTMDBDown
 			}
+			cat.held = c.evidence.perSeason
 		case errors.Is(err, tmdb.ErrNotFound):
 			d = decision{state: none, reason: "TMDB no longer has it"}
 		case errors.Is(err, tmdb.ErrRefused), errors.Is(err, tmdb.ErrNoKey):

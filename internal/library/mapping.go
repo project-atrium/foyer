@@ -15,6 +15,8 @@ type catalog struct {
 	seasons  map[int]map[int]tmdb.EpisodeInfo
 	regular  []int
 	absolute []tmdb.EpisodeRef
+	// held is the highest episode the series' files hold of each season.
+	held map[int]int
 }
 
 func newCatalog(seasons []tmdb.Season, absolute []tmdb.EpisodeRef) *catalog {
@@ -170,6 +172,15 @@ func place(c *catalog, r parse.Release) (placement, bool) {
 		if _, _, count := c.bounds(s); s >= 1 && count > 0 && e > count {
 			if season, number, by, ok := c.byAbsolute(e); ok {
 				return placement{season: season, episode: number, absolute: e, by: by}, true
+			}
+		}
+		// A second cour TMDB keeps in the season before: Solo Leveling's
+		// S02E01 is TMDB's S01E13, after the twelve the files hold of S01.
+		if _, _, count := c.bounds(s); s >= 2 && count == 0 {
+			if before := c.held[s-1]; before > 0 {
+				if _, ok := c.episode(s-1, before+e); ok {
+					return placement{season: s - 1, episode: before + e, by: "cour"}, true
+				}
 			}
 		}
 		return placement{}, false
