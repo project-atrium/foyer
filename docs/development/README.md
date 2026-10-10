@@ -87,6 +87,13 @@ directory, with the migrations applied, through PocketBase's real router
   files flat and nested, hrefs however they are escaped, a refused sign-in
   kept, ranges — and Zurg's `200` with a `Content-Range` read as `206`.
 - **Titles:** Loge's own cases for `titleKey` and `bareTitle`.
+- **Release names**, a table of some fifty: scene names, dotted and dashed;
+  numeric titles and years inside titles; season packs and ranges; anime
+  numbered from the start, with versions, ranges and recaps; specials, OVAs
+  and films inside a pack; what a file is — resolution, source, codecs, HDR,
+  audio, edition. And a file read where it lies: its season folder, a
+  specials or extras folder, its torrent's name, Zurg's ` (id)`. `FuzzName`
+  never panics.
 
 **Live TMDB**, opt-in and local only — the key from the workspace's
 `tmdb.env`, never committed and never printed:

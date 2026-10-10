@@ -73,6 +73,7 @@ internal/adapters/   what Foyer connects to: settings records, fields, masked se
   zurg/              Zurg over WebDAV: its folders, a torrent's files, a file's bytes with ranges
   zurg/zurgtest/     a pretend Zurg, for the tests
 internal/titles/     Loge's titleKey and bareTitle, ported to the byte
+internal/parse/      release names: title, year, season and episode, numbers counted from the start, what the file is
 internal/dashboard/  the dashboard's icon: a PocketBase UI extension, embedded
 internal/version/    the version, always the app's: its `npm run release` moves both
 migrations/          0001 users are profiles; 0002 the name, the rate limits, the first superuser; 0003 adapters
@@ -102,6 +103,11 @@ Go tests sit beside what they test. Everything else is PocketBase's: `serve`,
   walk both. Zurg answers a part with `200` and a `Content-Range` at times —
   that is a `206` — and a whole file answered for a part is refused, or a
   player would start again from the beginning. Never ask Zurg for gzip.
+- **A release's name is read, never trusted.** `internal/parse` reads what
+  the uploader typed; the library checks it against TMDB, and a superuser
+  corrects the rest. A season folder never takes a number counted from the
+  series' start — a pack's "Season 01" can hold episode 62 — and Zurg's
+  ` (id)` suffix is stripped before anything is read.
 - **Titles are keyed as Loge keys them.** `internal/titles` is `@loge/api`'s
   `titleKey` and `bareTitle`, and its tests are Loge's: change one, change
   both.
