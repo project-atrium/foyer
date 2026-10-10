@@ -36,8 +36,10 @@ Once a day it walks every torrent again, to see inside them.
    (`identities`): never asked again for a title it named.
 4. **Each title is written**: a film with its files as its versions; a series
    with its episodes as TMDB numbers them, each with its files. Specials are
-   matched to TMDB's season 0 by name; films and OVAs that came in a series'
-   pack are its extras.
+   matched to TMDB's season 0 by name — the whole name, or the part before
+   TMDB's colon or dash: "3D2Y" is "3D2Y: Overcome Ace's Death!…" — and only
+   where one episode answers; films and OVAs that came in a series' pack are
+   its extras.
 5. **Artwork is fetched** into PocketBase's own storage — local, or S3 as
    PocketBase's settings say: posters, backdrops, logos, episode stills.
 6. **What Zurg stopped listing** is kept for three days — Zurg's repairs take

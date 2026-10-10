@@ -96,21 +96,38 @@ func (c *catalog) byAbsolute(n int) (season, number int, by string, ok bool) {
 }
 
 // special is the season-0 episode a special's name begins: "Episode of Nami"
-// is TMDB's "Episode of Nami: Tears of a Navigator…". One answer, or none.
+// is TMDB's "Episode of Nami: Tears of a Navigator…". A name may also be
+// the head of TMDB's, before its colon or dash — "3D2Y", too short to trust
+// as a beginning, is "3D2Y: Overcome Ace's Death!…" — or share its head,
+// where the rest is spelt apart: "Episode of East Blue - …Crewmates's…".
+// One answer, or none.
 func (c *catalog) special(title string) (int, bool) {
-	key := titles.Key(title)
-	if len(key) < 6 {
-		return 0, false
-	}
+	key, head := titles.Key(title), titles.Key(headOf(title))
 	found, hits := 0, 0
 	for number, e := range c.seasons[0] {
-		name := titles.Key(e.Name)
-		if name == key || strings.HasPrefix(name, key+" ") || strings.HasPrefix(key, name+" ") {
-			found = number
-			hits++
+		name, nameHead := titles.Key(e.Name), titles.Key(headOf(e.Name))
+		switch {
+		case len(key) >= 6 && (name == key || strings.HasPrefix(name, key+" ") || strings.HasPrefix(key, name+" ")):
+		case len(key) >= 4 && key == nameHead:
+		case len(head) >= 6 && head != key && head == nameHead:
+		default:
+			continue
 		}
+		found = number
+		hits++
 	}
 	return found, hits == 1
+}
+
+// headOf is a title before its first colon or spaced dash.
+func headOf(title string) string {
+	end := len(title)
+	for _, sep := range []string{":", " - ", " – ", " — "} {
+		if i := strings.Index(title, sep); i > 0 && i < end {
+			end = i
+		}
+	}
+	return strings.TrimSpace(title[:end])
 }
 
 // placement is where a file lies in its series: a season and an episode,

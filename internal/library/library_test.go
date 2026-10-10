@@ -27,6 +27,10 @@ func TestPlacesEpisodesWhereTMDBHasThem(t *testing.T) {
 	// One Piece's way: each season's episodes run on from the last's.
 	absolute := newCatalog([]tmdb.Season{season(1, span(1, 61)...), season(2, span(62, 77)...), season(0, 1, 2)}, nil)
 	absolute.seasons[0][7] = tmdb.EpisodeInfo{Season: 0, Number: 7, Name: "Episode of Nami: Tears of a Navigator"}
+	absolute.seasons[0][11] = tmdb.EpisodeInfo{Season: 0, Number: 11, Name: "3D2Y: Overcome Ace's Death! Luffy's Vow to his Friends"}
+	absolute.seasons[0][15] = tmdb.EpisodeInfo{Season: 0, Number: 15, Name: "Episode of East Blue - Luffy and His 4 Crewmates' Big Adventure"}
+	absolute.seasons[0][22] = tmdb.EpisodeInfo{Season: 0, Number: 22, Name: "Recapping Fierce Fights! Straw Hats vs. Tobi Roppo"}
+	absolute.seasons[0][23] = tmdb.EpisodeInfo{Season: 0, Number: 23, Name: "Recapping Fierce Fights! Zoro vs. a Lead Performer!"}
 	// Most series' way: each season from one.
 	perSeason := newCatalog([]tmdb.Season{season(1, span(1, 10)...), season(2, span(1, 10)...)}, nil)
 	// A series whose absolute ordering TMDB keeps apart.
@@ -49,6 +53,9 @@ func TestPlacesEpisodesWhereTMDBHasThem(t *testing.T) {
 		{"a season TMDB has not got", perSeason, parse.Release{Seasons: []int{3}, Episodes: []int{1}}, placement{}, false},
 		{"a special by its name", absolute, parse.Release{Special: "special", EpisodeTitle: "Episode of Nami"}, placement{season: 0, episode: 7, by: "special"}, true},
 		{"a special by too short a name", absolute, parse.Release{Special: "special", EpisodeTitle: "Nami"}, placement{}, false},
+		{"a special by the head of TMDB's name", absolute, parse.Release{Special: "special", EpisodeTitle: "3D2Y"}, placement{season: 0, episode: 11, by: "special"}, true},
+		{"a special sharing TMDB's head", absolute, parse.Release{Special: "special", EpisodeTitle: "Episode of East Blue - Luffy and His 4 Crewmates's Big Adventure"}, placement{season: 0, episode: 15, by: "special"}, true},
+		{"a special's name two of TMDB's begin", absolute, parse.Release{Special: "special", EpisodeTitle: "Recapping Fierce Fights"}, placement{}, false},
 		{"several episodes in one file", perSeason, parse.Release{Seasons: []int{1}, Episodes: []int{1, 2}}, placement{season: 1, episode: 1, end: 2, by: "release"}, true},
 		{"no series to look in", nil, parse.Release{Absolute: []int{5}}, placement{season: 1, episode: 5, absolute: 5, by: "unknown"}, true},
 	} {
