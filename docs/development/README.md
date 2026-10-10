@@ -72,7 +72,8 @@ go run ./dev/fakezurg -addr 127.0.0.1:9999 <folder>
 `internal/version/version.go` is Foyer's version, and it is always Loge's:
 `YEAR.MONTH.BUILD`, where `BUILD` counts every release of the pair and never
 starts again. The app's `npm run release` moves both, and refuses when they
-disagree. `info` answers it, and `foyer --version` prints it.
+disagree; `internal/version`'s test fails when the app beside this
+repository says another. `info` answers it, and `foyer --version` prints it.
 `../loge/docs/development` has the whole scheme.
 
 ## Migrations
