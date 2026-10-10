@@ -80,7 +80,7 @@ func main() {
 	}
 
 	fake := zurgtest.New()
-	fake.User, fake.Password = *user, *password
+	fake.User, fake.Password, fake.AsZurg = *user, *password, true
 	counts := map[string]int{}
 	for _, folder := range []string{"__all__", "anime", "shows", "movies"} {
 		fake.Dir(folder, time.Time{})

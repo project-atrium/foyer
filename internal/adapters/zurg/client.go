@@ -178,6 +178,10 @@ func (c *Client) List(ctx context.Context, dir string) ([]Entry, error) {
 	defer func() { <-c.gate }()
 
 	address := c.address(dir, true)
+	requested, err := url.Parse(address)
+	if err != nil {
+		return nil, ErrUnavailable
+	}
 	request, err := http.NewRequestWithContext(ctx, "PROPFIND", address, strings.NewReader(propfind))
 	if err != nil {
 		return nil, ErrUnavailable
@@ -207,12 +211,12 @@ func (c *Client) List(ctx context.Context, dir string) ([]Entry, error) {
 	if err := xml.NewDecoder(bytes.NewReader(body)).Decode(&status); err != nil {
 		return nil, fmt.Errorf("%w: its listing could not be read", ErrUnavailable)
 	}
-	// Zurg names each entry by its whole path. The folder's own entry ends in
-	// the folder's segments; every other ends in one more, its name.
+	// Each entry is named by its path. The folder's own entry ends in the
+	// folder's segments; every other ends in one more, its name.
 	self := split(dir)
 	var entries []Entry
 	for _, r := range status.Responses {
-		href, err := url.Parse(strings.TrimSpace(r.Href))
+		href, err := resolve(requested, r.Href)
 		if err != nil {
 			continue
 		}
@@ -235,13 +239,44 @@ func (c *Client) List(ctx context.Context, dir string) ([]Entry, error) {
 			if n, err := strconv.ParseInt(strings.TrimSpace(p.Prop.Length), 10, 64); err == nil {
 				entry.Size = n
 			}
-			if t, err := http.ParseTime(strings.TrimSpace(p.Prop.Modified)); err == nil {
-				entry.Modified = t.UTC()
+			if t, ok := modified(p.Prop.Modified); ok {
+				entry.Modified = t
 			}
 		}
 		entries = append(entries, entry)
 	}
 	return entries, nil
+}
+
+// resolve reads an entry's href against the folder asked for. WebDAV allows
+// a relative one, and Zurg writes each child as its bare escaped name — and
+// its own entry as a path without /dav/. A bare name may hold a colon, so it
+// is never read as an address of its own.
+func resolve(requested *url.URL, raw string) (*url.URL, error) {
+	raw = strings.TrimSpace(raw)
+	if !strings.HasPrefix(raw, "/") && !strings.Contains(raw, "://") {
+		raw = "./" + raw
+	}
+	href, err := url.Parse(raw)
+	if err != nil {
+		return nil, err
+	}
+	return requested.ResolveReference(href), nil
+}
+
+// modified reads a WebDAV date: HTTP's own, or with its zone named — Zurg
+// writes "UTC" where HTTP says "GMT".
+func modified(value string) (time.Time, bool) {
+	value = strings.TrimSpace(value)
+	if t, err := http.ParseTime(value); err == nil {
+		return t.UTC(), true
+	}
+	for _, layout := range []string{time.RFC1123, time.RFC1123Z, time.RFC3339} {
+		if t, err := time.Parse(layout, value); err == nil {
+			return t.UTC(), true
+		}
+	}
+	return time.Time{}, false
 }
 
 // endsWith reports whether segments end with tail.

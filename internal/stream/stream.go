@@ -171,17 +171,40 @@ func Proxy(w http.ResponseWriter, r *http.Request, name string, open func(ctx co
 		return nil
 	}
 	h := w.Header()
-	for _, k := range []string{"Content-Length", "Content-Range", "Accept-Ranges", "ETag", "Last-Modified"} {
+	for _, k := range []string{"Content-Range", "ETag"} {
 		if v := response.Header.Get(k); v != "" {
 			h.Set(k, v)
 		}
 	}
-	if h.Get("Accept-Ranges") == "" && response.StatusCode == http.StatusPartialContent {
+	// Zurg dates a file in ISO form, which no player reads as HTTP's.
+	if v := response.Header.Get("Last-Modified"); v != "" {
+		if _, err := http.ParseTime(v); err == nil {
+			h.Set("Last-Modified", v)
+		}
+	}
+	// Zurg sends every file in chunks, a part even where none was asked for,
+	// and never says how long: a player that knows no length cannot seek.
+	status, length := response.StatusCode, int64(-1)
+	if n, err := strconv.ParseInt(response.Header.Get("Content-Length"), 10, 64); err == nil && n >= 0 {
+		length = n
+	}
+	if first, last, total, ok := contentRange(h.Get("Content-Range")); ok && status == http.StatusPartialContent {
+		if r.Header.Get("Range") == "" && first == 0 && last == total-1 {
+			status, length = http.StatusOK, total
+			h.Del("Content-Range")
+		} else if length < 0 {
+			length = last - first + 1
+		}
+	}
+	if length >= 0 && status != http.StatusNotModified {
+		h.Set("Content-Length", strconv.FormatInt(length, 10))
+	}
+	if status == http.StatusOK || status == http.StatusPartialContent {
 		h.Set("Accept-Ranges", "bytes")
 	}
 	h.Set("Content-Type", contentType(name))
 	h.Set("Cache-Control", "private")
-	w.WriteHeader(response.StatusCode)
+	w.WriteHeader(status)
 	if head || response.StatusCode == http.StatusNotModified {
 		return nil
 	}
@@ -201,6 +224,27 @@ func Proxy(w http.ResponseWriter, r *http.Request, name string, open func(ctx co
 			return nil
 		}
 	}
+}
+
+// contentRange reads "bytes first-last/total".
+func contentRange(value string) (first, last, total int64, ok bool) {
+	spec, found := strings.CutPrefix(strings.TrimSpace(value), "bytes ")
+	if !found {
+		return 0, 0, 0, false
+	}
+	span, size, found := strings.Cut(spec, "/")
+	from, to, found2 := strings.Cut(span, "-")
+	if !found || !found2 {
+		return 0, 0, 0, false
+	}
+	var err1, err2, err3 error
+	first, err1 = strconv.ParseInt(from, 10, 64)
+	last, err2 = strconv.ParseInt(to, 10, 64)
+	total, err3 = strconv.ParseInt(size, 10, 64)
+	if err1 != nil || err2 != nil || err3 != nil || first < 0 || last < first || total <= last {
+		return 0, 0, 0, false
+	}
+	return first, last, total, true
 }
 
 // contentType is a file's type by its extension: players read it.

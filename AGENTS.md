@@ -167,9 +167,14 @@ Go tests sit beside what they test. Everything else is PocketBase's: `serve`,
 - **Zurg is read over WebDAV only.** Its folders — the ones its config sorts
   torrents into — exist only there. A torrent's files may be listed flat,
   with ` (id)` added where two share a name, or under folders of their own:
-  walk both. Zurg answers a part with `200` and a `Content-Range` at times —
+  walk both. Zurg writes a child's href as its bare escaped name — read
+  against the folder asked for, a colon and all — and its dates in `UTC`, not
+  HTTP's `GMT`. It answers a part with `200` and a `Content-Range` at times —
   that is a `206` — and a whole file answered for a part is refused, or a
-  player would start again from the beginning. Never ask Zurg for gzip.
+  player would start again from the beginning. It sends every file as a
+  part, one not asked for too, in chunks with no length: the proxy answers a
+  player that asked for no part `200`, and gives every part its length, or a
+  player cannot seek. Never ask Zurg for gzip.
 - **A release's name is read, never trusted.** `internal/parse` reads what
   the uploader typed; the library checks it against TMDB, and a superuser
   corrects the rest. A season folder never takes a number counted from the

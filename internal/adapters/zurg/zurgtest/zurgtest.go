@@ -31,6 +31,11 @@ type Fake struct {
 	Quirk bool
 	// IgnoreRange answers every GET whole.
 	IgnoreRange bool
+	// AsZurg answers as the real Zurg does: a folder's children by their
+	// bare escaped names and its own entry by a path without /dav/, dates in
+	// UTC rather than GMT, and every GET as a part — one not asked for too —
+	// sent in chunks, with no length.
+	AsZurg bool
 
 	mu        sync.Mutex
 	root      *node
@@ -139,6 +144,12 @@ func (f *Fake) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if f.Quirk {
 			writer = quirk{w}
 		}
+		if f.AsZurg && r.Method == http.MethodGet {
+			if r.Header.Get("Range") == "" {
+				r.Header.Set("Range", "bytes=0-")
+			}
+			writer = chunked{writer, w}
+		}
 		http.ServeContent(writer, r, path, n.modified, bytes.NewReader(n.content))
 	default:
 		http.Error(w, "not here", http.StatusMethodNotAllowed)
@@ -153,6 +164,21 @@ func (q quirk) WriteHeader(status int) {
 		status = http.StatusOK
 	}
 	q.ResponseWriter.WriteHeader(status)
+}
+
+// chunked sends a body without its length, as Zurg does: its headers go
+// before its body, or Go's server would count a short one itself.
+type chunked struct {
+	http.ResponseWriter
+	original http.ResponseWriter
+}
+
+func (c chunked) WriteHeader(status int) {
+	c.Header().Del("Content-Length")
+	c.ResponseWriter.WriteHeader(status)
+	if f, ok := c.original.(http.Flusher); ok {
+		f.Flush()
+	}
 }
 
 func href(path string, dir bool) string {
@@ -174,9 +200,13 @@ func (f *Fake) list(w http.ResponseWriter, r *http.Request, path string, n *node
 
 	var b bytes.Buffer
 	b.WriteString(`<?xml version="1.0" encoding="UTF-8"?><d:multistatus xmlns:d="DAV:">`)
-	entry := func(path string, n *node) {
+	entry := func(path string, n *node, self bool) {
+		h := href(path, n.dir)
+		if f.AsZurg {
+			h = zurgHref(path, self)
+		}
 		b.WriteString("<d:response><d:href>")
-		_ = xml.EscapeText(&b, []byte(href(path, n.dir)))
+		_ = xml.EscapeText(&b, []byte(h))
 		b.WriteString("</d:href><d:propstat><d:prop>")
 		if n.dir {
 			b.WriteString("<d:resourcetype><d:collection/></d:resourcetype>")
@@ -184,12 +214,16 @@ func (f *Fake) list(w http.ResponseWriter, r *http.Request, path string, n *node
 			fmt.Fprintf(&b, "<d:resourcetype/><d:getcontentlength>%d</d:getcontentlength>", len(n.content))
 		}
 		if !n.modified.IsZero() {
-			fmt.Fprintf(&b, "<d:getlastmodified>%s</d:getlastmodified>", n.modified.UTC().Format(http.TimeFormat))
+			date := n.modified.UTC().Format(http.TimeFormat)
+			if f.AsZurg {
+				date = n.modified.UTC().Format("Mon, 02 Jan 2006 15:04:05") + " UTC"
+			}
+			fmt.Fprintf(&b, "<d:getlastmodified>%s</d:getlastmodified>", date)
 		}
 		b.WriteString("</d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>")
 	}
 	f.mu.Lock()
-	entry(path, n)
+	entry(path, n, true)
 	if r.Header.Get("Depth") != "0" && n.dir {
 		names := make([]string, 0, len(n.children))
 		for name := range n.children {
@@ -201,7 +235,7 @@ func (f *Fake) list(w http.ResponseWriter, r *http.Request, path string, n *node
 			if path == "" {
 				child = name
 			}
-			entry(child, n.children[name])
+			entry(child, n.children[name], false)
 		}
 	}
 	f.mu.Unlock()
@@ -209,4 +243,20 @@ func (f *Fake) list(w http.ResponseWriter, r *http.Request, path string, n *node
 	w.Header().Set("Content-Type", "application/xml; charset=utf-8")
 	w.WriteHeader(http.StatusMultiStatus)
 	_, _ = w.Write(b.Bytes())
+}
+
+// zurgHref is an entry's href as Zurg writes it: its own entry a path
+// without /dav/, a child its bare escaped name.
+func zurgHref(path string, self bool) string {
+	parts := segments(path)
+	if !self {
+		return url.PathEscape(parts[len(parts)-1])
+	}
+	for i, p := range parts {
+		parts[i] = url.PathEscape(p)
+	}
+	if len(parts) == 0 {
+		return "/"
+	}
+	return "/" + strings.Join(parts, "/") + "/"
 }

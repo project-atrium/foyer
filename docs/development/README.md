@@ -59,6 +59,9 @@ go run ./dev/fakezurg -addr 127.0.0.1:9999 <folder>
   where only a torrent's biggest file shows; and all of them to `__all__`.
 - Names, sizes and dates come from the records — a torrent's folder dated
   when Real-Debrid added it. Their links and hashes are never read.
+- It answers as Zurg does (`zurgtest`'s `AsZurg`, which the server's tests
+  use too): relative hrefs, dates in `UTC`, every file sent as a part in
+  chunks with no length.
 - Every file is the same four seconds of 1080p made with ffmpeg — Japanese
   audio, English subtitles, two chapters — so ffprobe has something to read;
   `-sample` serves a video of your own instead.

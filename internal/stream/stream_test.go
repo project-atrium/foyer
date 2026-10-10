@@ -3,9 +3,11 @@ package stream
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -24,6 +26,30 @@ func serving(content []byte) func(context.Context, http.Header, bool) (*http.Res
 		w := httptest.NewRecorder()
 		http.ServeContent(w, r, "x.mkv", time.Time{}, bytes.NewReader(content))
 		return w.Result(), nil
+	}
+}
+
+// asZurg answers as Zurg does: every GET a part, one not asked for too, sent
+// with no length, and dated in ISO form.
+func asZurg(content []byte) func(context.Context, http.Header, bool) (*http.Response, error) {
+	return func(ctx context.Context, header http.Header, head bool) (*http.Response, error) {
+		first, last := int64(0), int64(len(content)-1)
+		if spec, ok := strings.CutPrefix(header.Get("Range"), "bytes="); ok {
+			from, to, _ := strings.Cut(spec, "-")
+			first, _ = strconv.ParseInt(from, 10, 64)
+			if to != "" {
+				last, _ = strconv.ParseInt(to, 10, 64)
+			}
+		}
+		return &http.Response{
+			StatusCode: http.StatusPartialContent,
+			Header: http.Header{
+				"Content-Range": {fmt.Sprintf("bytes %d-%d/%d", first, last, len(content))},
+				"Last-Modified": {"2026-07-31T02:44:00+02:00"},
+			},
+			ContentLength: -1,
+			Body:          io.NopCloser(bytes.NewReader(content[first : last+1])),
+		}, nil
 	}
 }
 
@@ -48,6 +74,45 @@ func TestPassesAPartOn(t *testing.T) {
 		response.Header.Get("Content-Range") != "bytes 2-5/10" || response.Header.Get("Accept-Ranges") != "bytes" ||
 		response.Header.Get("Content-Type") != "video/x-matroska" {
 		t.Fatalf("%d %q %v", response.StatusCode, body, response.Header)
+	}
+}
+
+// A player that asked for no part gets the file, whole and with its length,
+// though Zurg sent it as a part of unknown length.
+func TestAWholeFileSentAsAPartIsTheFile(t *testing.T) {
+	server := proxied(asZurg([]byte("0123456789")))
+	defer server.Close()
+	response, err := http.Get(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	body, _ := io.ReadAll(response.Body)
+	if response.StatusCode != http.StatusOK || string(body) != "0123456789" || response.ContentLength != 10 ||
+		response.Header.Get("Content-Range") != "" || response.Header.Get("Accept-Ranges") != "bytes" ||
+		response.Header.Get("Last-Modified") != "" {
+		t.Fatalf("%d %q %d %v", response.StatusCode, body, response.ContentLength, response.Header)
+	}
+}
+
+// A part keeps its range, and gains the length its range says — from the
+// start too, as ffmpeg asks.
+func TestAPartSentWithoutALengthGetsOne(t *testing.T) {
+	server := proxied(asZurg([]byte("0123456789")))
+	defer server.Close()
+	for byteRange, want := range map[string]string{"bytes=2-5": "2345", "bytes=0-": "0123456789"} {
+		request, _ := http.NewRequest(http.MethodGet, server.URL, nil)
+		request.Header.Set("Range", byteRange)
+		response, err := http.DefaultClient.Do(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		body, _ := io.ReadAll(response.Body)
+		response.Body.Close()
+		if response.StatusCode != http.StatusPartialContent || string(body) != want || response.ContentLength != int64(len(want)) ||
+			response.Header.Get("Accept-Ranges") != "bytes" {
+			t.Errorf("%s: %d %q %d %v", byteRange, response.StatusCode, body, response.ContentLength, response.Header)
+		}
 	}
 }
 

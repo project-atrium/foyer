@@ -33,6 +33,9 @@ var (
 
 func zurgLibrary() *zurgtest.Fake {
 	f := zurgtest.New()
+	// As the real Zurg answers: bare relative hrefs, dates in UTC, every
+	// file sent as a part with no length.
+	f.AsZurg = true
 	f.Dir("__all__", monday)
 	// Films: one film in two torrents, an anime film named once, two films
 	// of one name, and a film TMDB never heard of.

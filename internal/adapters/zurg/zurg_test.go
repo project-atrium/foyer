@@ -89,6 +89,75 @@ func TestWalksATorrentsFoldersWhateverTheirNames(t *testing.T) {
 	}
 }
 
+// Zurg itself writes a folder's children as their bare escaped names — a
+// colon left as it is — its own entry as a path without /dav/, and its dates
+// in UTC where HTTP says GMT.
+func TestReadsZurgsOwnListing(t *testing.T) {
+	const listing = `<?xml version="1.0" encoding="utf-8"?><d:multistatus xmlns:d="DAV:"><d:response>
+	<d:href>/shows/</d:href>
+	<d:propstat><d:prop><d:resourcetype><d:collection/></d:resourcetype><d:getlastmodified>Sat, 10 Oct 2026 21:42:26 UTC</d:getlastmodified></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat>
+</d:response><d:response>
+	<d:href>Some%20Show%20%28Season%203%29%20%5B1080p%5D</d:href>
+	<d:propstat><d:prop><d:resourcetype><d:collection/></d:resourcetype><d:getlastmodified>Fri, 31 Jul 2026 19:22:23 UTC</d:getlastmodified></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat>
+</d:response><d:response>
+	<d:href>Re:Start%20-%20S01E01.mkv</d:href>
+	<d:propstat><d:prop><d:getcontentlength>351878464</d:getcontentlength><d:getlastmodified>Fri, 31 Jul 2026 00:44:00 UTC</d:getlastmodified><d:resourcetype></d:resourcetype></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat>
+</d:response></d:multistatus>`
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/dav/shows/" {
+			t.Errorf("asked for %s", r.URL.Path)
+		}
+		w.WriteHeader(http.StatusMultiStatus)
+		_, _ = io.WriteString(w, listing)
+	}))
+	defer server.Close()
+	client, err := zurg.New(server.URL, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	entries, err := client.List(context.Background(), "shows")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]zurg.Entry{}
+	for _, e := range entries {
+		got[e.Name] = e
+	}
+	if len(got) != 2 {
+		t.Fatalf("entries %+v", entries)
+	}
+	if e := got["Some Show (Season 3) [1080p]"]; !e.Dir || !e.Modified.Equal(time.Date(2026, 7, 31, 19, 22, 23, 0, time.UTC)) {
+		t.Errorf("the pack %+v", e)
+	}
+	if e := got["Re:Start - S01E01.mkv"]; e.Dir || e.Size != 351878464 || !e.Modified.Equal(time.Date(2026, 7, 31, 0, 44, 0, 0, time.UTC)) {
+		t.Errorf("the file %+v", e)
+	}
+}
+
+// The pretend Zurg answering as Zurg does is read as well: its folders, a
+// torrent walked, a part opened.
+func TestReadsAZurgThatAnswersAsZurgDoes(t *testing.T) {
+	fake, client := library(t)
+	fake.AsZurg = true
+	folders, err := client.List(context.Background(), "")
+	if err != nil || len(folders) != 3 {
+		t.Fatalf("folders %+v %v", folders, err)
+	}
+	files, err := client.Walk(context.Background(), "shows", "[Group] Some Show (01-26) [1080p]", 3)
+	if err != nil || len(files) != 3 || files[0].Modified.IsZero() {
+		t.Fatalf("files %+v %v", files, err)
+	}
+	response, err := client.Open(context.Background(), "movies", "Some.Film.2022.1080p.BluRay.x264-GRP/Some.Film.2022.1080p.BluRay.x264-GRP.mkv", http.Header{"Range": {"bytes=1-2"}}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	body, _ := io.ReadAll(response.Body)
+	if response.StatusCode != http.StatusPartialContent || string(body) != "il" || response.ContentLength != -1 {
+		t.Fatalf("%d %q, length %d", response.StatusCode, body, response.ContentLength)
+	}
+}
+
 // Zurg names its entries by absolute addresses or paths, escaped its own way:
 // whatever the spelling, a name is its own segment.
 func TestReadsAListingWhateverItsHrefsLookLike(t *testing.T) {
