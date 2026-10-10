@@ -14,6 +14,7 @@ import (
 	"foyer/internal/config"
 	"foyer/internal/dashboard"
 	"foyer/internal/guard"
+	"foyer/internal/library"
 	"foyer/internal/routes"
 )
 
@@ -23,18 +24,25 @@ type Server struct {
 	App      core.App
 	Config   config.Config
 	Adapters *adapters.Registry
+	Library  *library.Engine
 }
 
 // collections are Foyer's own static collections: written by its code alone.
-var collections = []string{adapters.Collection}
+var collections = []string{
+	adapters.Collection,
+	library.LibrariesCollection, library.TorrentsCollection, library.FilesCollection, library.IdentitiesCollection,
+}
 
 // Bind binds Foyer's guard, routes and dashboard pages, and starts nothing:
-// a test that binds it runs no background work.
+// a test that binds it runs no background work. main asks for that with
+// Background.
 func Bind(app core.App, cfg config.Config) *Server {
+	registry := adapters.NewRegistry(app, zurg.Adapter(), tmdb.Adapter())
 	s := &Server{
 		App:      app,
 		Config:   cfg,
-		Adapters: adapters.NewRegistry(app, zurg.Adapter(), tmdb.Adapter()),
+		Adapters: registry,
+		Library:  library.New(app, registry),
 	}
 	guard.Bind(app, s.managed)
 	app.OnServe().BindFunc(func(se *core.ServeEvent) error {
@@ -50,6 +58,7 @@ func Bind(app core.App, cfg config.Config) *Server {
 		admin := se.Router.Group("/api/foyer/admin")
 		admin.Bind(apis.RequireSuperuserAuth())
 		s.Adapters.Routes(admin)
+		s.Library.Routes(admin)
 		// Read by PocketBase's own handler for UI extensions, which runs last.
 		extension, err := dashboard.Extension()
 		if err != nil {
@@ -61,8 +70,19 @@ func Bind(app core.App, cfg config.Config) *Server {
 	return s
 }
 
-func (s *Server) managed(_ core.App, name string) bool {
-	return slices.Contains(collections, name)
+// Background is what runs beside the routes once the server serves — main
+// asks for it, a test never does: the library's collections brought up to
+// date at start.
+func (s *Server) Background() *Server {
+	s.App.OnServe().BindFunc(func(se *core.ServeEvent) error {
+		s.Library.EnsureAll()
+		return se.Next()
+	})
+	return s
+}
+
+func (s *Server) managed(app core.App, name string) bool {
+	return slices.Contains(collections, name) || library.Managed(app, name)
 }
 
 // trustProxy applies FOYER_TRUST_PROXY on every start, so `.env` stays the one

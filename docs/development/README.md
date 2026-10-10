@@ -77,6 +77,12 @@ directory, with the migrations applied, through PocketBase's real router
 - **Adapters:** the page's routes are the superusers'; a secret is masked,
   kept when a save leaves it out, and readable by no profile; a save that
   will not do names its fields.
+- **Libraries:** a movies folder is one collection and a shows folder two; a
+  name that will not do is refused; an `uncertain` title is hidden from a
+  user, its episodes too, and the files from everyone but superusers;
+  `Ensure` is idempotent and repairs; removing a library takes its
+  collections and files, and one made again gets an id of its own; Zurg's
+  folders come with their libraries.
 - **The guard:** Foyer's collections refuse a superuser's record writes, a
   change, a truncate, an import and a delete; `users`' rules stay.
 - **TMDB**, against a fake of its routes: Loge's matcher's own cases, ported —

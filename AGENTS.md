@@ -74,9 +74,11 @@ internal/adapters/   what Foyer connects to: settings records, fields, masked se
   zurg/zurgtest/     a pretend Zurg, for the tests
 internal/titles/     Loge's titleKey and bareTitle, ported to the byte
 internal/parse/      release names: title, year, season and episode, numbers counted from the start, what the file is
+internal/library/    libraries: their collections from one template, Ensure, the dashboard's library routes
 internal/dashboard/  the dashboard's icon: a PocketBase UI extension, embedded
 internal/version/    the version, always the app's: its `npm run release` moves both
-migrations/          0001 users are profiles; 0002 the name, the rate limits, the first superuser; 0003 adapters
+migrations/          0001 users are profiles; 0002 the name, the rate limits, the first superuser; 0003 adapters;
+                     0004 libraries, media_torrents, media_files, identities
 Dockerfile           two stages: a Go build, then the binary alone
 docker-compose.yml   the server, and pb_data in a volume
 ```
@@ -91,6 +93,17 @@ Go tests sit beside what they test. Everything else is PocketBase's: `serve`,
   would write one — the dashboard's, a superuser's, an import, a truncate.
   Foyer's code saves at the model level, which no request hook sees. A new
   collection of Foyer's joins the guard's list in `internal/server`.
+- **A library's collections are Foyer's, from one template.** `x`, or `x` and
+  `x_episodes`, made and kept by `library.Ensure` — never by a migration,
+  which cannot see them, and never in the dashboard. Change the template,
+  raise `TemplateVersion`, and every library is brought up to it at start.
+  Never change a field's type: add one under a new name. A new collection
+  takes a random id, because PocketBase removes a deleted one's files in the
+  background, under its id.
+- **An `uncertain` title is hidden from users**, its episodes with it, by the
+  collections' rules — and its files by `media_files` being the superusers'
+  alone. Whatever a user reads of a title — its versions, their paths — is on
+  the title itself.
 - **No admin route answers 401 for a service's refusal.** The dashboard takes
   any 401 for its own session ending and signs the superuser out: a test that
   failed is `200 { ok: false }`.

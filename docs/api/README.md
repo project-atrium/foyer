@@ -18,6 +18,10 @@ and their rules, and how they fail.
 | `GET /api/foyer/admin/adapters` | superusers | every adapter: `[{ key, name, description, notice?, enabled, fields, values, status? }]`, each secret as `"******"` when set and `""` when not |
 | `PUT /api/foyer/admin/adapters/{key}` | superusers | `{ enabled, values }` → the adapter as `GET` shows it; `400` names each field that will not do, as `values.<key>` |
 | `POST /api/foyer/admin/adapters/{key}/test` | superusers | `{ values? }`, laid over what is saved → `{ ok, message, details? }` |
+| `GET /api/foyer/admin/zurg/folders` | superusers | `{ ok, message?, folders: [{ folder, library? }] }`: Zurg's folders, each with the library it is, and libraries whose folder Zurg no longer lists |
+| `POST /api/foyer/admin/libraries` | superusers | `{ folder, name, kind: "movies" \| "shows", enabled }` → the library, its collections made; `400` names what will not do |
+| `PATCH /api/foyer/admin/libraries/{id}` | superusers | `{ enabled }` → the library |
+| `DELETE /api/foyer/admin/libraries/{id}` | superusers | `204`: its collections, artwork, torrents, files and identities gone; watch status stays. `409` when a collection of your own still points at it |
 
 ### The Adapters page's routes
 
@@ -69,12 +73,41 @@ Password sign-in only: OAuth2, OTP, MFA and sign-in alerts are off.
 `enabled`, `config` (every value but the secrets), `secrets` (plain text, as
 typed) and `status` (the last test). Written only through the Adapters page.
 
+### The library
+
+**A library is a Zurg folder**, and its collections are named after it: a
+movies library `movies` is the collection `movies`; a shows library `shows`
+is `shows`, with `shows_episodes`. Foyer makes and keeps them from one
+template; a name is lower-case letters, digits and underscores, never ends in
+`_episodes`, and is never Foyer's or PocketBase's own.
+
+| Collection | One record per |
+| --- | --- |
+| `libraries` | library: `name`, `kind`, `folder`, `enabled`, its last scans and their error |
+| `media_torrents` | folder Zurg lists in a library's folder — a torrent — or a file lying there loose |
+| `media_files` | file of a torrent: its `path` under the folder, what its name says (`parsed`), which title took it (`item_collection`, `item_id`) and as what (`role`), what ffprobe found (`probe`) |
+| `identities` | title a library read: what TMDB was asked (`key`), its answer (`tmdb_id`), and how sure (`state`: sure, uncertain, none, manual) |
+| `<movies library>` | film: TMDB's names, dates, ids, rating and artwork; `versions`, one per file; `quality`, `encoding`, `container`, `hdr`, `audio_tracks`, `subtitles` and the languages, over its versions; `added` and `last_added`; `match_state` |
+| `<shows library>` | series: the same, its seasons as TMDB counts them, and its lists over its episodes |
+| `<shows library>_episodes` | episode: its `show`, `season`, `episode`, TMDB's title, overview and still, its `versions` and lists |
+
+- **`match_state`** is `matched` (TMDB was sure), `uncertain` (a best guess),
+  `unmatched` (TMDB had nothing: the title is its name's) or `manual` (a
+  superuser decided). **An `uncertain` title is hidden from users** — its
+  episodes too — until a superuser confirms or corrects it.
+- **`identity`** is what watch status is kept by, as Loge keys it:
+  `tmdb:movie:937278`, `tmdb:tv:63926/s3e11`, or the title and year where
+  TMDB said nothing.
+
 ### Rules
 
 | Collection | List, view | Create | Update | Delete |
 | --- | --- | --- | --- | --- |
 | `users` | its own record | superusers | its own record | superusers |
 | `adapters` | superusers | Foyer | Foyer | Foyer |
+| `libraries` | users | Foyer | Foyer | Foyer |
+| `media_torrents`, `media_files`, `identities` | superusers | Foyer | Foyer | Foyer |
+| a library's collections | users, but not an `uncertain` title or its episodes | Foyer | Foyer | Foyer |
 
 ### The guard
 

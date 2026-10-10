@@ -34,7 +34,7 @@ func main() {
 	app.RootCmd.Version = version.Version
 	// The migrations own Foyer's collections: none is ever written from the dashboard.
 	migratecmd.MustRegister(app, app.RootCmd, migratecmd.Config{Automigrate: false})
-	server.Bind(app, cfg)
+	server.Bind(app, cfg).Background()
 
 	if err := app.Start(); err != nil {
 		log.Fatal(err)
