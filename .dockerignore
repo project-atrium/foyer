@@ -5,5 +5,7 @@ foyer
 !.env.example
 .git
 .agents
+.github
+dev
 docs
 *.md

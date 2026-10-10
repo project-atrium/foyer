@@ -43,11 +43,18 @@ func FromSettings(s adapters.Settings) Tools {
 	return t
 }
 
-// Command is a tool run with nothing of Foyer's environment but its PATH:
-// ffmpeg reads http_proxy, and would send even a loopback read through it.
+// Command is a tool run with nothing of Foyer's environment but its PATH
+// and libva's LIBVA_ settings: ffmpeg reads http_proxy, and would send even
+// a loopback read through it, while LIBVA_DRIVER_NAME is how a GPU's driver
+// is chosen where libva guesses wrong.
 func Command(ctx context.Context, name string, args ...string) *exec.Cmd {
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Env = []string{"PATH=" + os.Getenv("PATH")}
+	for _, kv := range os.Environ() {
+		if strings.HasPrefix(kv, "LIBVA_") {
+			cmd.Env = append(cmd.Env, kv)
+		}
+	}
 	cmd.WaitDelay = 5 * time.Second
 	return cmd
 }

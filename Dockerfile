@@ -1,8 +1,12 @@
 # syntax=docker/dockerfile:1
 #
-# Foyer, your own server: one static binary, and its data in a volume.
+# Foyer, the household's own server: one binary, Jellyfin's ffmpeg beside it,
+# and its data in a volume.
 #
 #   docker build -t foyer .
+#
+# With the GPU for the transcoding to come: compose.gpu.yaml beside
+# docker-compose.yml (docs/deployment).
 
 FROM golang:1.27-alpine AS build
 WORKDIR /src
@@ -12,8 +16,22 @@ COPY . .
 # PocketBase's SQLite is pure Go: nothing to link, nothing to install beside it.
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /foyer .
 
-FROM alpine:3
-RUN adduser -D -H -u 10001 foyer && mkdir /pb_data && chown foyer /pb_data
+# Debian, for Jellyfin's own ffmpeg: built for VAAPI and Quick Sync, with the
+# drivers they need inside the package, and the build a household's Jellyfin
+# already transcodes with on the same hardware.
+FROM debian:trixie-slim
+ADD --chmod=644 https://repo.jellyfin.org/jellyfin_team.gpg.key /etc/apt/keyrings/jellyfin.asc
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates curl \
+ && echo "deb [signed-by=/etc/apt/keyrings/jellyfin.asc] https://repo.jellyfin.org/debian trixie main" \
+      > /etc/apt/sources.list.d/jellyfin.list \
+ && apt-get update \
+ && apt-get install -y --no-install-recommends jellyfin-ffmpeg8 \
+ && rm -rf /var/lib/apt/lists/* \
+ && ln -s /usr/lib/jellyfin-ffmpeg/ffmpeg /usr/local/bin/ffmpeg \
+ && ln -s /usr/lib/jellyfin-ffmpeg/ffprobe /usr/local/bin/ffprobe \
+ && useradd --system --uid 10001 --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin foyer \
+ && mkdir /pb_data && chown foyer /pb_data
 COPY --from=build /foyer /usr/local/bin/foyer
 USER foyer
 # Called by its name, the binary keeps pb_data in the working directory: here
@@ -22,5 +40,5 @@ WORKDIR /
 VOLUME ["/pb_data"]
 EXPOSE 8090
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD wget -qO- http://127.0.0.1:8090/api/health >/dev/null || exit 1
+  CMD curl -fsS -o /dev/null http://127.0.0.1:8090/api/health || exit 1
 CMD ["foyer", "serve", "--http=0.0.0.0:8090", "--dir=/pb_data"]

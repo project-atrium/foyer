@@ -91,7 +91,8 @@ Then make the dashboard's superuser, and a user for each person.
   title as a poster, the newest added first, a title's files and what TMDB
   said of it, and Confirm or Set TMDB id where it guessed.
 - **`go test ./...` proves it.**
-- **The Dockerfile and compose file are written**, and not yet built.
+- **The image is written** — Debian with Jellyfin's ffmpeg, for VAAPI and
+  Quick Sync — with its compose files, the GPU's too; not yet built.
 
 ## Documentation
 

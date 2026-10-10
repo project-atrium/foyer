@@ -1,0 +1,17 @@
+# The GPU, for Foyer's ffmpeg: the host's render device, and the group that
+# may open it.
+#
+#   docker compose -f docker-compose.yml -f compose.gpu.yaml up -d
+#
+# FOYER_RENDER_GID in .env is the host's render group:
+#   getent group render | cut -d: -f3
+# In a VM — Proxmox, say — the GPU is passed through to the VM first, so
+# /dev/dri/renderD128 exists in it. Settings → Adapters → FFmpeg → Test says
+# whether ffmpeg can encode on it.
+
+services:
+  foyer:
+    devices:
+      - /dev/dri:/dev/dri
+    group_add:
+      - "${FOYER_RENDER_GID:?set FOYER_RENDER_GID in .env to the host's render group id}"

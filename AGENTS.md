@@ -88,8 +88,10 @@ internal/version/    the version, always the app's: its `npm run release` moves 
 migrations/          0001 users are profiles; 0002 the name, the rate limits, the first superuser; 0003 adapters;
                      0004 libraries, media_torrents, media_files, identities; 0005 streams' rate limit;
                      0006 watch_states
-Dockerfile           two stages: a Go build, then the binary alone
+dev/fakezurg/        a pretend Zurg for running Foyer here, from Zurg's .zurgtorrent records; never in the image
+Dockerfile           two stages: a Go build, then Debian with Jellyfin's ffmpeg and the binary
 docker-compose.yml   the server, and pb_data in a volume
+compose.gpu.yaml     /dev/dri passed in, and the host's render group
 ```
 
 Go tests sit beside what they test. Everything else is PocketBase's: `serve`,
@@ -137,7 +139,8 @@ Go tests sit beside what they test. Everything else is PocketBase's: `serve`,
   127.0.0.1 opens one file for minutes, so ffprobe's arguments and output
   never hold Zurg's address or password.
 - **ffprobe reads through the loopback, with nothing of Foyer's
-  environment** — ffmpeg reads `http_proxy` — and only http: a file that is
+  environment** but the PATH and libva's `LIBVA_` settings — ffmpeg reads
+  `http_proxy` — and only http: a file that is
   really a playlist must not send it elsewhere. What it says on failure is
   cleared of addresses before it is kept. Zurg failing is no file's fault: it
   costs no attempt, and five in a row pause the queue. A pack's probes redraw
@@ -228,5 +231,6 @@ libraries, named by TMDB, read by ffprobe and streamed through signed
 addresses; each user's watch status; the dashboard's Library and Adapters
 pages. `go test ./...` proves it, and the dashboard was driven headless in
 Chrome against a pretend Zurg and the real TMDB. The account-sync protocol,
-its harness and the shared fixtures are gone — git has them. The Dockerfile
-and compose file are written, and not yet built.
+its harness and the shared fixtures are gone — git has them. The image —
+Debian with Jellyfin's ffmpeg — and its compose files, the GPU's too, are
+written, and not yet built.

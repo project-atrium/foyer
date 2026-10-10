@@ -5,9 +5,9 @@ reached, how it is backed up, and how the household's users are looked after.
 `getting-started` has the quick version.
 
 The binary is `foyer`. In the image it is on the `PATH`, the
-data is `/pb_data`, and it listens on 8090. The Dockerfile and compose file
-are written and not yet built — Docker was not there when they were — so try
-them before you rely on them.
+data is `/pb_data`, and it listens on 8090. The Dockerfile and the compose
+files are written and not yet built — Docker was not there when they were —
+so try them before you rely on them.
 
 ## The binary
 
@@ -28,7 +28,9 @@ docker compose up -d
 docker compose exec foyer foyer superuser upsert you@example.com 'a long password'
 ```
 
-- The image is a two-stage Go build of this repository alone.
+- The image is Debian with Jellyfin's own ffmpeg (`jellyfin-ffmpeg8`, its
+  VAAPI and Quick Sync drivers inside) and the binary, built in a stage of
+  its own from this repository alone. It runs as `foyer`, uid 10001.
 - The data lives in the `pb_data` volume.
 - It listens on 8090, and reports its health from `/api/health`.
 - `docker compose exec foyer foyer …` runs any command —
@@ -51,6 +53,8 @@ dashboard's Adapters page.
 | --- | --- | --- |
 | `FOYER_ADMIN_EMAIL`, `FOYER_ADMIN_PASSWORD` | — | The first superuser, made on the first start. Take the password out of `.env` once it exists; `superuser update` changes it later. |
 | `FOYER_TRUST_PROXY` | — | Behind a reverse proxy: the header it puts the caller's address in, such as `X-Forwarded-For`. Never without a proxy (below). |
+| `FOYER_RENDER_GID` | — | With `compose.gpu.yaml`: the host's `render` group, which may open the GPU (below). |
+| `LIBVA_DRIVER_NAME` | — | Only where libva picks the wrong driver for the GPU: `iHD` for Intel from Broadwell on, `i965` before, `radeonsi` for AMD. ffmpeg gets it, and nothing else of the server's environment. |
 
 - **Until 2026.10.1 these were `SC_…`.** A server started with an old name
   refuses to start and says the new one, rather than quietly running without
@@ -83,6 +87,46 @@ Leave them as they are.
 
 `FOYER_TRUST_PROXY` is not a setting the migrations write: the server applies it
 on every start, so `.env` stays the one place it is set.
+
+## Zurg
+
+Foyer reads Zurg over its WebDAV, at the address set on the Adapters page —
+`http://zurg:9999` where both are in one compose project. Every stream comes
+through Foyer, so Zurg needs to be reachable from Foyer alone, never from the
+household's devices.
+
+**Scanning as soon as Zurg changes.** Zurg runs its `on_library_update`
+after every change it makes. The Adapters page shows the line for Zurg's
+`config.yml`, with a token of Foyer's: it posts the folders that changed, and
+Foyer scans those. Use the address Zurg reaches Foyer by. The line uses
+`curl`; in a container without it, BusyBox's `wget` does — an empty body
+scans every library:
+
+```yaml
+on_library_update: wget -qO- --header='Authorization: Bearer <token>' --post-data='' http://foyer:8090/api/foyer/zurg/updated
+```
+
+Without it, Foyer looks every 15 minutes, as the Adapters page sets.
+
+## The GPU
+
+Foyer's ffmpeg will transcode on the GPU; today, Settings → Adapters →
+FFmpeg → **Test** says whether it could, by encoding a few frames with VAAPI —
+and Quick Sync, on Intel — on the render device, `/dev/dri/renderD128`.
+
+```bash
+echo "FOYER_RENDER_GID=$(getent group render | cut -d: -f3)" >> .env
+docker compose -f docker-compose.yml -f compose.gpu.yaml up -d
+```
+
+- `compose.gpu.yaml` passes `/dev/dri` in, and adds the container's user to
+  the host's `render` group, which may open it.
+- **In a VM — Proxmox, say — pass the GPU through to the VM first**, so
+  `/dev/dri/renderD128` exists in it; an LXC container needs the device
+  bound in and its group mapped.
+- Jellyfin's ffmpeg brings its own drivers. Where libva still picks the
+  wrong one, set `LIBVA_DRIVER_NAME`.
+- Without the override, Foyer runs as before: ffprobe needs no GPU.
 
 ## Storage
 

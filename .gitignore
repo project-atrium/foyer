@@ -1,6 +1,6 @@
 pb_data/
 /foyer
-harness/node_modules/
+/fakezurg
 .env
 .env.*
 !.env.example

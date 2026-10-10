@@ -44,6 +44,29 @@ go build -o foyer .               # one static binary
   - Foyer's files are served `no-cache`; the rest of `/_/` PocketBase lets a
     browser keep for two weeks outside `--dev`.
 
+## A pretend Zurg
+
+`dev/fakezurg` serves Zurg's WebDAV on this machine, from a folder of
+`.zurgtorrent` files — Zurg's own records of its torrents, from its data
+folder:
+
+```bash
+go run ./dev/fakezurg -addr 127.0.0.1:9999 <folder>
+```
+
+- Torrents go where Zurg's default config puts them: a CRC in a name to
+  `anime`, a file numbered as an episode to `shows`, the rest to `movies`,
+  where only a torrent's biggest file shows; and all of them to `__all__`.
+- Names, sizes and dates come from the records — a torrent's folder dated
+  when Real-Debrid added it. Their links and hashes are never read.
+- Every file is the same four seconds of 1080p made with ffmpeg — Japanese
+  audio, English subtitles, two chapters — so ffprobe has something to read;
+  `-sample` serves a video of your own instead.
+- Set Zurg on the Adapters page to `http://127.0.0.1:9999`. `-user` and
+  `-password` make it ask for them.
+- **Records from a real Zurg hold the household's Real-Debrid links.** Keep
+  them out of the repository: the tests' names are made up.
+
 ## The version
 
 `internal/version/version.go` is Foyer's version, and it is always Loge's:

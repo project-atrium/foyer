@@ -3,6 +3,8 @@
 #   cp .env.example .env
 #   docker compose up -d
 #   docker compose exec foyer foyer superuser upsert you@example.com 'a long password'
+#
+# With the GPU: docker compose -f docker-compose.yml -f compose.gpu.yaml up -d
 
 # Named, so its volume is foyer_pb_data wherever this folder is checked out.
 name: foyer

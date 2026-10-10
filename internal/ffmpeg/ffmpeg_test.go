@@ -40,3 +40,26 @@ func TestTheGPUIsSummedUpInALine(t *testing.T) {
 		t.Fatalf("summary %q", got)
 	}
 }
+
+// A tool gets the PATH and libva's settings, and nothing else of Foyer's:
+// ffmpeg would send even a loopback read through http_proxy.
+func TestAToolGetsNothingOfFoyersEnvironmentButTheGPUs(t *testing.T) {
+	env, err := exec.LookPath("env")
+	if err != nil {
+		t.Skip("no env here")
+	}
+	t.Setenv("http_proxy", "http://proxy.invalid:3128")
+	t.Setenv("FOYER_ADMIN_PASSWORD", "secret")
+	t.Setenv("LIBVA_DRIVER_NAME", "iHD")
+	out, err := Command(context.Background(), env).Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if !strings.Contains(got, "LIBVA_DRIVER_NAME=iHD") || !strings.Contains(got, "PATH=") {
+		t.Errorf("missing what it needs: %q", got)
+	}
+	if strings.Contains(got, "proxy.invalid") || strings.Contains(got, "secret") {
+		t.Errorf("Foyer's environment leaked: %q", got)
+	}
+}
