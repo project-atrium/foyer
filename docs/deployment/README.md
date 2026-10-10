@@ -5,9 +5,9 @@ reached, how it is backed up, and how the household's users are looked after.
 `getting-started` has the quick version.
 
 The binary is `foyer`. In the image it is on the `PATH`, the
-data is `/pb_data`, and it listens on 8090. The Dockerfile and the compose
-files are written and not yet built — Docker was not there when they were —
-so try them before you rely on them.
+data is `/pb_data`, and it listens on 8090. The image has been built and
+run — on arm64, under Colima — with Docker's old builder as well as
+BuildKit; the GPU's override has not met a GPU yet.
 
 ## The binary
 

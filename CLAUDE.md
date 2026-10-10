@@ -48,8 +48,8 @@ order: PocketBase compares file names as text, so they are zero-padded.
 ## Current state
 
 **Users are profiles, and the library runs**, set up on the dashboard's
-Adapters page. `README.md` and `AGENTS.md` say what runs. The image and its
-compose files are written, and not yet built.
+Adapters page. `README.md` and `AGENTS.md` say what runs. The image builds
+and runs; the GPU's override is untried on a GPU.
 
 ## Git
 

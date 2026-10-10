@@ -20,9 +20,12 @@ RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /foyer .
 # drivers they need inside the package, and the build a household's Jellyfin
 # already transcodes with on the same hardware.
 FROM debian:trixie-slim
-ADD --chmod=644 https://repo.jellyfin.org/jellyfin_team.gpg.key /etc/apt/keyrings/jellyfin.asc
+# The key comes with curl, not ADD --chmod: that needs BuildKit, and a
+# Docker without buildx builds with the old builder.
 RUN apt-get update \
  && apt-get install -y --no-install-recommends ca-certificates curl \
+ && install -d -m 755 /etc/apt/keyrings \
+ && curl -fsSL https://repo.jellyfin.org/jellyfin_team.gpg.key -o /etc/apt/keyrings/jellyfin.asc \
  && echo "deb [signed-by=/etc/apt/keyrings/jellyfin.asc] https://repo.jellyfin.org/debian trixie main" \
       > /etc/apt/sources.list.d/jellyfin.list \
  && apt-get update \
