@@ -31,8 +31,9 @@ small as that allows.
 
 **A user is a profile.** One Foyer is one household. The account that held up
 to ten profiles is gone, and with it the protocol Loge's `sync/custom-server`
-spoke; Step 2 redesigns how Loge signs in — a device with two profiles signs
-in as two users, and a user's PIN is on its own record.
+spoke. Loge's `sync/foyer` signs in as the household's users — a device with
+two profiles signs in as two users, by password or a pairing code — and a
+user's PIN is on its own record.
 
 **Secrets are plain text on this server.** The share's password, the TMDB key and
 the PINs are stored as typed; a user's password is PocketBase's bcrypt hash.

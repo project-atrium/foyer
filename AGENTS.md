@@ -25,10 +25,11 @@ per user, and streams for Loge.
   it through.
 - **Not a place for what belongs to a device.** Players, sync settings and
   caches never reach it.
-- **Not the account Loge's `sync/custom-server` speaks to — not any more.**
-  That protocol was removed with the account that held profiles, and Loge's
-  side is redesigned in Step 2: a device with two profiles signs in as two
-  users, and each user's PIN is on its record.
+- **Not an account that holds profiles.** That protocol went with Step 1, and
+  Loge's `sync/custom-server` with it in Step 2. Loge's `sync/foyer` signs in
+  as the household's users instead: a device with two profiles signs in as
+  two users, each with a session of their own, and each user's PIN is on its
+  record.
 
 ## Boundaries
 

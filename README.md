@@ -70,8 +70,9 @@ Then make the dashboard's superuser, and a user for each person.
   code, made on the dashboard's Household page, signs chosen users in on a
   device at once, once, within ten minutes.
 - **The account that held up to ten profiles is gone**, with the protocol
-  Loge's `sync/custom-server` adapter spoke. Loge signs in to Foyer anew in
-  Step 2 — a device with two profiles signs in as two users.
+  Loge's `sync/custom-server` adapter spoke. Loge's `sync/foyer` signs in as
+  the household's users — a device with two profiles signs in as two users,
+  by password or with a pairing code.
 - **Adapters, set up as connections**: as many WebDAV shares as the household
   has — Zurg's, its ways included, or any other — each named and switched on
   its own, and TMDB's key and FFmpeg once; their secrets masked; a TMDB client
