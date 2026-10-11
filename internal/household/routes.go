@@ -80,10 +80,12 @@ func (s *Service) Routes(r *router.Router[*core.RequestEvent], admin *router.Rou
 		if err != nil {
 			return e.BadRequestError(sentence(err), nil)
 		}
+		// A user removed since the code was made is left out.
 		users, err := e.App.FindRecordsByIds("users", ids)
 		if err != nil || len(users) == 0 {
 			return e.BadRequestError(sentence(ErrUnusable), nil)
 		}
+		inOrder(users, ids)
 		h, err := Get(e.App)
 		if err != nil {
 			return e.InternalServerError("", err)

@@ -273,7 +273,14 @@ func usersByID(app core.App, ids []string) ([]*core.Record, error) {
 	if len(records) != len(slices.Compact(slices.Sorted(slices.Values(ids)))) {
 		return nil, errors.New("one of those users does not exist")
 	}
+	inOrder(records, ids)
 	return records, nil
+}
+
+// inOrder puts records in the order their ids were named, which SQLite's IN
+// does not keep.
+func inOrder(records []*core.Record, ids []string) {
+	slices.SortFunc(records, func(a, b *core.Record) int { return slices.Index(ids, a.Id) - slices.Index(ids, b.Id) })
 }
 
 // devicesView is the devices as the dashboard lists them, the latest seen

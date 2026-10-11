@@ -69,6 +69,27 @@ func TestAUserSeesTheHouseholdsMembersAndNoPIN(t *testing.T) {
 	}
 }
 
+// A code's users come back in the order the superuser named them, whatever
+// order SQLite keeps them in.
+func TestAPairingAnswersItsUsersInTheirOrder(t *testing.T) {
+	h := start(t, options{})
+	admin := h.superuser()
+	alex := h.makeUser("alex", map[string]any{"name": "Alex"})
+	kids := h.makeUser("kids", map[string]any{"name": "Kids"})
+	for _, order := range [][]string{{alex.id, kids.id}, {kids.id, alex.id}} {
+		code := h.call(http.MethodPost, "/api/foyer/admin/pairings", admin, map[string]any{"users": order}).body["code"]
+		paired := h.call(http.MethodPost, "/api/foyer/pair", "", map[string]any{"code": code, "device": map[string]any{"installation": "device-hash-1"}})
+		users, _ := paired.body["users"].([]any)
+		got := []string{}
+		for _, raw := range users {
+			got = append(got, raw.(map[string]any)["member"].(map[string]any)["id"].(string))
+		}
+		if !slices.Equal(got, order) {
+			t.Errorf("named %v, answered %v", order, got)
+		}
+	}
+}
+
 // A pairing code signs the users it names in on one device, once, within
 // ten minutes — with no password crossing — and any code that will not do
 // is refused alike.
