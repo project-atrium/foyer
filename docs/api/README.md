@@ -25,6 +25,8 @@ and their rules, and how they fail.
 | `POST /api/foyer/download` | users | `{ collection, id, file? }` → `{ url, expiresAt, version }`: the file as it is, at a signed address asked for afresh each time — a copy that stopped asks again and carries on from the bytes it has, with a `Range` |
 | `POST /api/foyer/watch/progress` | users | `{ collection, id, file?, kind: started \| progress \| stopped \| end, positionMs, durationMs, paused?, session? }` → `204`; `file` names one of the title's extras, which keeps its own |
 | `POST /api/foyer/watch/played` | users | `{ collection, id, file?, played }` → `204`; a series marks each of its episodes, `file` one of its extras |
+| `POST /api/foyer/me/push` | users | `{ records }`, at most a thousand of the user's own — `profile` and `pin` onto their own record, `preference`, `subscription`, `playlist` and `favoriteChannel` onto their rows, tombstones among them — each judged as the app's `isAccountRecord` judges it → `{ seq }`, all stored, each write with the next seq; or `422 { message, refused: { index, reason } }`, nothing stored |
+| `GET /api/foyer/me/changes` | users | `?after=<seq>` → `{ records, seq, more?, reset? }`: the user's own records stored since, in that order, tombstones too, 500 to a page — `more` while another follows, from `seq`; `after=0` is everything kept; `reset` where deletes since were let go of (after 90 days), or Foyer went back to an older copy of itself: read again from 0 |
 | `GET /api/foyer/catalogue` | users | `?kind=movies \| shows&sort=title \| releaseDate \| addedAt \| rating&order=asc \| desc&limit&cursor&term&genre` → `{ items: [title], nextCursor? }`: every library of the kind that is switched on as one list, 50 to a page (100 at most), in exactly Loge's `compareItems` order, each title with this user's watch status — a series' from its episodes. `nextCursor` holds the last title's keys, so a scan between two pages moves nothing; a guess and a title whose files are gone are never listed; `term` finds every word in a title's names and year, case and accents aside; `genre` is one genre, as Loge keys it |
 | `GET /api/foyer/catalogue/genres` | users | `?kind` → `{ genres }`: every genre a kind's listed titles are filed under, each once, as TMDB spells it |
 | `GET /api/foyer/catalogue/resume` | users | `?limit` (20) → `{ items: [{ kind: "movie", title } \| { kind: "episode", episode, show }] }`: what this user began past 30 seconds and has not finished, the latest first; a series' extra comes as one of its episodes |
@@ -183,6 +185,24 @@ refreshes a session.
 **`watch_states`** — what a user watched: `user`, `identity`, the title it
 was last played as (`item_collection`, `item_id`), `external_ids`, `watched`,
 `position_ms`, `duration_ms`, `play_count`, `last_played_at`.
+
+**What a user keeps for themselves** — migration 0010, one row per user and
+record key (`user`, `key`, unique together), `deleted` for a tombstone, and
+the `seq` its last write took. A user lists and reads their own; only
+Foyer's routes write them.
+
+| Collection | The app's record | Its fields |
+| --- | --- | --- |
+| `preferences` | `preference` — key `<user>/<name>` | `name`, `value` |
+| `subscriptions` | `subscription`, a channel followed | `connection`, `external_id`, `title`, `added_at` |
+| `playlists` | `playlist`, a list | `title`, `description`, `items`, `source`, `created_at`, `updated_at` |
+| `favorite_channels` | `favoriteChannel`, a ★ | `connection`, `external_id`, `name`, `number`, `logo`, `added_at` |
+
+**`_foyer_seq`** — a table of Foyer's own, outside PocketBase's collections:
+`state`, the last seq a write took, and `pruned`, the newest a tombstone let
+go of had. Never on a record: a record anything else saves would write back
+the value it read, and a seq that went back would make a device miss a
+write.
 
 ### The library
 

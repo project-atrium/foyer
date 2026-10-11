@@ -92,6 +92,8 @@ internal/stream/     signed stream addresses, the Range proxy, the quiet log, th
 internal/ffmpeg/     the tools: where, which versions, the GPU tried; the FFmpeg adapter
 internal/probe/      ffprobe's answers as versions, and the queue of files waiting for it
 internal/watch/      each user's watch status: Loge's rules, the routes, an identity's history moved, extras with it
+internal/userstate/  what each user keeps for themselves — preferences, follows, lists, ★ — pushed whole and read back
+                     by seq, their name and PIN onto their own record; tombstones let go of after 90 days
 internal/catalogue/  the library as Loge reads it: keyset pages in compareItems' order, a title's page, seasons,
                      episodes and extras, genres, what was begun — each with its user's watch status; what is served
 internal/identity/   Loge's watchIdentity and identityHash, ported
@@ -102,7 +104,8 @@ internal/fixtures/   reads what both sides must answer alike from the app beside
 migrations/          0001 users are profiles; 0002 the name, the rate limits, the first superuser; 0003 adapters;
                      0004 libraries, media_entries, media_files, identities; 0005 streams' rate limit;
                      0006 watch_states; 0007 adapters become connections, a library a folder of one;
-                     0008 the household's record, devices, pairing's rate limit; 0009 pictures' rate limit
+                     0008 the household's record, devices, pairing's rate limit; 0009 pictures' rate limit;
+                     0010 each user's preferences, subscriptions, playlists, ★, and the seq
 dev/fakezurg/        a pretend Zurg for running Foyer here, from Zurg's .zurgtorrent records; never in the image
 harness/             Node and vitest, test-only: the app's code that speaks Foyer against the real binary
 Dockerfile           two stages: a Go build, then Debian with Jellyfin's ffmpeg and the binary
@@ -224,6 +227,12 @@ Go tests sit beside what they test. Everything else is PocketBase's: `serve`,
   only what is empty as JSON — `""`, `null`, `{}`, `[]` — and a `0` or a
   `false` goes out. An optional number or flag in an answer is `omitzero`:
   a rating of 0 sent is a rating the app sorts by.
+- **A user's own state is pushed whole and read by seq.** A push stores all
+  its records or none, each judged as the app's `isAccountRecord` judges it,
+  and every write takes the next seq inside its transaction — SQLite's one
+  writer makes that commit order. The seq lives in `_foyer_seq`, never on a
+  record: nothing else may ever write it back. A read never pages past the
+  seq it began at, and answers `reset` rather than skip what it cannot show.
 - **The catalogue is what Loge reads, and pages by keys.** Its order is
   `compareItems`' to the byte, a page is what sorts after the last one's keys
   — never `OFFSET`, which a scan between two pages would shift — and what a

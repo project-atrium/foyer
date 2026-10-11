@@ -24,6 +24,7 @@ import (
 	"foyer/internal/probe"
 	"foyer/internal/routes"
 	"foyer/internal/stream"
+	"foyer/internal/userstate"
 	"foyer/internal/watch"
 )
 
@@ -46,6 +47,8 @@ var collections = []string{
 	library.LibrariesCollection, library.EntriesCollection, library.FilesCollection, library.IdentitiesCollection,
 	watch.Collection,
 	household.Collection, household.DevicesCollection,
+	userstate.Collections[userstate.KindPreference], userstate.Collections[userstate.KindSubscription],
+	userstate.Collections[userstate.KindPlaylist], userstate.Collections[userstate.KindFavoriteChannel],
 }
 
 // Bind binds Foyer's guard, routes and dashboard pages, and starts nothing:
@@ -92,6 +95,7 @@ func Bind(app core.App, cfg config.Config) *Server {
 		s.Library.PlayRoutes(se.Router, s.Streams)
 		watch.Routes(se.Router, library.Managed)
 		s.Catalogue.Routes(se.Router)
+		userstate.Routes(se.Router)
 		admin := se.Router.Group("/api/foyer/admin")
 		admin.Bind(apis.RequireSuperuserAuth())
 		s.Adapters.Routes(admin)
@@ -130,6 +134,7 @@ func (s *Server) Background() *Server {
 			s.Library.Run(ctx)
 		})
 		wg.Go(func() { s.Probes.Run(ctx) })
+		wg.Go(func() { s.pruneTombstones(ctx) })
 		return se.Next()
 	})
 	s.App.OnTerminate().BindFunc(func(e *core.TerminateEvent) error {
@@ -167,4 +172,21 @@ func trustProxy(app core.App, cfg config.Config) error {
 	}
 	settings.TrustedProxy.Headers = want
 	return app.Save(settings)
+}
+
+// pruneTombstones lets go of deletes older than a device is ever away for,
+// once a day: one away longer reads everything again.
+func (s *Server) pruneTombstones(ctx context.Context) {
+	for {
+		if removed, err := userstate.Prune(s.App, time.Now().Add(-userstate.TombstonesKept)); err != nil {
+			s.App.Logger().Error("Old deletes could not be let go of", "error", err)
+		} else if removed > 0 {
+			s.App.Logger().Info("Old deletes let go of", "records", removed)
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(24 * time.Hour):
+		}
+	}
 }

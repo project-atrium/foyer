@@ -93,6 +93,10 @@ Then make the dashboard's superuser, and a user for each person.
 - **Watch status**, each user's own, kept by Foyer by Loge's rules — with
   resume, a series marked by its episodes, and its extras kept apart. A
   title TMDB names later, or you correct, takes what was watched with it.
+- **What each of you keeps for yourselves** — preferences, the channels you
+  follow, your lists, your ★ — on Foyer, and on every device you sign in on,
+  each change in the order it was made; deletes are kept 90 days for a device
+  that was away to learn of.
 - **The catalogue Loge reads**: each kind across every library as one list,
   in the app's own order and paged by it, so a scan between two pages moves
   nothing; a title's page, a series' seasons and episodes and its extras,
