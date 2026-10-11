@@ -442,15 +442,23 @@ func TestTheCatalogueFindsAndHides(t *testing.T) {
 		t.Errorf("a guess's page: %d", got.status)
 	}
 
-	// Switched off, the library is neither listed nor served.
+	// Switched off, the library lists nothing — and is still served, empty,
+	// so no device lets go of what it kept of it.
 	if got := h.call(http.MethodPatch, "/api/foyer/admin/libraries/"+lib, admin, map[string]any{"enabled": false}); got.status != http.StatusOK {
 		t.Fatalf("switching off: %d %v", got.status, got.body)
 	}
 	if got := titlesOf(h.get("/api/foyer/catalogue?kind=movies", alex.token)); len(got) != 0 {
 		t.Errorf("a library switched off lists %v", got)
 	}
+	if served := items(h.get("/api/foyer/household", alex.token), "served"); len(served) != 1 {
+		t.Errorf("served with its library switched off: %v", served)
+	}
+	// Gone, it is no longer served.
+	if got := h.call(http.MethodDelete, "/api/foyer/admin/libraries/"+lib, admin, nil); got.status != http.StatusNoContent {
+		t.Fatalf("removing: %d %v", got.status, got.body)
+	}
 	if served := items(h.get("/api/foyer/household", alex.token), "served"); len(served) != 0 {
-		t.Errorf("served with no library on: %v", served)
+		t.Errorf("served with no library: %v", served)
 	}
 	if got := h.call(http.MethodGet, "/api/foyer/catalogue?kind=films", alex.token, nil); got.status != http.StatusBadRequest {
 		t.Errorf("a kind of nothing: %d", got.status)

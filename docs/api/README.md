@@ -15,7 +15,7 @@ and their rules, and how they fail.
 | Route | Who | Answer |
 | --- | --- | --- |
 | `GET /api/foyer/info` | anyone | `{ serverVersion, protocol, household: { id, name } }`: the version, always the app's, the protocol Loge's Foyer adapters speak (1), and the household — its id is what a device keys this Foyer by |
-| `GET /api/foyer/household` | users | `{ household, members: [{ id, username, name, avatar?, hasPin }], served: [{ key, type, name }] }`: who else is in the household — names and pictures, never a PIN or an email — and what this Foyer serves: `{ key: "library", type: "library", name: "Library" }` while a library is switched on; each device in the household runs it as a connection of its own |
+| `GET /api/foyer/household` | users | `{ household, members: [{ id, username, name, avatar?, hasPin }], served: [{ key, type, name }] }`: who else is in the household — names and pictures, never a PIN or an email — and what this Foyer serves: `{ key: "library", type: "library", name: "Library" }` while it has a library — one switched off is served empty, since a device lets go of what it kept of a thing no longer served; each device in the household runs it as a connection of its own |
 | `POST /api/foyer/pair` | anyone with a code — five tries a minute per address | `{ code, device: { installation, name, platform, appVersion } }` → `{ household, users: [{ member, pin, token }] }`: the sessions of the users the code names, each with its own PIN; the code is spent; any code that will not do is the same `400` |
 | `GET /api/foyer/admin/household` | superusers | `{ household, members, devices: [{ id, name, platform, appVersion, users, paired, lastSeen }] }` |
 | `PATCH /api/foyer/admin/household` | superusers | `{ name }` → the household |

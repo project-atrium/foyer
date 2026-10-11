@@ -42,11 +42,12 @@ func (s *Service) Routes(r *router.Router[*core.RequestEvent]) {
 }
 
 // Served is what Foyer serves of its library, for the household's answer:
-// the library, while one is switched on. Every device in the household makes
-// a connection of it.
+// the library, while it has one. Every device in the household makes a
+// connection of it, and lets it go — with every list, ★ and copy kept of
+// it — when it is no longer served: a library switched off for a while is
+// still served, empty, so nothing is lost over it.
 func Served(app core.App) []map[string]any {
-	libs, err := app.FindAllRecords(library.LibrariesCollection)
-	if err == nil && slices.ContainsFunc(libs, func(l *core.Record) bool { return l.GetBool("enabled") }) {
+	if n, err := app.CountRecords(library.LibrariesCollection); err == nil && n > 0 {
 		return []map[string]any{{"key": "library", "type": "library", "name": "Library"}}
 	}
 	return []map[string]any{}
