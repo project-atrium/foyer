@@ -66,7 +66,7 @@ func readCursor(text string) (*cursor, error) {
 type ref struct {
 	Collection string `db:"c"`
 	ID         string `db:"id"`
-	// The id Loge keys it by, `movies/<id>`: the last tie-break, as in the app.
+	// The id Loge keys it by, `movies.<id>`: the last tie-break, as in the app.
 	Ext   string `db:"ext"`
 	Title string `db:"tk"`
 	Value string `db:"v"`
@@ -160,7 +160,7 @@ func (s *Service) page(q query) ([]ref, *cursor, error) {
 	for i, name := range names {
 		key := "c" + strconv.Itoa(i)
 		params[key] = name
-		parts[i] = fmt.Sprintf("SELECT {:%s} AS c, [[id]] AS id, {:%s} || '/' || [[id]] AS ext, [[sort_title_key]] AS tk, %s AS v FROM {{%s}} WHERE %s",
+		parts[i] = fmt.Sprintf("SELECT {:%s} AS c, [[id]] AS id, {:%s} || '.' || [[id]] AS ext, [[sort_title_key]] AS tk, %s AS v FROM {{%s}} WHERE %s",
 			key, key, value, name, strings.Join(filters, " AND "))
 	}
 	direction, beyond := "ASC", ">"
@@ -207,7 +207,7 @@ func (s *Service) titles(kind string, refs []ref) ([]Title, error) {
 			return nil, err
 		}
 		for _, r := range found {
-			records[collection+"/"+r.Id] = r
+			records[collection+"."+r.Id] = r
 		}
 	}
 	items := make([]Title, 0, len(refs))

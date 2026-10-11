@@ -296,7 +296,7 @@ func TestTheCatalogueIsInTheAppsOrder(t *testing.T) {
 	fixtures.Load(t, "order.json", &fixture)
 
 	// Ids that sort as the fixture's do: the last tie-break is Loge's id,
-	// `collection/id`, so two titles that tie share a collection.
+	// `collection.id`, so two titles that tie share a collection.
 	names := []string{}
 	for _, item := range fixture.Items {
 		names = append(names, item.ID)

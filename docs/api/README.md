@@ -80,7 +80,7 @@ and their rules, and how they fail.
 - **In the app's own order.** Loge merges every source's pages by one
   comparison, so a page comes sorted as it sorts: by the value, a missing one
   first ascending and last descending, then the lowered title, then Loge's id
-  for it, `collection/id`. The titles keep their keys for it (`docs/library`)
+  for it, `collection.id`. The titles keep their keys for it (`docs/library`)
   and a page is the next few after the last one's keys — never an offset.
 - **A field a title lacks is absent**, never empty or 0: an empty sort title
   would sort as it is, and a rating of 0 is nobody's.
