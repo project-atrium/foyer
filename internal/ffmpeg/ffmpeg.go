@@ -223,6 +223,8 @@ func (d Detection) Summary() string {
 func Adapter() adapters.Adapter {
 	return adapters.Adapter{
 		Key:         Key,
+		Category:    adapters.Tools,
+		Single:      true,
 		Name:        "FFmpeg",
 		Description: "ffprobe reads what each file is — its picture, its audio and subtitle tracks, its chapters — through Foyer, a few at a time. ffmpeg will transcode on the GPU.",
 		Fields: []adapters.Field{

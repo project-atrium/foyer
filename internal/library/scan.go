@@ -100,7 +100,7 @@ type walked struct {
 }
 
 func (e *Engine) scan(ctx context.Context, lib *core.Record, full bool, run *run) error {
-	client, err := e.share()
+	client, err := e.shareOf(lib)
 	if err != nil {
 		return err
 	}

@@ -16,8 +16,9 @@ const Key = "webdav"
 // all. Which of its folders are libraries is set beside it, on the page.
 func Adapter() adapters.Adapter {
 	return adapters.Adapter{
-		Key:  Key,
-		Name: "WebDAV",
+		Key:      Key,
+		Category: adapters.Sources,
+		Name:     "WebDAV",
 		Description: "A WebDAV share: Zurg's Real-Debrid library, rclone's, a NAS's. Each of its folders you choose becomes a library; " +
 			"nothing in it is renamed or moved.",
 		Fields: []adapters.Field{

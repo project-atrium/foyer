@@ -113,14 +113,10 @@ func (e *Engine) scanAsked(ctx context.Context, r request) {
 }
 
 func (e *Engine) due(ctx context.Context) {
-	interval := defaultInterval
-	if s, err := e.adapters.Settings(webdav.Key); err == nil && s.Int("interval") > 0 {
-		interval = s.Int("interval")
-	}
 	now := e.now()
 	for _, lib := range e.enabled() {
 		last := lib.GetDateTime("last_scan_at").Time()
-		if !last.IsZero() && now.Sub(last) < time.Duration(interval)*time.Minute {
+		if !last.IsZero() && now.Sub(last) < time.Duration(e.intervalOf(lib))*time.Minute {
 			continue
 		}
 		full := now.Sub(lib.GetDateTime("last_full_scan_at").Time()) >= fullEvery
@@ -134,17 +130,41 @@ func (e *Engine) scanLogged(ctx context.Context, lib *core.Record, full bool) {
 	}
 }
 
-// hookToken is the token the share's webhook sends, made once.
-func (e *Engine) hookToken() (string, error) {
-	token, err := e.adapters.Secret(webdav.Key, hookSecret)
+// intervalOf is how often a library's share is looked at, in minutes.
+func (e *Engine) intervalOf(lib *core.Record) int {
+	if c, err := e.adapters.Connection(lib.GetString("connection")); err == nil && c.Int("interval") > 0 {
+		return c.Int("interval")
+	}
+	return defaultInterval
+}
+
+// hookToken is the token a share's webhook sends, made once per share.
+func (e *Engine) hookToken(connection string) (string, error) {
+	token, err := e.adapters.Secret(connection, hookSecret)
 	if err != nil || token != "" {
 		return token, err
 	}
 	token = security.RandomString(32)
-	return token, e.adapters.SetSecret(webdav.Key, hookSecret, token)
+	return token, e.adapters.SetSecret(connection, hookSecret, token)
 }
 
-// HookRoutes mounts the route the share's webhook calls — Zurg's
+// caller is the share whose webhook token came with a call: the one route
+// serves every share, and the token says which.
+func (e *Engine) caller(got string) (string, bool) {
+	shares, err := e.adapters.Connections(webdav.Key)
+	if err != nil || got == "" {
+		return "", false
+	}
+	for _, c := range shares {
+		want, err := e.adapters.Secret(c.ID, hookSecret)
+		if err == nil && want != "" && subtle.ConstantTimeCompare([]byte(got), []byte(want)) == 1 {
+			return c.ID, true
+		}
+	}
+	return "", false
+}
+
+// HookRoutes mounts the route a share's webhook calls — Zurg's
 // on_library_update, or any script that posts the folders changed: a scan
 // of the libraries whose folders changed, at once instead of at the next
 // interval.
@@ -152,9 +172,9 @@ func (e *Engine) hookToken() (string, error) {
 // would keep it.
 func (e *Engine) HookRoutes(r *router.Router[*core.RequestEvent]) {
 	r.POST("/api/foyer/webdav/updated", func(re *core.RequestEvent) error {
-		want, err := e.adapters.Secret(webdav.Key, hookSecret)
 		got, _ := strings.CutPrefix(re.Request.Header.Get("Authorization"), "Bearer ")
-		if err != nil || want == "" || subtle.ConstantTimeCompare([]byte(got), []byte(want)) != 1 {
+		connection, ok := e.caller(got)
+		if !ok {
 			return re.ForbiddenError("", nil)
 		}
 		// One updated folder per line, as the share names them.
@@ -166,25 +186,37 @@ func (e *Engine) HookRoutes(r *router.Router[*core.RequestEvent]) {
 				changed[first] = true
 			}
 		}
-		matched := false
+		var mine []*core.Record
 		for _, lib := range e.enabled() {
+			if lib.GetString("connection") == connection {
+				mine = append(mine, lib)
+			}
+		}
+		matched := false
+		for _, lib := range mine {
 			if changed[lib.GetString("folder")] {
 				e.Trigger(lib.Id, false)
 				matched = true
 			}
 		}
 		if !matched {
-			e.Trigger("", false)
+			for _, lib := range mine {
+				e.Trigger(lib.Id, false)
+			}
 		}
 		return re.NoContent(http.StatusAccepted)
 	}).Bind(apis.SkipSuccessActivityLog())
 }
 
-// hookRoute is the superusers' route that shows the token, and the line to
-// put in Zurg's config, or any script's.
+// hookRoute is the superusers' route that shows a share's token, and the
+// line to put in Zurg's config, or any script's.
 func (e *Engine) hookRoute(admin *router.RouterGroup[*core.RequestEvent]) {
-	admin.GET("/webdav/hook", func(re *core.RequestEvent) error {
-		token, err := e.hookToken()
+	admin.GET("/connections/{id}/hook", func(re *core.RequestEvent) error {
+		id := re.Request.PathValue("id")
+		if c, err := e.adapters.Connection(id); err != nil || c.Adapter != webdav.Key {
+			return re.NotFoundError("", nil)
+		}
+		token, err := e.hookToken(id)
 		if err != nil {
 			return re.InternalServerError("", err)
 		}

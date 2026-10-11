@@ -37,6 +37,9 @@ type Engine struct {
 	tmdbClient  *tmdb.Client
 	tmdbKey     string
 	tmdbOptions []tmdb.Option
+	// shares are a client per WebDAV connection, kept while its settings
+	// stand: a client holds the share's transport, its pace and its refusal.
+	shares map[string]share
 	// dirty are series whose episodes a probe changed: collection and id,
 	// with their library.
 	dirty map[[2]string]string
@@ -91,7 +94,7 @@ func (e *Engine) identityInUse(identity string) bool {
 func (e *Engine) OnScanned(fn func()) { e.scanned = fn }
 
 func New(app core.App, registry *adapters.Registry) *Engine {
-	return &Engine{
+	e := &Engine{
 		app:       app,
 		adapters:  registry,
 		images:    &http.Client{Timeout: 30 * time.Second},
@@ -100,22 +103,75 @@ func New(app core.App, registry *adapters.Registry) *Engine {
 		scanning:  map[string]bool{},
 		locks:     map[string]*sync.Mutex{},
 		vanishing: map[string]time.Time{},
+		shares:    map[string]share{},
 	}
+	registry.OnChange(func(c adapters.Connection) {
+		e.mu.Lock()
+		delete(e.shares, c.ID)
+		e.mu.Unlock()
+	})
+	// A share whose folders are libraries stays: their collections are
+	// Foyer's to remove, one library at a time.
+	registry.OnDelete(func(c adapters.Connection) error {
+		n, err := app.CountRecords(LibrariesCollection, dbx.HashExp{"connection": c.ID})
+		if err != nil {
+			return err
+		}
+		if n > 0 {
+			return fmt.Errorf("%d of its folders are libraries: remove them first", n)
+		}
+		return nil
+	})
+	return e
 }
 
-// errOff is an adapter the household has not switched on.
+// errOff is a connection the household has not switched on.
 var errOff = errors.New("switched off on the Adapters page")
 
-// share is a client for the WebDAV share as the Adapters page has it set.
-func (e *Engine) share() (*webdav.Client, error) {
-	s, err := e.adapters.Settings(webdav.Key)
+// errNoShare is a library no share is set for.
+var errNoShare = errors.New("this library is a folder of no WebDAV share")
+
+type share struct {
+	settings string
+	client   *webdav.Client
+}
+
+// shareOf is a client for the WebDAV share a library is a folder of.
+func (e *Engine) shareOf(lib *core.Record) (*webdav.Client, error) {
+	return e.shareFor(lib.GetString("connection"))
+}
+
+// shareFor is a client for a WebDAV connection as the Adapters page has it
+// set: the one made before, while its settings stand.
+func (e *Engine) shareFor(id string) (*webdav.Client, error) {
+	if id == "" {
+		return nil, errNoShare
+	}
+	c, err := e.adapters.Connection(id)
+	if err != nil {
+		if errors.Is(err, adapters.ErrNoConnection) {
+			return nil, errNoShare
+		}
+		return nil, err
+	}
+	if c.Adapter != webdav.Key {
+		return nil, errNoShare
+	}
+	if !c.Enabled {
+		return nil, fmt.Errorf("%s is %w", c.Name, errOff)
+	}
+	settings := c.String("url") + "\x00" + c.String("username") + "\x00" + c.String("password")
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if cached, ok := e.shares[id]; ok && cached.settings == settings {
+		return cached.client, nil
+	}
+	client, err := webdav.New(c.String("url"), c.String("username"), c.String("password"))
 	if err != nil {
 		return nil, err
 	}
-	if !s.Enabled {
-		return nil, fmt.Errorf("WebDAV is %w", errOff)
-	}
-	return webdav.New(s.String("url"), s.String("username"), s.String("password"))
+	e.shares[id] = share{settings: settings, client: client}
+	return client, nil
 }
 
 // EnsureAll brings every library's collections to the template, at start.
@@ -143,6 +199,7 @@ type libraryView struct {
 	ID         string `json:"id"`
 	Name       string `json:"name"`
 	Kind       string `json:"kind"`
+	Connection string `json:"connection"`
 	Folder     string `json:"folder"`
 	Enabled    bool   `json:"enabled"`
 	LastScanAt string `json:"lastScanAt,omitempty"`
@@ -151,8 +208,8 @@ type libraryView struct {
 
 func viewOf(r *core.Record) libraryView {
 	v := libraryView{
-		ID: r.Id, Name: r.GetString("name"), Kind: r.GetString("kind"), Folder: r.GetString("folder"),
-		Enabled: r.GetBool("enabled"), ScanError: r.GetString("scan_error"),
+		ID: r.Id, Name: r.GetString("name"), Kind: r.GetString("kind"), Connection: r.GetString("connection"),
+		Folder: r.GetString("folder"), Enabled: r.GetBool("enabled"), ScanError: r.GetString("scan_error"),
 	}
 	if t := r.GetDateTime("last_scan_at"); !t.IsZero() {
 		v.LastScanAt = t.Time().UTC().Format(time.RFC3339)
@@ -166,8 +223,14 @@ func viewOf(r *core.Record) libraryView {
 func (e *Engine) Routes(admin *router.RouterGroup[*core.RequestEvent]) {
 	e.hookRoute(admin)
 	e.gridRoutes(admin)
-	admin.GET("/webdav/folders", func(re *core.RequestEvent) error {
-		libs, err := e.app.FindAllRecords(LibrariesCollection)
+	// A share's folders, each with the library it is, and libraries whose
+	// folder the share no longer lists.
+	admin.GET("/connections/{id}/folders", func(re *core.RequestEvent) error {
+		id := re.Request.PathValue("id")
+		if c, err := e.adapters.Connection(id); err != nil || c.Adapter != webdav.Key {
+			return re.NotFoundError("", nil)
+		}
+		libs, err := e.app.FindAllRecords(LibrariesCollection, dbx.HashExp{"connection": id})
 		if err != nil {
 			return re.InternalServerError("", err)
 		}
@@ -184,7 +247,7 @@ func (e *Engine) Routes(admin *router.RouterGroup[*core.RequestEvent]) {
 			Message string   `json:"message,omitempty"`
 			Folders []folder `json:"folders"`
 		}{Folders: []folder{}}
-		client, err := e.share()
+		client, err := e.shareFor(id)
 		if err == nil {
 			ctx, cancel := context.WithTimeout(re.Request.Context(), 30*time.Second)
 			defer cancel()
@@ -218,15 +281,16 @@ func (e *Engine) Routes(admin *router.RouterGroup[*core.RequestEvent]) {
 
 	admin.POST("/libraries", func(re *core.RequestEvent) error {
 		var body struct {
-			Folder  string `json:"folder"`
-			Name    string `json:"name"`
-			Kind    string `json:"kind"`
-			Enabled bool   `json:"enabled"`
+			Connection string `json:"connection"`
+			Folder     string `json:"folder"`
+			Name       string `json:"name"`
+			Kind       string `json:"kind"`
+			Enabled    bool   `json:"enabled"`
 		}
 		if err := re.BindBody(&body); err != nil {
 			return re.BadRequestError("The library could not be read.", err)
 		}
-		lib, err := e.Add(body.Folder, body.Name, body.Kind, body.Enabled)
+		lib, err := e.Add(body.Connection, body.Folder, body.Name, body.Kind, body.Enabled)
 		if err != nil {
 			return re.BadRequestError("The library will not do.", err)
 		}
@@ -263,13 +327,23 @@ func (e *Engine) Routes(admin *router.RouterGroup[*core.RequestEvent]) {
 	})
 }
 
-// Add makes a library of one of the share's folders, and its collections.
-func (e *Engine) Add(folder, name, kind string, enabled bool) (*core.Record, error) {
+// Add makes a library of one of a share's folders, and its collections. A
+// household with one share need not name it.
+func (e *Engine) Add(connection, folder, name, kind string, enabled bool) (*core.Record, error) {
 	folder, name = strings.TrimSpace(folder), strings.TrimSpace(name)
 	errs := validation.Errors{}
+	if connection == "" {
+		if shares, err := e.adapters.Connections(webdav.Key); err == nil && len(shares) == 1 {
+			connection = shares[0].ID
+		}
+	}
+	if c, err := e.adapters.Connection(connection); err != nil || c.Adapter != webdav.Key {
+		errs["connection"] = validation.NewError("validation_required", "A library is a folder of one of the WebDAV shares.")
+	}
 	if folder == "" || strings.Contains(folder, "/") {
 		errs["folder"] = validation.NewError("validation_required", "A library is one of the share's folders.")
-	} else if _, err := e.app.FindFirstRecordByData(LibrariesCollection, "folder", folder); err == nil {
+	} else if _, err := e.app.FindFirstRecordByFilter(LibrariesCollection, "connection = {:connection} && folder = {:folder}",
+		dbx.Params{"connection": connection, "folder": folder}); err == nil {
 		errs["folder"] = validation.NewError("foyer_taken", "That folder is a library already.")
 	}
 	if kind != Movies && kind != Shows {
@@ -293,6 +367,7 @@ func (e *Engine) Add(folder, name, kind string, enabled bool) (*core.Record, err
 		return nil, err
 	}
 	lib := core.NewRecord(collection)
+	lib.Set("connection", connection)
 	lib.Set("folder", folder)
 	lib.Set("name", name)
 	lib.Set("kind", kind)

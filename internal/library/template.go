@@ -45,9 +45,17 @@ var (
 
 var (
 	namePattern = regexp.MustCompile(`^[a-z][a-z0-9_]{0,39}$`)
-	// reserved are names a library may never take: PocketBase's, Foyer's,
-	// and what their records' tables would collide with.
-	reserved = []string{"users", "adapters", "libraries", "media_entries", "media_files", "identities", "watch_states"}
+	// reserved are names a library may never take: PocketBase's, Foyer's —
+	// those it has, and those its next migrations make, which would stop at
+	// a library of the same name and keep the server from starting.
+	reserved = []string{
+		"users", "adapters", "connections", "libraries", "media_entries", "media_files", "identities", "watch_states",
+		"household", "devices", "preferences", "playlists", "subscriptions", "favorite_channels",
+		"play_history", "integrations", "file_corrections",
+	}
+	// reservedPrefixes are names kept for whole modules: IPTV's collections,
+	// YouTube's.
+	reservedPrefixes = []string{"iptv_", "youtube_"}
 )
 
 // Episodes is the collection of a shows library's episodes.
@@ -66,7 +74,7 @@ func CheckName(app core.App, name, kind, ownID string) error {
 		return refuse("That name is PocketBase's own.")
 	case strings.HasSuffix(name, "_episodes"):
 		return refuse("A name may not end in _episodes: a shows library's episodes are called that.")
-	case slices.Contains(reserved, name):
+	case slices.Contains(reserved, name), slices.ContainsFunc(reservedPrefixes, func(p string) bool { return strings.HasPrefix(name, p) }):
 		return refuse("That name is Foyer's own.")
 	}
 	names := []string{name}

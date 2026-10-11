@@ -23,7 +23,7 @@ func (e *Engine) OpenFile(ctx context.Context, file *core.Record, header http.He
 	if err != nil {
 		return nil, stream.ErrGone
 	}
-	client, err := e.share()
+	client, err := e.shareOf(lib)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", stream.ErrSource, err)
 	}

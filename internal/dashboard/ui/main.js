@@ -19,12 +19,19 @@ if (window.app?.routes?.superuserOnly && !app.store._ready) {
   app.routes.superuserOnly('#/library', page('library.js', 'pageLibrary'));
   app.routes.superuserOnly('#/settings/adapters', page('adapters.js', 'pageAdapters'));
 
-  const links = app.store.headerLinks;
-  const at = links.findIndex((link) => link.href === '#/settings');
+  // Settings opens on Foyer's own page, and stays lit on PocketBase's: the
+  // link moves, PocketBase's #/settings route is left alone.
+  const links = app.store.headerLinks.map((link) =>
+    link.href === '#/settings'
+      ? { ...link, href: '#/settings/adapters', isActive: () => window.location.hash.startsWith('#/settings') }
+      : link,
+  );
+  const at = links.findIndex((link) => link.href === '#/settings/adapters');
   const library = { href: '#/library', icon: 'ri-film-line', label: 'Library' };
   app.store.headerLinks = at < 0 ? [...links, library] : [...links.slice(0, at), library, ...links.slice(at)];
+  // Foyer's group first: the sidebar draws the groups in their keys' order.
   app.store.settingsNavGroups = {
-    ...app.store.settingsNavGroups,
     Foyer: [{ href: '#/settings/adapters', icon: 'ri-plug-line', label: 'Adapters' }],
+    ...app.store.settingsNavGroups,
   };
 }

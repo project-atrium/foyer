@@ -68,11 +68,12 @@ Then make the dashboard's superuser, and a user for each person.
 - **The account that held up to ten profiles is gone**, with the protocol
   Loge's `sync/custom-server` adapter spoke. Loge signs in to Foyer anew in
   Step 2 — a device with two profiles signs in as two users.
-- **Adapters**: a WebDAV share's settings and TMDB's kept on the server,
-  their secrets masked; the share read over WebDAV — Zurg's, its ways
-  included, or any other; a TMDB client that names films and series as Loge
-  does, with their details, seasons and artwork.
-- **The library**: each of the share's folders you choose is a library,
+- **Adapters, set up as connections**: as many WebDAV shares as the household
+  has — Zurg's, its ways included, or any other — each named and switched on
+  its own, and TMDB's key and FFmpeg once; their secrets masked; a TMDB client
+  that names films and series as Loge does, with their details, seasons and
+  artwork. The adapters still to come are listed, planned.
+- **The library**: each share's folders you choose are libraries,
   scanned every 15 minutes and when Zurg says: films and series named by
   TMDB, episodes laid as TMDB numbers them — anime packs counted from the
   start included — with their artwork, dates and what each file's name says
@@ -88,8 +89,9 @@ Then make the dashboard's superuser, and a user for each person.
   resume, and a series marked by its episodes. A title TMDB names later, or
   you correct, takes what was watched with it.
 - **The dashboard** wears Foyer's icon, and is where Foyer is set up:
-  **Settings → Adapters** for WebDAV, TMDB and FFmpeg — each tried where it
-  is set — and which of the share's folders are libraries; **Library** for every
+  **Settings → Adapters**, which Settings opens on — the shares, TMDB and
+  FFmpeg by category, each tried where it is set, and which of each share's
+  folders are libraries; **Library** for every
   title as a poster, the newest added first, a title's files and what TMDB
   said of it, and Confirm or Set TMDB id where it guessed.
 - **`go test ./...` proves it.**

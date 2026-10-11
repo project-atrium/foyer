@@ -90,16 +90,16 @@ on every start, so `.env` stays the one place it is set.
 
 ## Zurg, or another WebDAV share
 
-Foyer reads a WebDAV share at the address set on the Adapters page — its
+Foyer reads each WebDAV share at the address set on the Adapters page — its
 WebDAV root: `http://zurg:9999/dav` where Foyer and Zurg are in one compose
 project, rclone's or a NAS's wherever it serves. Every stream comes through
 Foyer, so the share needs to be reachable from Foyer alone, never from the
 household's devices.
 
 **Scanning as soon as Zurg changes.** Zurg runs its `on_library_update`
-after every change it makes. The Adapters page shows the line for Zurg's
-`config.yml`, with a token of Foyer's: it posts the folders that changed, and
-Foyer scans those. Use the address Zurg reaches Foyer by. The line uses
+after every change it makes. The Adapters page shows, under each share, the
+line for Zurg's `config.yml`, with that share's token: it posts the folders
+that changed, and Foyer scans that share's libraries for them. Use the address Zurg reaches Foyer by. The line uses
 `curl`; in a container without it, BusyBox's `wget` does — an empty body
 scans every library:
 
@@ -107,7 +107,7 @@ scans every library:
 on_library_update: wget -qO- --header='Authorization: Bearer <token>' --post-data='' http://foyer:8090/api/foyer/webdav/updated
 ```
 
-Without it, Foyer looks every 15 minutes, as the Adapters page sets.
+Without it, Foyer looks every 15 minutes, or as often as each share is set to.
 
 ## The GPU
 

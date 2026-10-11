@@ -18,10 +18,15 @@ named as you like:
 Folders you leave alone — `__all__`, `__unplayable__`, downloads — are never
 read.
 
+**More than one share.** Each WebDAV share is a connection of its own on the
+Adapters page — Zurg, a NAS — and lists its own folders. A library is a
+folder of one share; two shares may each have a `movies` folder, made into
+two libraries of different names.
+
 ## A scan
 
-Foyer looks at each library every 15 minutes (the WebDAV adapter's
-interval), at once when Zurg's `on_library_update` tells it, and when you
+Foyer looks at each library every 15 minutes (its share's interval), at
+once when that share's `on_library_update` tells it, and when you
 press Scan now. Once a day it walks every entry again — a torrent on Zurg, a
 folder or a file elsewhere — to see inside them.
 

@@ -219,6 +219,7 @@ type scanned struct {
 	*harness
 	admin       string
 	zurg        *webdavtest.Fake
+	zurgShare   string
 	movies, tvs string
 }
 
@@ -232,13 +233,9 @@ func scanLibrary(t *testing.T) *scanned {
 	tmdbServer := fakeTMDB(t)
 	h.server.Library.UseTMDB(tmdb.WithBase(tmdbServer.URL+"/3", tmdbServer.URL+"/t/p"), tmdb.WithBackoff(time.Millisecond))
 	h.server.Library.SetClock(func() time.Time { return friday.Add(time.Hour) })
-	for key, values := range map[string]map[string]any{
-		"webdav": {"url": zurgServer.URL + "/dav"},
-		"tmdb":   {"key": "a-key.for.tests", "language": "en-US"},
-	} {
-		if got := h.call(http.MethodPut, "/api/foyer/admin/adapters/"+key, admin, map[string]any{"enabled": true, "values": values}); got.status != http.StatusOK {
-			t.Fatalf("%s: %d %v", key, got.status, got.body)
-		}
+	share := h.share(admin, "Zurg", zurgServer.URL+"/dav")
+	if got := h.call(http.MethodPut, "/api/foyer/admin/adapters/tmdb", admin, map[string]any{"enabled": true, "values": map[string]any{"key": "a-key.for.tests", "language": "en-US"}}); got.status != http.StatusOK {
+		t.Fatalf("tmdb: %d %v", got.status, got.body)
 	}
 	movies := h.addLibrary(admin, "movies", "movies", "movies")["id"].(string)
 	tvs := h.addLibrary(admin, "shows", "shows", "shows")["id"].(string)
@@ -247,7 +244,7 @@ func scanLibrary(t *testing.T) *scanned {
 			t.Fatalf("scanning: %v", err)
 		}
 	}
-	return &scanned{harness: h, admin: admin, zurg: fake, movies: movies, tvs: tvs}
+	return &scanned{harness: h, admin: admin, zurg: fake, zurgShare: share, movies: movies, tvs: tvs}
 }
 
 // An entry that will not be kept is told and passed over: the library's
@@ -262,13 +259,9 @@ func TestAnEntryThatWillNotBeKeptHoldsNothingBack(t *testing.T) {
 	t.Cleanup(zurgServer.Close)
 	tmdbServer := fakeTMDB(t)
 	h.server.Library.UseTMDB(tmdb.WithBase(tmdbServer.URL+"/3", tmdbServer.URL+"/t/p"), tmdb.WithBackoff(time.Millisecond))
-	for key, values := range map[string]map[string]any{
-		"webdav": {"url": zurgServer.URL + "/dav"},
-		"tmdb":   {"key": "a-key.for.tests", "language": "en-US"},
-	} {
-		if got := h.call(http.MethodPut, "/api/foyer/admin/adapters/"+key, admin, map[string]any{"enabled": true, "values": values}); got.status != http.StatusOK {
-			t.Fatalf("%s: %d %v", key, got.status, got.body)
-		}
+	h.share(admin, "Zurg", zurgServer.URL+"/dav")
+	if got := h.call(http.MethodPut, "/api/foyer/admin/adapters/tmdb", admin, map[string]any{"enabled": true, "values": map[string]any{"key": "a-key.for.tests", "language": "en-US"}}); got.status != http.StatusOK {
+		t.Fatalf("tmdb: %d %v", got.status, got.body)
 	}
 	refuse := true
 	h.app.OnRecordCreate("media_files").BindFunc(func(e *core.RecordEvent) error {
@@ -493,7 +486,7 @@ func TestASuperusersCorrectionSticks(t *testing.T) {
 
 func TestTheWebhookNeedsItsToken(t *testing.T) {
 	s := scanLibrary(t)
-	hook := s.call(http.MethodGet, "/api/foyer/admin/webdav/hook", s.admin, nil)
+	hook := s.call(http.MethodGet, "/api/foyer/admin/connections/"+s.zurgShare+"/hook", s.admin, nil)
 	token, _ := hook.body["token"].(string)
 	if hook.status != http.StatusOK || len(token) < 20 || !strings.Contains(hook.body["command"].(string), token) {
 		t.Fatalf("hook: %d %v", hook.status, hook.body)
@@ -505,7 +498,49 @@ func TestTheWebhookNeedsItsToken(t *testing.T) {
 		t.Fatalf("the token: %d %v", got.status, got.body)
 	}
 	// Asked again, the same token: Zurg's config keeps working.
-	if again := s.call(http.MethodGet, "/api/foyer/admin/webdav/hook", s.admin, nil); again.body["token"] != token {
+	if again := s.call(http.MethodGet, "/api/foyer/admin/connections/"+s.zurgShare+"/hook", s.admin, nil); again.body["token"] != token {
 		t.Fatal("a new token every time")
+	}
+}
+
+// Two shares: each library is read from its own, and each share's webhook
+// has a token of its own.
+func TestEachLibraryIsReadFromItsOwnShare(t *testing.T) {
+	s := scanLibrary(t)
+	nasFake := webdavtest.New()
+	nasFake.File("movies/Another.Film.2021.1080p/Another.Film.2021.1080p.mkv", []byte("nas"), monday)
+	nasFake.Dir("movies/Another.Film.2021.1080p", monday)
+	nasServer := httptest.NewServer(nasFake)
+	t.Cleanup(nasServer.Close)
+	nas := s.share(s.admin, "NAS", nasServer.URL+"/dav")
+	got := s.call(http.MethodPost, "/api/foyer/admin/libraries", s.admin, map[string]any{"connection": nas, "folder": "movies", "name": "nas_movies", "kind": "movies", "enabled": true})
+	if got.status != http.StatusOK {
+		t.Fatalf("the NAS's library: %d %v", got.status, got.body)
+	}
+	if err := s.server.Library.Scan(context.Background(), got.body["id"].(string), true); err != nil {
+		t.Fatalf("scanning the NAS: %v", err)
+	}
+	if n, _ := s.app.CountRecords("media_files", dbx.HashExp{"library": got.body["id"]}); n != 1 {
+		t.Errorf("the NAS's library holds %d files", n)
+	}
+	if n, _ := s.app.CountRecords("media_files", dbx.HashExp{"library": s.movies}); n != 5 {
+		t.Errorf("Zurg's movies hold %d files", n)
+	}
+	zurgHook := s.call(http.MethodGet, "/api/foyer/admin/connections/"+s.zurgShare+"/hook", s.admin, nil)
+	nasHook := s.call(http.MethodGet, "/api/foyer/admin/connections/"+nas+"/hook", s.admin, nil)
+	if zurgHook.body["token"] == nasHook.body["token"] {
+		t.Fatal("two shares, one token")
+	}
+	for _, hook := range []answer{zurgHook, nasHook} {
+		if got := s.call(http.MethodPost, "/api/foyer/webdav/updated", "Bearer "+hook.body["token"].(string), nil); got.status != http.StatusAccepted {
+			t.Fatalf("a share's token: %d %v", got.status, got.body)
+		}
+	}
+	// Switched off, a share is read no more: its library says why.
+	if got := s.call(http.MethodPut, "/api/foyer/admin/connections/"+nas, s.admin, map[string]any{"name": "NAS", "enabled": false, "values": map[string]any{"url": nasServer.URL + "/dav"}}); got.status != http.StatusOK {
+		t.Fatalf("switching the NAS off: %d %v", got.status, got.body)
+	}
+	if err := s.server.Library.Scan(context.Background(), got.body["id"].(string), false); err == nil || !strings.Contains(err.Error(), "NAS is switched off") {
+		t.Fatalf("scanning a share switched off: %v", err)
 	}
 }

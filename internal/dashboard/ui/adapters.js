@@ -1,5 +1,7 @@
-// The Adapters page, under Settings: each adapter's form drawn from the
-// fields it describes, and the WebDAV share's folders made into libraries.
+// The Adapters page, under Settings: what Foyer connects to, by category —
+// each adapter with the connections the household set up, every form drawn
+// from the fields the adapter describes — and each WebDAV share's folders
+// made into libraries.
 const masked = '******';
 
 function send(path, options = {}) {
@@ -45,7 +47,34 @@ function settingsSidebar() {
   );
 }
 
-const icons = { webdav: 'ri-hard-drive-3-line', tmdb: 'ri-movie-2-line', ffmpeg: 'ri-cpu-line' };
+const categories = [
+  ['sources', 'Sources', "Where the household's films, series and videos come from."],
+  ['iptv', 'IPTV', "Live channels, and a provider's own films and series."],
+  ['metadata', 'Metadata', 'What a title is: its name, dates, ids and artwork.'],
+  ['tracking', 'Tracking', 'What each user watched, kept in step with a service of their own.'],
+  ['tools', 'Tools', 'What Foyer runs on this server.'],
+];
+
+const icons = {
+  webdav: 'ri-hard-drive-3-line',
+  tmdb: 'ri-movie-2-line',
+  ffmpeg: 'ri-cpu-line',
+  jellyfin: 'ri-server-line',
+  emby: 'ri-server-line',
+  plex: 'ri-server-line',
+  google_drive: 'ri-google-line',
+  onedrive: 'ri-cloud-line',
+  local: 'ri-folder-3-line',
+  yattee: 'ri-video-line',
+  invidious: 'ri-video-line',
+  youtube: 'ri-youtube-line',
+  stalker: 'ri-tv-2-line',
+  m3u: 'ri-play-list-line',
+  xtream: 'ri-tv-line',
+  trakt: 'ri-history-line',
+  simkl: 'ri-history-line',
+  anilist: 'ri-history-line',
+};
 
 export function pageAdapters(route) {
   app.store.title = 'Adapters';
@@ -64,6 +93,11 @@ export function pageAdapters(route) {
     }
     data.loading = false;
   }
+
+  // A connection opened by the address — ?connection=… or ?adapter=… — is
+  // drawn open.
+  const opened = (type, connection) =>
+    (connection && route.query.connection?.[0] == connection.id) || route.query.adapter?.[0] == type.key;
 
   return t.div(
     {
@@ -87,12 +121,26 @@ export function pageAdapters(route) {
         }
         return t.div(
           null,
-          t.p({ className: 'txt-lg m-b-base' }, 'What Foyer connects to. A WebDAV share — Zurg\'s — lists the household\'s files, TMDB names them, and FFmpeg says what each one is.'),
+          t.p(
+            { className: 'txt-lg m-b-base' },
+            "What Foyer connects to. A WebDAV share — Zurg's — lists the household's files, TMDB names them, and FFmpeg says what each one is. A share can be set up more than once.",
+          ),
           t.div(
             { className: 'alert warning m-b-base' },
             'Passwords and keys are kept on this server as typed: anyone who signs in as a superuser, or holds a copy of pb_data or a backup, has them.',
           ),
-          views.map((view) => adapterPanel(view, route.query.adapter?.[0] == view.key)),
+          categories.map(([category, title, blurb]) => {
+            const types = views.filter((v) => v.category == category);
+            if (!types.length) {
+              return null;
+            }
+            return t.div(
+              { className: 'foyer-category m-b-lg' },
+              t.h4({ className: 'm-b-5' }, title),
+              t.p({ className: 'txt-hint m-b-sm' }, blurb),
+              types.map((type) => typeBlock(type, load, opened)),
+            );
+          }),
         );
       }),
       t.footer({ className: 'page-footer' }, app.components.credits()),
@@ -100,31 +148,77 @@ export function pageAdapters(route) {
   );
 }
 
-function adapterPanel(view, open) {
-  const key = view.key;
+// typeBlock is one adapter: planned, set up once, or set up as many times as
+// the household has shares.
+function typeBlock(type, reload, opened) {
+  if (type.planned) {
+    return t.div(
+      { className: 'foyer-planned m-b-sm' },
+      t.i({ className: icons[type.key] || 'ri-plug-line', ariaHidden: true }),
+      t.div(
+        { className: 'flex-fill' },
+        t.div(null, t.strong(null, type.name), ' ', t.span({ className: 'label sm' }, 'Planned')),
+        t.div({ className: 'txt-hint txt-sm' }, type.description),
+      ),
+    );
+  }
+  if (type.single) {
+    return connectionPanel(type, type.connections[0] || null, reload, opened(type, type.connections[0]));
+  }
+  const adding = store({ count: 0 });
+  return t.div(
+    { className: 'foyer-adapter m-b-sm' },
+    t.div(
+      { className: 'foyer-adapter-head' },
+      t.i({ className: icons[type.key] || 'ri-plug-line', ariaHidden: true }),
+      t.strong(null, type.name),
+    ),
+    t.p({ className: 'txt-hint txt-sm m-b-sm' }, type.description),
+    type.connections.map((c) => connectionPanel(type, c, reload, opened(type, c))),
+    () => (adding.count > 0 ? connectionPanel(type, null, reload, true, () => (adding.count = 0)) : null),
+    t.button(
+      { type: 'button', className: 'btn sm secondary', hidden: () => adding.count > 0, onclick: () => (adding.count = 1) },
+      t.i({ className: 'ri-add-line', ariaHidden: true }),
+      t.span({ className: 'txt' }, type.connections.length ? `Add another ${type.name} connection` : `Add a ${type.name} connection`),
+    ),
+  );
+}
+
+// connectionPanel is one connection's form — or a new one's, until it is
+// saved. A single adapter's is saved by its key.
+function connectionPanel(type, connection, reload, open, discard) {
+  const key = type.key;
+  const id = connection ? connection.id : `new_${key}`;
   const form = store({
-    name: view.name,
-    enabled: view.enabled,
+    name: connection?.name || type.name,
+    enabled: connection ? connection.enabled : true,
     values: {},
     status: null,
     init: 'null',
     saving: false,
     testing: false,
     result: null,
+    // A new connection is a change already; a single adapter not yet saved
+    // is not, until it is edited.
     get hasChanges() {
-      return form.init != JSON.stringify([form.enabled, form.values]);
+      return (!connection && !type.single) || form.init != JSON.stringify([form.name, form.enabled, form.values]);
     },
   });
-  reset(view);
+  reset(connection);
 
-  // reset reads nothing back from the store: the panel is built inside the
-  // page's reactive child, which would be redrawn for every value read.
+  // reset reads nothing back from the store — only writes it: the panel is
+  // built inside the page's reactive child, which would be redrawn for every
+  // value read, and the form with it as it is typed in. A single adapter
+  // starts off until it is saved; a new connection on.
   function reset(next) {
-    const values = JSON.parse(JSON.stringify(next.values || {}));
-    form.enabled = next.enabled;
+    const values = JSON.parse(JSON.stringify(next?.values || type.defaults || {}));
+    const name = next?.name || type.name;
+    const enabled = next ? next.enabled : !type.single;
+    form.name = name;
+    form.enabled = enabled;
     form.values = values;
-    form.status = next.status || null;
-    form.init = JSON.stringify([next.enabled, values]);
+    form.status = next?.status || null;
+    form.init = JSON.stringify([name, enabled, values]);
   }
 
   async function save() {
@@ -132,13 +226,27 @@ function adapterPanel(view, open) {
       return;
     }
     form.saving = true;
+    const body = { name: form.name, enabled: form.enabled, values: app.utils.filterRedactedProps(form.values, masked) };
     try {
-      const next = await send(`/api/foyer/admin/adapters/${key}`, {
-        method: 'PUT',
-        body: { enabled: form.enabled, values: app.utils.filterRedactedProps(form.values, masked) },
-      });
-      reset(next);
+      let next;
+      if (type.single) {
+        next = await send(`/api/foyer/admin/adapters/${key}`, { method: 'PUT', body });
+      } else if (connection) {
+        next = await send(`/api/foyer/admin/connections/${connection.id}`, { method: 'PUT', body });
+      } else {
+        next = await send('/api/foyer/admin/connections', { method: 'POST', body: { ...body, adapter: key } });
+      }
       app.toasts.success(`${next.name} saved.`);
+      if (connection || type.single) {
+        reset(next);
+        if (!connection) {
+          reload();
+        }
+      } else {
+        // A new connection joins the list, where its folders can be listed.
+        window.location.hash = `#/settings/adapters?connection=${next.id}`;
+        reload();
+      }
     } catch (err) {
       failed(err);
     }
@@ -148,15 +256,34 @@ function adapterPanel(view, open) {
   async function test() {
     form.testing = true;
     form.result = null;
+    const path = connection ? `/api/foyer/admin/connections/${connection.id}/test` : `/api/foyer/admin/adapters/${key}/test`;
     try {
-      form.result = await send(`/api/foyer/admin/adapters/${key}/test`, {
-        method: 'POST',
-        body: { values: app.utils.filterRedactedProps(form.values, masked) },
-      });
+      form.result = await send(path, { method: 'POST', body: { values: app.utils.filterRedactedProps(form.values, masked) } });
     } catch (err) {
       failed(err);
     }
     form.testing = false;
+  }
+
+  function remove() {
+    app.modals.confirm(
+      t.div(
+        null,
+        t.p(null, `Remove ${connection.name}?`),
+        t.p({ className: 'txt-hint' }, 'Its settings go. A share whose folders are libraries stays until they are removed.'),
+      ),
+      async () => {
+        try {
+          await send(`/api/foyer/admin/connections/${connection.id}`, { method: 'DELETE' });
+          app.toasts.success(`${connection.name} removed.`);
+          reload();
+        } catch (err) {
+          failed(err);
+        }
+      },
+      null,
+      { yesButton: 'Remove' },
+    );
   }
 
   const shown = () => form.result || form.status;
@@ -166,7 +293,8 @@ function adapterPanel(view, open) {
     t.summary(
       null,
       t.i({ className: icons[key] || 'ri-plug-line', ariaHidden: true }),
-      t.span({ className: 'txt' }, view.name),
+      t.span({ className: 'txt' }, () => (type.single ? type.name : form.name || type.name)),
+      connection || type.single ? null : t.span({ className: 'label sm' }, 'New'),
       t.div({ className: 'flex-fill' }),
       () => (form.enabled ? t.span({ className: 'label success' }, 'Enabled') : t.span({ className: 'label' }, 'Disabled')),
       () => {
@@ -176,7 +304,7 @@ function adapterPanel(view, open) {
         }
       },
     ),
-    t.p({ className: 'txt-hint' }, view.description),
+    type.single ? t.p({ className: 'txt-hint' }, type.description) : null,
     t.form(
       {
         className: 'grid',
@@ -186,23 +314,42 @@ function adapterPanel(view, open) {
           save();
         },
       },
+      type.single
+        ? null
+        : t.div(
+            { className: 'col-lg-12' },
+            t.div(
+              { className: 'field' },
+              t.label({ htmlFor: `${id}.name` }, 'Name'),
+              t.input({
+                id: `${id}.name`,
+                name: 'name',
+                type: 'text',
+                autocomplete: 'off',
+                required: true,
+                value: () => form.name,
+                oninput: (e) => (form.name = e.target.value),
+              }),
+            ),
+            t.div({ className: 'field-help' }, 'What this connection is called here: "Zurg", "The NAS".'),
+          ),
       t.div(
         { className: 'col-lg-12' },
         t.div(
           { className: 'field' },
           t.input({
-            id: `${key}.enabled`,
-            name: `${key}.enabled`,
+            id: `${id}.enabled`,
+            name: 'enabled',
             type: 'checkbox',
             className: 'switch',
             checked: () => form.enabled,
             onchange: (e) => (form.enabled = e.target.checked),
           }),
-          t.label({ htmlFor: `${key}.enabled` }, 'Enabled'),
+          t.label({ htmlFor: `${id}.enabled` }, 'Enabled'),
         ),
       ),
-      view.fields.map((f) => fieldOf(form, key, f)),
-      view.notice ? t.div({ className: 'col-lg-12' }, t.p({ className: 'txt-sm txt-hint' }, view.notice)) : null,
+      type.fields.map((f) => fieldOf(form, id, f)),
+      type.notice ? t.div({ className: 'col-lg-12' }, t.p({ className: 'txt-sm txt-hint' }, type.notice)) : null,
       t.div({ className: 'col-lg-12' }, () => {
         const s = shown();
         if (!s) {
@@ -228,26 +375,40 @@ function adapterPanel(view, open) {
             t.i({ className: 'ri-pulse-line', ariaHidden: true }),
             t.span({ className: 'txt' }, 'Test'),
           ),
+          connection && !type.single
+            ? t.button(
+                { type: 'button', className: 'btn transparent danger', onclick: remove },
+                t.i({ className: 'ri-delete-bin-7-line', ariaHidden: true }),
+                t.span({ className: 'txt' }, 'Remove'),
+              )
+            : null,
           t.div({ className: 'm-r-auto' }),
           t.button(
-            { type: 'button', className: 'btn transparent secondary', hidden: () => !form.hasChanges, onclick: () => reset(view) },
+            {
+              type: 'button',
+              className: 'btn transparent secondary',
+              hidden: () => !form.hasChanges,
+              onclick: () => (connection || type.single ? reset(connection) : discard?.()),
+            },
             t.span({ className: 'txt' }, 'Cancel'),
           ),
           t.button(
             { className: () => `btn expanded-lg ${form.saving ? 'loading' : ''}`, disabled: () => !form.hasChanges || form.saving },
-            t.span({ className: 'txt' }, 'Save changes'),
+            t.span({ className: 'txt' }, () => (connection || type.single ? 'Save changes' : 'Add')),
           ),
         ),
       ),
     ),
-    key == 'webdav' ? libraries(() => form.init) : null,
+    key == 'webdav' && connection ? libraries(connection, () => form.init) : null,
   );
 }
 
 // fieldOf draws one field an adapter asks for. Inputs are named as the
-// server keys its errors, `values.<key>`, so PocketBase marks the right one.
-function fieldOf(form, adapter, f) {
-  const id = `${adapter}.${f.key}`;
+// server keys its errors, `values.<key>`, so PocketBase marks the right one;
+// their ids are the connection's, as one adapter's fields can be on the page
+// twice.
+function fieldOf(form, connection, f) {
+  const id = `${connection}.${f.key}`;
   const name = `values.${f.key}`;
   const help = f.help ? t.div({ className: 'field-help' }, f.help) : null;
   if (f.type == 'bool') {
@@ -282,6 +443,18 @@ function fieldOf(form, adapter, f) {
       required: !!f.required,
       value: () => form.values[f.key] ?? '',
       oninput: (e) => (form.values[f.key] = e.target.value === '' ? undefined : parseInt(e.target.value, 10)),
+    });
+  } else if (f.type == 'password' && f.visible) {
+    // A secret that is no secret to whoever holds it — a portal's MAC
+    // address — is typed in the clear, and read back to be edited.
+    input = t.input({
+      id,
+      name,
+      type: 'text',
+      autocomplete: 'off',
+      required: !!f.required,
+      value: () => form.values[f.key] ?? '',
+      oninput: (e) => (form.values[f.key] = e.target.value),
     });
   } else if (f.type == 'password') {
     // A secret that is set comes back masked: left alone it stays as it is,
@@ -337,16 +510,16 @@ function detection(d) {
   );
 }
 
-// libraries is the share's folders, each a library or not yet, and the
+// libraries is a share's folders, each a library or not yet, and the
 // command that has Zurg tell Foyer of every change. saved changes as the
 // share's settings are saved, so the folders are listed again.
-function libraries(saved) {
+function libraries(connection, saved) {
   const data = store({ loading: false, ok: false, message: '', folders: [], hook: null });
 
   async function load() {
     data.loading = true;
     try {
-      const answer = await send('/api/foyer/admin/webdav/folders');
+      const answer = await send(`/api/foyer/admin/connections/${connection.id}/folders`);
       data.ok = answer.ok;
       data.message = answer.message || '';
       data.folders = answer.folders || [];
@@ -358,7 +531,7 @@ function libraries(saved) {
 
   async function loadHook() {
     try {
-      data.hook = await send('/api/foyer/admin/webdav/hook');
+      data.hook = await send(`/api/foyer/admin/connections/${connection.id}/hook`);
     } catch (err) {
       failed(err);
     }
@@ -429,7 +602,7 @@ function libraries(saved) {
       t.button(
         { type: 'button', className: 'btn sm secondary', onclick: () => scan({ id: '', name: 'every library' }) },
         t.i({ className: 'ri-refresh-line', ariaHidden: true }),
-        t.span({ className: 'txt' }, 'Scan all'),
+        t.span({ className: 'txt' }, 'Scan every library'),
       ),
     ),
     t.p({ className: 'txt-hint' }, "Each of the share's folders can be a library: movies, or shows with their episodes. A folder that is not one — Zurg's __all__, a download folder — is never read."),
@@ -476,7 +649,7 @@ function libraries(saved) {
         t.td(
           { className: 'txt-right' },
           t.button(
-            { type: 'button', className: 'btn sm secondary', onclick: () => openNewLibrary(f.folder, load) },
+            { type: 'button', className: 'btn sm secondary', onclick: () => openNewLibrary(connection, f.folder, load) },
             t.i({ className: 'ri-add-line', ariaHidden: true }),
             t.span({ className: 'txt' }, 'Make a library'),
           ),
@@ -523,7 +696,7 @@ function nameFor(folder) {
   return name.slice(0, 41);
 }
 
-function openNewLibrary(folder, done) {
+function openNewLibrary(connection, folder, done) {
   const uniqueId = 'foyer_new_' + app.utils.randomString();
   const guessShows = /show|series|tv|anime/i.test(folder);
   const data = store({ name: nameFor(folder), kind: guessShows ? 'shows' : 'movies', enabled: true, saving: false });
@@ -536,7 +709,7 @@ function openNewLibrary(folder, done) {
     try {
       const lib = await send('/api/foyer/admin/libraries', {
         method: 'POST',
-        body: { folder, name: data.name, kind: data.kind, enabled: data.enabled },
+        body: { connection: connection.id, folder, name: data.name, kind: data.kind, enabled: data.enabled },
       });
       app.toasts.success(`${lib.name} made.`);
       app.modals.close();

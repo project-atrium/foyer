@@ -2,19 +2,20 @@ package server_test
 
 import (
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/pocketbase/pocketbase/core"
 )
 
-func tmdbView(t *testing.T, list []any) map[string]any {
+func typeView(t *testing.T, list []any, key string) map[string]any {
 	t.Helper()
 	for _, raw := range list {
-		if view, _ := raw.(map[string]any); view["key"] == "tmdb" {
+		if view, _ := raw.(map[string]any); view["key"] == key {
 			return view
 		}
 	}
-	t.Fatalf("no tmdb adapter in %v", list)
+	t.Fatalf("no %s adapter in %v", key, list)
 	return nil
 }
 
@@ -31,16 +32,28 @@ func TestTheAdaptersPageIsTheSuperusersOnly(t *testing.T) {
 	}
 }
 
-func TestAnAdapterStartsOffWithItsDefaults(t *testing.T) {
+func TestAnAdapterStartsWithNoConnectionAndItsDefaults(t *testing.T) {
 	h := start(t, options{})
 	got := h.call(http.MethodGet, "/api/foyer/admin/adapters", h.superuser(), nil)
 	if got.status != http.StatusOK {
 		t.Fatalf("%d %v", got.status, got.body)
 	}
-	view := tmdbView(t, got.list)
-	values := view["values"].(map[string]any)
-	if view["enabled"] != false || values["language"] != "en-US" || values["key"] != "" || view["notice"] == "" {
+	view := typeView(t, got.list, "tmdb")
+	defaults := view["defaults"].(map[string]any)
+	if len(view["connections"].([]any)) != 0 || defaults["language"] != "en-US" || defaults["key"] != "" || view["notice"] == "" ||
+		view["single"] != true || view["category"] != "metadata" {
 		t.Fatalf("view %v", view)
+	}
+	// The page lists them by category, in its order.
+	var categories []string
+	for _, raw := range got.list {
+		category := raw.(map[string]any)["category"].(string)
+		if len(categories) == 0 || categories[len(categories)-1] != category {
+			categories = append(categories, category)
+		}
+	}
+	if strings.Join(categories, ",") != "sources,metadata,tools" {
+		t.Fatalf("categories %v", categories)
 	}
 }
 
@@ -52,7 +65,7 @@ func TestASecretIsMaskedAndKeptWhenASaveLeavesItOut(t *testing.T) {
 	got := h.call(http.MethodPut, "/api/foyer/admin/adapters/tmdb", admin, map[string]any{
 		"enabled": true, "values": map[string]any{"key": "a secret key", "language": "de-DE"},
 	})
-	if got.status != http.StatusOK || got.body["values"].(map[string]any)["key"] != "******" {
+	if got.status != http.StatusOK || got.body["values"].(map[string]any)["key"] != "******" || got.body["name"] != "TMDB" {
 		t.Fatalf("save: %d %v", got.status, got.body)
 	}
 	if got := h.call(http.MethodPut, "/api/foyer/admin/adapters/tmdb", admin, map[string]any{
@@ -60,7 +73,11 @@ func TestASecretIsMaskedAndKeptWhenASaveLeavesItOut(t *testing.T) {
 	}); got.status != http.StatusOK {
 		t.Fatalf("save again: %d %v", got.status, got.body)
 	}
-	record, err := h.app.FindFirstRecordByData("adapters", "key", "tmdb")
+	// Saved twice, it is still the household's one TMDB connection.
+	if n, _ := h.app.CountRecords("connections"); n != 1 {
+		t.Fatalf("%d connections", n)
+	}
+	record, err := h.app.FindFirstRecordByData("connections", "adapter", "tmdb")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,8 +91,8 @@ func TestASecretIsMaskedAndKeptWhenASaveLeavesItOut(t *testing.T) {
 	// A profile reads no adapter at all; a superuser sees everything, secrets
 	// included, as the docs say.
 	alex := h.makeUser("alex", nil)
-	if listed := h.call(http.MethodGet, "/api/collections/adapters/records", alex.token, nil); listed.status != http.StatusForbidden {
-		t.Fatalf("a profile listing adapters: %d %v", listed.status, listed.body)
+	if listed := h.call(http.MethodGet, "/api/collections/connections/records", alex.token, nil); listed.status != http.StatusForbidden {
+		t.Fatalf("a profile listing connections: %d %v", listed.status, listed.body)
 	}
 }
 
@@ -92,8 +109,102 @@ func TestASaveThatWillNotDoNamesTheField(t *testing.T) {
 
 func TestAnUnknownAdapterIsNotFound(t *testing.T) {
 	h := start(t, options{})
-	if got := h.call(http.MethodPut, "/api/foyer/admin/adapters/plex", h.superuser(), map[string]any{}); got.status != http.StatusNotFound {
+	admin := h.superuser()
+	if got := h.call(http.MethodPut, "/api/foyer/admin/adapters/nonesuch", admin, map[string]any{}); got.status != http.StatusNotFound {
 		t.Fatalf("%d %v", got.status, got.body)
+	}
+	if got := h.call(http.MethodPost, "/api/foyer/admin/connections", admin, map[string]any{"adapter": "nonesuch"}); got.status != http.StatusNotFound {
+		t.Fatalf("a connection: %d %v", got.status, got.body)
+	}
+	if got := h.call(http.MethodPut, "/api/foyer/admin/connections/nonesuch", admin, map[string]any{}); got.status != http.StatusNotFound {
+		t.Fatalf("an update: %d %v", got.status, got.body)
+	}
+}
+
+// --- Connections ------------------------------------------------------------------
+
+// A WebDAV share is set up as often as the household has shares, each named
+// and switched on its own; TMDB once.
+func TestEachShareIsAConnectionOfItsOwn(t *testing.T) {
+	h := start(t, options{})
+	admin := h.superuser()
+	zurg := h.share(admin, "Zurg", "http://zurg:9999/dav")
+	nas := h.share(admin, "The NAS", "https://nas.example.com/dav")
+	got := h.call(http.MethodGet, "/api/foyer/admin/adapters", admin, nil)
+	connections := typeView(t, got.list, "webdav")["connections"].([]any)
+	if len(connections) != 2 || connections[0].(map[string]any)["name"] != "Zurg" || connections[1].(map[string]any)["name"] != "The NAS" {
+		t.Fatalf("connections %v", connections)
+	}
+	if got := h.call(http.MethodPut, "/api/foyer/admin/connections/"+nas, admin, map[string]any{
+		"name": "NAS", "enabled": false, "values": map[string]any{"url": "https://nas.example.com/webdav"},
+	}); got.status != http.StatusOK || got.body["name"] != "NAS" || got.body["enabled"] != false {
+		t.Fatalf("update: %d %v", got.status, got.body)
+	}
+	if c, err := h.server.Adapters.Connection(zurg); err != nil || c.String("url") != "http://zurg:9999/dav" || !c.Enabled {
+		t.Fatalf("the other share changed: %v %v", c, err)
+	}
+	if got := h.call(http.MethodDelete, "/api/foyer/admin/connections/"+nas, admin, nil); got.status != http.StatusNoContent {
+		t.Fatalf("removing: %d %v", got.status, got.body)
+	}
+	if got := h.call(http.MethodDelete, "/api/foyer/admin/connections/"+nas, admin, nil); got.status != http.StatusNotFound {
+		t.Fatalf("removing again: %d %v", got.status, got.body)
+	}
+	// A share's address is checked as ever, and named by its field.
+	bad := h.call(http.MethodPost, "/api/foyer/admin/connections", admin, map[string]any{"adapter": "webdav", "enabled": true, "values": map[string]any{"url": "zurg"}})
+	if values, _ := bad.body["data"].(map[string]any)["values"].(map[string]any); bad.status != http.StatusBadRequest || values["url"] == nil {
+		t.Fatalf("a bad address: %d %v", bad.status, bad.body)
+	}
+	// TMDB is the household's once: a second connection is refused.
+	if got := h.call(http.MethodPost, "/api/foyer/admin/connections", admin, map[string]any{"adapter": "tmdb", "enabled": true, "values": map[string]any{"key": "k"}}); got.status != http.StatusOK {
+		t.Fatalf("tmdb: %d %v", got.status, got.body)
+	}
+	if got := h.call(http.MethodPost, "/api/foyer/admin/connections", admin, map[string]any{"adapter": "tmdb", "enabled": true, "values": map[string]any{"key": "k"}}); got.status != http.StatusBadRequest {
+		t.Fatalf("a second tmdb: %d %v", got.status, got.body)
+	}
+	// A share is no single adapter: it is not saved by its key.
+	if got := h.call(http.MethodPut, "/api/foyer/admin/adapters/webdav", admin, map[string]any{"enabled": true}); got.status != http.StatusBadRequest {
+		t.Fatalf("a share by its key: %d %v", got.status, got.body)
+	}
+}
+
+// A share whose folders are libraries stays until they are removed: their
+// collections are Foyer's to remove, one library at a time.
+func TestAShareWithLibrariesStays(t *testing.T) {
+	h := start(t, options{})
+	admin := h.superuser()
+	share := h.share(admin, "Zurg", "http://zurg:9999/dav")
+	lib := h.addLibrary(admin, "movies", "movies", "movies")
+	if lib["connection"] != share {
+		t.Fatalf("library %v", lib)
+	}
+	if got := h.call(http.MethodDelete, "/api/foyer/admin/connections/"+share, admin, nil); got.status != http.StatusConflict {
+		t.Fatalf("removing a share in use: %d %v", got.status, got.body)
+	}
+	if got := h.call(http.MethodDelete, "/api/foyer/admin/libraries/"+lib["id"].(string), admin, nil); got.status != http.StatusNoContent {
+		t.Fatalf("removing the library: %d %v", got.status, got.body)
+	}
+	if got := h.call(http.MethodDelete, "/api/foyer/admin/connections/"+share, admin, nil); got.status != http.StatusNoContent {
+		t.Fatalf("removing the share: %d %v", got.status, got.body)
+	}
+}
+
+// With two shares, a library says whose folder it is, and one folder name
+// may be a library in each.
+func TestTwoSharesMayHaveAFolderOfOneName(t *testing.T) {
+	h := start(t, options{})
+	admin := h.superuser()
+	zurg := h.share(admin, "Zurg", "http://zurg:9999/dav")
+	nas := h.share(admin, "NAS", "https://nas.example.com/dav")
+	if got := h.call(http.MethodPost, "/api/foyer/admin/libraries", admin, map[string]any{"folder": "movies", "name": "movies", "kind": "movies"}); got.status != http.StatusBadRequest {
+		t.Fatalf("no share named, with two: %d %v", got.status, got.body)
+	}
+	for share, name := range map[string]string{zurg: "movies", nas: "nas_movies"} {
+		if got := h.call(http.MethodPost, "/api/foyer/admin/libraries", admin, map[string]any{"connection": share, "folder": "movies", "name": name, "kind": "movies"}); got.status != http.StatusOK {
+			t.Fatalf("%s: %d %v", name, got.status, got.body)
+		}
+	}
+	if got := h.call(http.MethodPost, "/api/foyer/admin/libraries", admin, map[string]any{"connection": zurg, "folder": "movies", "name": "again", "kind": "movies"}); got.status != http.StatusBadRequest {
+		t.Fatalf("a folder twice in one share: %d %v", got.status, got.body)
 	}
 }
 
@@ -102,30 +213,30 @@ func TestAnUnknownAdapterIsNotFound(t *testing.T) {
 func TestFoyersCollectionsRefuseEvenASuperusersWrites(t *testing.T) {
 	h := start(t, options{})
 	admin := h.superuser()
-	if got := h.call(http.MethodPost, "/api/collections/adapters/records", admin, map[string]any{"key": "webdav"}); got.status != http.StatusForbidden {
+	if got := h.call(http.MethodPost, "/api/collections/connections/records", admin, map[string]any{"adapter": "webdav"}); got.status != http.StatusForbidden {
 		t.Errorf("a record: %d %v", got.status, got.body)
 	}
-	if got := h.call(http.MethodPatch, "/api/collections/adapters", admin, map[string]any{"listRule": ""}); got.status != http.StatusForbidden {
+	if got := h.call(http.MethodPatch, "/api/collections/connections", admin, map[string]any{"listRule": ""}); got.status != http.StatusForbidden {
 		t.Errorf("the collection: %d %v", got.status, got.body)
 	}
-	if got := h.call(http.MethodDelete, "/api/collections/adapters/truncate", admin, nil); got.status != http.StatusForbidden {
+	if got := h.call(http.MethodDelete, "/api/collections/connections/truncate", admin, nil); got.status != http.StatusForbidden {
 		t.Errorf("truncating: %d %v", got.status, got.body)
 	}
-	if got := h.call(http.MethodDelete, "/api/collections/adapters", admin, nil); got.status != http.StatusForbidden {
+	if got := h.call(http.MethodDelete, "/api/collections/connections", admin, nil); got.status != http.StatusForbidden {
 		t.Errorf("deleting: %d %v", got.status, got.body)
 	}
 	if got := h.call(http.MethodPut, "/api/collections/import", admin, map[string]any{
-		"collections": []any{map[string]any{"name": "adapters", "type": "base"}}, "deleteMissing": false,
+		"collections": []any{map[string]any{"name": "connections", "type": "base"}}, "deleteMissing": false,
 	}); got.status != http.StatusForbidden {
 		t.Errorf("importing: %d %v", got.status, got.body)
 	}
 	// Foyer's own code saves past the guard.
-	collection, err := h.app.FindCollectionByNameOrId("adapters")
+	collection, err := h.app.FindCollectionByNameOrId("connections")
 	if err != nil {
 		t.Fatal(err)
 	}
 	record := core.NewRecord(collection)
-	record.Set("key", "webdav")
+	record.Set("adapter", "webdav")
 	if err := h.app.Save(record); err != nil {
 		t.Fatalf("a model save: %v", err)
 	}

@@ -65,7 +65,7 @@ go run ./dev/fakezurg -addr 127.0.0.1:9999 <folder>
 - Every file is the same four seconds of 1080p made with ffmpeg — Japanese
   audio, English subtitles, two chapters — so ffprobe has something to read;
   `-sample` serves a video of your own instead.
-- Set WebDAV on the Adapters page to `http://127.0.0.1:9999/dav`. `-user`
+- Add a WebDAV connection on the Adapters page at `http://127.0.0.1:9999/dav`. `-user`
   and `-password` make it ask for them.
 - **Records from a real Zurg hold the household's Real-Debrid links.** Keep
   them out of the repository: the tests' names are made up.

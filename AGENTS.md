@@ -70,7 +70,8 @@ internal/config/     FOYER_ADMIN_*, FOYER_TRUST_PROXY, and the .env reader; the 
 internal/routes/     GET /api/foyer/info
 internal/server/     Bind: the guard, the routes, the trusted proxy, no installer, the UI extension — and the HTTP tests
 internal/guard/      Foyer's collections refuse every write request, a superuser's too; users' rules stay
-internal/adapters/   what Foyer connects to: settings records, fields, masked secrets, the Adapters page's routes
+internal/adapters/   what Foyer connects to: adapters by category, the connections set up of each, fields, masked
+                     secrets, the Adapters page's routes; the adapters still to come, planned
   tmdb/              TMDB: Loge's matcher ported (Find), a film's and a series' details, seasons, episode groups, artwork
   webdav/            a WebDAV share — Zurg's above all: its folders, an entry's files, a file's bytes with ranges
   webdav/webdavtest/ a pretend share, answering as Zurg does where asked, for the tests
@@ -89,7 +90,7 @@ internal/dashboard/  the dashboard's icon and pages — Library, Settings → Ad
 internal/version/    the version, always the app's: its `npm run release` moves both
 migrations/          0001 users are profiles; 0002 the name, the rate limits, the first superuser; 0003 adapters;
                      0004 libraries, media_entries, media_files, identities; 0005 streams' rate limit;
-                     0006 watch_states
+                     0006 watch_states; 0007 adapters become connections, a library a folder of one
 dev/fakezurg/        a pretend Zurg for running Foyer here, from Zurg's .zurgtorrent records; never in the image
 Dockerfile           two stages: a Go build, then Debian with Jellyfin's ffmpeg and the binary
 docker-compose.yml   the server, and pb_data in a volume
@@ -106,6 +107,21 @@ Go tests sit beside what they test. Everything else is PocketBase's: `serve`,
   would write one — the dashboard's, a superuser's, an import, a truncate.
   Foyer's code saves at the model level, which no request hook sees. A new
   collection of Foyer's joins the guard's list in `internal/server`.
+- **An adapter is set up as connections.** A connection is one share, one
+  key: `connections`, keyed by id, never by the adapter. Two WebDAV shares
+  are two connections, and a library names its own (`libraries.connection`);
+  read a share through `Engine.shareFor`, which keeps one client per
+  connection while its settings stand — a client is a transport, a pace and
+  a refusal latch, and a new one per request loses all three. A single
+  adapter — TMDB, FFmpeg — is the household's once (`Registry.Settings`); a
+  planned one is listed and cannot be set up. A share whose folders are
+  libraries is never removed from under them (`Registry.OnDelete`).
+- **A collection name Foyer will make is reserved before its migration
+  lands.** A library takes its collection's name, and a migration that meets
+  a library of the name it makes stops — and `serve` with it. `reserved` and
+  `reservedPrefixes` in `internal/library/template.go` hold every name Step 2
+  makes, and `iptv_` and `youtube_`; a migration making a new collection adds
+  its name there first, in an earlier release.
 - **A library's collections are Foyer's, from one template.** `x`, or `x` and
   `x_episodes`, made and kept by `library.Ensure` — never by a migration,
   which cannot see them, and never in the dashboard. Change the template,
@@ -235,6 +251,15 @@ Go tests sit beside what they test. Everything else is PocketBase's: `serve`,
   - **No `rid` on an element whose content is not reactive**: Shablon keeps
     the element it drew before, and drops the new one — a poster that
     arrived later never showed.
+  - **A form's own setup reads nothing back from its store.** A panel built
+    inside a reactive child that reads `form.name` while it is built makes
+    that child redraw — and the form with it, a fresh store under the typed
+    name — at every keystroke. Write the store from the values given; read
+    it only inside functions and handlers.
+  - **Never register `#/settings`**: it would replace PocketBase's own
+    Application page. Foyer's settings come first by building
+    `settingsNavGroups` as `{Foyer, ...groups}`, and the header's Settings
+    link points at Foyer's page with an `isActive` for any `#/settings`.
   - **Foyer's files are served `no-cache`** (`dashboard.Fresh`): outside
     `--dev` PocketBase lets a browser keep `/_/` two weeks, and last
     version's pages would call this version's routes.
@@ -245,7 +270,8 @@ Go tests sit beside what they test. Everything else is PocketBase's: `serve`,
 Go framework: `users` as profiles with their PINs; a WebDAV share's folders
 — Zurg's — as libraries, named by TMDB, read by ffprobe and streamed through signed
 addresses; each user's watch status; the dashboard's Library and Adapters
-pages. `go test ./...` proves it, and the dashboard was driven headless in
+pages — adapters set up as connections, several shares among them, Settings
+opening on Foyer's own. `go test ./...` proves it, and the dashboard was driven headless in
 Chrome against a pretend Zurg and the real TMDB. The account-sync protocol,
 its harness and the shared fixtures are gone — git has them. The image —
 Debian with Jellyfin's ffmpeg — was built and run on arm64 under Colima,

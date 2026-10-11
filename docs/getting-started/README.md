@@ -59,23 +59,25 @@ dashboard, which ends every session that user had.
 
 ## The library
 
-Everything else is set on the dashboard, under **Settings → Adapters**. Each
-adapter is switched on with **Enabled**, tried with **Test**, and kept with
-**Save changes**.
+Everything else is set on the dashboard, under **Settings → Adapters** — the
+first thing Settings opens. Each connection is switched on with **Enabled**,
+tried with **Test**, and kept with **Save changes**.
 
-1. **WebDAV** — the share's address: its WebDAV root, as Zurg's is
-   `http://zurg:9999/dav`, rclone's or a NAS's wherever it serves. And its
-   username and password if it asks for them.
+1. **WebDAV** — **Add a WebDAV connection**, named as you like, with the
+   share's address: its WebDAV root, as Zurg's is `http://zurg:9999/dav`,
+   rclone's or a NAS's wherever it serves. And its username and password if
+   it asks for them. A second share is a second connection.
 2. **TMDB** — your own key, from themoviedb.org → Settings → API: the API
    Read Access Token or the API key. And the language titles and artwork
    are asked in.
 3. **FFmpeg** — where ffprobe and ffmpeg are, if not on the PATH. Its test
    says what it found, and whether the GPU answers.
-4. **Libraries**, under WebDAV: the share's folders. **Make a library** of each you
+4. **Libraries**, under each share: its folders. **Make a library** of each you
    want, as movies or as shows; it is scanned at once. A folder that is not
    one — `__all__`, a download folder — is never read.
 5. **Scan as soon as Zurg changes**: paste the `on_library_update` shown
-   there into Zurg's `config.yml`, with the address Zurg reaches Foyer by.
+   under the share into Zurg's `config.yml`, with the address Zurg reaches
+   Foyer by. Each share has a token of its own.
 
 Then **Library**, in the header: every title as a poster, the newest added
 first. A title TMDB could only guess at is marked, and hidden from the

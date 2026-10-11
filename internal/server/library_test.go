@@ -13,13 +13,31 @@ import (
 	"foyer/internal/library"
 )
 
+// addLibrary makes a library of a folder of the household's one share — made
+// here, pointing nowhere, if there is none yet.
 func (h *harness) addLibrary(admin, folder, name, kind string) map[string]any {
 	h.t.Helper()
+	if shares, err := h.server.Adapters.Connections("webdav"); err != nil || len(shares) == 0 {
+		h.share(admin, "Zurg", "http://127.0.0.1:9/dav")
+	}
 	got := h.call(http.MethodPost, "/api/foyer/admin/libraries", admin, map[string]any{"folder": folder, "name": name, "kind": kind, "enabled": true})
 	if got.status != http.StatusOK {
 		h.t.Fatalf("adding %s: %d %v", name, got.status, got.body)
 	}
 	return got.body
+}
+
+// share sets a WebDAV share up, as the Adapters page does, and answers its
+// connection's id.
+func (h *harness) share(admin, name, address string) string {
+	h.t.Helper()
+	got := h.call(http.MethodPost, "/api/foyer/admin/connections", admin, map[string]any{
+		"adapter": "webdav", "name": name, "enabled": true, "values": map[string]any{"url": address},
+	})
+	if got.status != http.StatusOK {
+		h.t.Fatalf("setting up %s: %d %v", name, got.status, got.body)
+	}
+	return got.body["id"].(string)
 }
 
 // save writes a record as Foyer's own code does, past the guard.
@@ -87,6 +105,11 @@ func TestALibraryNameThatWillNotDoIsRefused(t *testing.T) {
 		"a library's":           {"folder": "e", "name": "movies", "kind": "shows"},
 		"a folder taken":        {"folder": "movies", "name": "films", "kind": "movies"},
 		"neither movies nor tv": {"folder": "f", "name": "music", "kind": "music"},
+		// What Foyer's next migrations make: a library of that name would
+		// stop them, and the server with them.
+		"a collection to come": {"folder": "g", "name": "playlists", "kind": "movies"},
+		"IPTV's":               {"folder": "h", "name": "iptv_movies", "kind": "movies"},
+		"YouTube's":            {"folder": "i", "name": "youtube_videos", "kind": "movies"},
 	} {
 		if got := h.call(http.MethodPost, "/api/foyer/admin/libraries", admin, body); got.status != http.StatusBadRequest {
 			t.Errorf("%s: %d %v", name, got.status, got.body)
@@ -212,15 +235,22 @@ func TestTheSharesFoldersComeWithTheirLibraries(t *testing.T) {
 	server := httptest.NewServer(fake)
 	defer server.Close()
 
-	// Before the share is set up, the page is told why there is nothing.
-	if got := h.call(http.MethodGet, "/api/foyer/admin/webdav/folders", admin, nil); got.status != http.StatusOK || got.body["ok"] != false || got.body["message"] == "" {
-		t.Fatalf("unset: %d %v", got.status, got.body)
+	// Before the share is switched on, the page is told why there is nothing.
+	made := h.call(http.MethodPost, "/api/foyer/admin/connections", admin, map[string]any{
+		"adapter": "webdav", "name": "Zurg", "enabled": false, "values": map[string]any{"url": server.URL + "/dav"},
+	})
+	if made.status != http.StatusOK {
+		t.Fatalf("setting up the share: %d %v", made.status, made.body)
 	}
-	if got := h.call(http.MethodPut, "/api/foyer/admin/adapters/webdav", admin, map[string]any{"enabled": true, "values": map[string]any{"url": server.URL + "/dav"}}); got.status != http.StatusOK {
-		t.Fatalf("saving the share: %d %v", got.status, got.body)
+	id := made.body["id"].(string)
+	if got := h.call(http.MethodGet, "/api/foyer/admin/connections/"+id+"/folders", admin, nil); got.status != http.StatusOK || got.body["ok"] != false || got.body["message"] == "" {
+		t.Fatalf("switched off: %d %v", got.status, got.body)
+	}
+	if got := h.call(http.MethodPut, "/api/foyer/admin/connections/"+id, admin, map[string]any{"name": "Zurg", "enabled": true, "values": map[string]any{"url": server.URL + "/dav"}}); got.status != http.StatusOK {
+		t.Fatalf("switching the share on: %d %v", got.status, got.body)
 	}
 	h.addLibrary(admin, "movies", "movies", "movies")
-	got := h.call(http.MethodGet, "/api/foyer/admin/webdav/folders", admin, nil)
+	got := h.call(http.MethodGet, "/api/foyer/admin/connections/"+id+"/folders", admin, nil)
 	folders, _ := got.body["folders"].([]any)
 	if got.status != http.StatusOK || got.body["ok"] != true || len(folders) != 4 {
 		t.Fatalf("%d %v", got.status, got.body)

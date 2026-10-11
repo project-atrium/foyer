@@ -20,11 +20,15 @@ and their rules, and how they fail.
 | `POST /api/foyer/watch/played` | users | `{ collection, id, played }` → `204`; a series marks each of its episodes |
 | `GET /api/foyer/watch/resume` | users | `?limit` (20) → `{ items: [{ collection, id, identity, title, showTitle?, season?, episode?, positionMs, durationMs, watched, lastPlayedAt }] }`, the latest first |
 | `GET`, `HEAD /api/foyer/stream/{file}?u&exp&sig` | whoever holds the address | the file's bytes, a `Range` passed on: `206` with `Content-Range`; `403` when the signature is wrong or six hours old |
-| `GET /api/foyer/admin/adapters` | superusers | every adapter: `[{ key, name, description, notice?, enabled, fields, values, status? }]`, each secret as `"******"` when set and `""` when not |
-| `PUT /api/foyer/admin/adapters/{key}` | superusers | `{ enabled, values }` → the adapter as `GET` shows it; `400` names each field that will not do, as `values.<key>` |
-| `POST /api/foyer/admin/adapters/{key}/test` | superusers | `{ values? }`, laid over what is saved → `{ ok, message, details? }` |
-| `GET /api/foyer/admin/webdav/folders` | superusers | `{ ok, message?, folders: [{ folder, library? }] }`: the share's folders, each with the library it is, and libraries whose folder Zurg no longer lists |
-| `POST /api/foyer/admin/libraries` | superusers | `{ folder, name, kind: "movies" \| "shows", enabled }` → the library, its collections made; `400` names what will not do |
+| `GET /api/foyer/admin/adapters` | superusers | every adapter, by category: `[{ key, category, name, description, notice?, single, planned, fields, defaults, connections: [{ id, adapter, name, enabled, values, status? }] }]`, each secret as `"******"` when set and `""` when not |
+| `PUT /api/foyer/admin/adapters/{key}` | superusers | a single adapter's settings — TMDB's, FFmpeg's: `{ enabled, values }` → its one connection, made by the first save; `400` names each field that will not do, as `values.<key>`, and refuses an adapter set up as connections |
+| `POST /api/foyer/admin/adapters/{key}/test` | superusers | `{ values? }`, values not yet saved, over the adapter's defaults — or a single adapter's saved ones → `{ ok, message, details? }` |
+| `POST /api/foyer/admin/connections` | superusers | `{ adapter, name, enabled, values }` → the connection; `400` for a planned adapter, a second connection of a single one, or a field that will not do |
+| `PUT /api/foyer/admin/connections/{id}` | superusers | `{ name, enabled, values }` → the connection |
+| `DELETE /api/foyer/admin/connections/{id}` | superusers | `204`; `409` while a share's folders are libraries |
+| `POST /api/foyer/admin/connections/{id}/test` | superusers | `{ values? }`, laid over what is saved → `{ ok, message, details? }`, kept as the connection's status |
+| `GET /api/foyer/admin/connections/{id}/folders` | superusers | `{ ok, message?, folders: [{ folder, library? }] }`: a share's folders, each with the library it is, and libraries whose folder the share no longer lists |
+| `POST /api/foyer/admin/libraries` | superusers | `{ connection, folder, name, kind: "movies" \| "shows", enabled }` → the library, its collections made; `connection` may be left out where the household has one share; `400` names what will not do |
 | `PATCH /api/foyer/admin/libraries/{id}` | superusers | `{ enabled }` → the library |
 | `GET /api/foyer/admin/status` | superusers | `{ scans: [{ library, name, full, phase, running, torrents, walked, newFiles, missing, removed, titles, artwork, error?, notes? }] }`, kept in memory |
 | `POST /api/foyer/admin/scan` | superusers | `{ library?, full? }` → `202`: a scan of that library, or of all |
@@ -32,8 +36,8 @@ and their rules, and how they fail.
 | `GET /api/foyer/admin/library/{collection}/{id}` | superusers | `{ item, library, files, seasons, identity }`: a title, its files and what TMDB answered |
 | `POST /api/foyer/admin/library/{collection}/{id}/confirm` | superusers | `204`: a guess confirmed |
 | `POST /api/foyer/admin/library/{collection}/{id}/match` | superusers | `{ tmdbId }` → `204`: the title is that one, merged into a title already holding it; `502` when TMDB cannot say |
-| `GET /api/foyer/admin/webdav/hook` | superusers | `{ token, command }`: the line for Zurg's `on_library_update`, or any script |
-| `POST /api/foyer/webdav/updated` | the share — Zurg's `on_library_update` — with `Authorization: Bearer <token>` | the folders that changed, one per line → `202`, every library for none; `403` without the token |
+| `GET /api/foyer/admin/connections/{id}/hook` | superusers | `{ token, command }`: the line for that share's `on_library_update` — Zurg's — or any script |
+| `POST /api/foyer/webdav/updated` | a share — Zurg's `on_library_update` — with `Authorization: Bearer <token>` | the folders that changed, one per line → `202`: that share's libraries for those folders, all of them for none; the token says which share called; `403` without one |
 | `DELETE /api/foyer/admin/libraries/{id}` | superusers | `204`: its collections, artwork, torrents, files and identities gone; watch status stays. `409` when a collection of your own still points at it |
 
 ### Watch status
@@ -67,9 +71,17 @@ and their rules, and how they fail.
 
 ### The Adapters page's routes
 
+- **An adapter is a kind of thing Foyer reaches; a connection is one set
+  up.** Two WebDAV shares are two connections of one adapter, each named and
+  switched on its own. A **single** adapter — TMDB, FFmpeg — is the
+  household's once, and saved by its key. A **planned** adapter is listed so
+  the household sees what is coming, and cannot be set up.
+- **Adapters come by category**, in the page's order: Sources, IPTV,
+  Metadata, Tracking, Tools.
 - **A field is one of** `text`, `url`, `password`, `number`, `select` or
   `bool`, with its label, default, choices and help: the page draws every
-  form from them.
+  form from them. A password marked `visible` — a portal's MAC address — is
+  shown as typed and sent back, and kept with the secrets all the same.
 - **A secret** — a `password` field — is stored as typed and never sent back.
   A save that leaves it out, or sends `"******"` back, keeps it; one that
   sends `""` clears it.
@@ -81,7 +93,8 @@ and their rules, and how they fail.
   `http://zurg:9999/dav` — a username and a password if the share asks for
   them, and how often to look for new media, in minutes (15 unless set). Its
   test lists the share's folders, and names Zurg's `/dav` where nothing
-  answers as WebDAV.
+  answers as WebDAV. A share whose folders are libraries is not removed until
+  they are; each share has a webhook token of its own.
 - **FFmpeg** has the paths of `ffprobe` and `ffmpeg` (their names on the PATH
   unless set), the render device (`/dev/dri/renderD128`) and how many files
   are read at once (2). Switched on, ffprobe reads what each file is. Its test
@@ -117,9 +130,11 @@ its token.
 
 Password sign-in only: OAuth2, OTP, MFA and sign-in alerts are off.
 
-**`adapters`** — one record per adapter that has been saved: `key`,
+**`connections`** — one record per connection: `adapter`, `name`,
 `enabled`, `config` (every value but the secrets), `secrets` (plain text, as
-typed) and `status` (the last test). Written only through the Adapters page.
+typed — a webhook's token among them), `status` (the last test) and
+`position`. Written only through the Adapters page. Until 2026.10 it was
+`adapters`, one record per adapter; migration 0007 renamed it in place.
 
 **`watch_states`** — what a user watched: `user`, `identity`, the title it
 was last played as (`item_collection`, `item_id`), `external_ids`, `watched`,
@@ -127,15 +142,18 @@ was last played as (`item_collection`, `item_id`), `external_ids`, `watched`,
 
 ### The library
 
-**A library is a Zurg folder**, and its collections are named after it: a
-movies library `movies` is the collection `movies`; a shows library `shows`
-is `shows`, with `shows_episodes`. Foyer makes and keeps them from one
-template; a name is lower-case letters, digits and underscores, never ends in
-`_episodes`, and is never Foyer's or PocketBase's own.
+**A library is a folder of a share** — `libraries.connection` says which —
+and its collections are named after it: a movies library `movies` is the
+collection `movies`; a shows library `shows` is `shows`, with
+`shows_episodes`. Foyer makes and keeps them from one template; a name is
+lower-case letters, digits and underscores, never ends in `_episodes`, and is
+never Foyer's or PocketBase's own — nor one Foyer's coming migrations make
+(`playlists`, `devices`…, and anything starting `iptv_` or `youtube_`), which
+would otherwise stop at the library and keep the server from starting.
 
 | Collection | One record per |
 | --- | --- |
-| `libraries` | library: `name`, `kind`, `folder`, `enabled`, its last scans and their error |
+| `libraries` | library: `name`, `kind`, its share (`connection`) and `folder` — unique together — `enabled`, its last scans and their error |
 | `media_entries` | entry the share lists in a library's folder — a torrent on Zurg, a folder or a file elsewhere — and whether it is a file lying there loose |
 | `media_files` | file of an entry (`entry`): its `path` under the folder, what its name says (`parsed`), which title took it (`item_collection`, `item_id`) and as what (`role`), what ffprobe found (`probe`) |
 | `identities` | title a library read: what TMDB was asked (`key`), its answer (`tmdb_id`), and how sure (`state`: sure, uncertain, none, manual) |
@@ -156,7 +174,7 @@ template; a name is lower-case letters, digits and underscores, never ends in
 | Collection | List, view | Create | Update | Delete |
 | --- | --- | --- | --- | --- |
 | `users` | its own record | superusers | its own record | superusers |
-| `adapters` | superusers | Foyer | Foyer | Foyer |
+| `connections` | superusers | Foyer | Foyer | Foyer |
 | `libraries` | users | Foyer | Foyer | Foyer |
 | `media_entries`, `media_files`, `identities` | superusers | Foyer | Foyer | Foyer |
 | `watch_states` | its own user's | Foyer | Foyer | Foyer |

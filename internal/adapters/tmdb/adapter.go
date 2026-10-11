@@ -15,6 +15,8 @@ const Key = "tmdb"
 func Adapter() adapters.Adapter {
 	return adapters.Adapter{
 		Key:         Key,
+		Category:    adapters.Metadata,
+		Single:      true,
 		Name:        "TMDB",
 		Description: "Names every film and series in the library, with its dates, ids and artwork — with your own key.",
 		Notice:      "This product uses the TMDB API but is not endorsed or certified by TMDB.",
