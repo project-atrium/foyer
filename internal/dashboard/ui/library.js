@@ -300,10 +300,15 @@ export function pageLibrary(route) {
 }
 
 // openTitle shows a title's panel: what it is, its files, what TMDB answered,
-// and the superuser's corrections.
+// and the superuser's corrections — TMDB searched for the title it is, or its
+// id typed.
 function openTitle(item, changed) {
   const uniqueId = 'foyer_title_' + app.utils.randomString();
   const data = store({ detail: null, tmdbId: '', busy: false });
+  const search = store({ query: item.title || '', year: item.year ? String(item.year) : '', results: null, searching: false });
+  // Each candidate's poster, fetched with the superuser's token: a page's own <img> sends none.
+  const posters = store({});
+  const made = [];
 
   async function loadDetail() {
     try {
@@ -326,10 +331,102 @@ function openTitle(item, changed) {
     data.busy = false;
   }
 
+  async function find(e, kind) {
+    e.preventDefault();
+    search.searching = true;
+    try {
+      const params = new URLSearchParams({ kind, q: search.query.trim() });
+      if (/^\d{4}$/.test(search.year.trim())) {
+        params.set('year', search.year.trim());
+      }
+      const answer = await send(`/api/foyer/admin/tmdb/search?${params}`);
+      search.results = answer.results || [];
+      for (const c of search.results) {
+        if (c.poster && !posters[c.id]) {
+          poster(c);
+        }
+      }
+    } catch (err) {
+      failed(err);
+    }
+    search.searching = false;
+  }
+
+  async function poster(c) {
+    try {
+      const res = await fetch(app.pb.buildURL(`/api/foyer/admin/tmdb/image/w92${c.poster}`), { headers: { Authorization: app.pb.authStore.token } });
+      if (res.ok) {
+        const url = URL.createObjectURL(await res.blob());
+        made.push(url);
+        posters[c.id] = url;
+      }
+    } catch {
+      // A candidate without its picture is still one to pick.
+    }
+  }
+
+  function searchSection(kind) {
+    return t.div(
+      { className: 'foyer-section m-t-base' },
+      t.header(null, t.h5(null, 'Not this title?')),
+      t.form(
+        { className: 'flex gap-5 m-b-sm', onsubmit: (e) => find(e, kind) },
+        t.div(
+          { className: 'field m-0 flex-fill' },
+          t.input({ name: 'query', type: 'text', required: true, placeholder: 'Search TMDB', value: () => search.query, oninput: (e) => (search.query = e.target.value) }),
+        ),
+        t.div(
+          { className: 'field m-0', style: 'width: 90px' },
+          t.input({ name: 'year', type: 'text', inputMode: 'numeric', placeholder: 'Year', value: () => search.year, oninput: (e) => (search.year = e.target.value) }),
+        ),
+        t.button(
+          { type: 'submit', className: () => `btn secondary ${search.searching ? 'loading' : ''}`, disabled: () => search.searching || data.busy },
+          t.span({ className: 'txt' }, 'Search'),
+        ),
+      ),
+      () => {
+        if (!search.results) {
+          return t.p({ className: 'txt-hint txt-sm' }, 'TMDB, in its own order: pick what this title is, and its files are placed again.');
+        }
+        if (!search.results.length) {
+          return t.p({ className: 'txt-hint' }, 'TMDB has nothing called so.');
+        }
+        return t.div(
+          { className: 'foyer-candidates' },
+          search.results.map((c) =>
+            t.div(
+              { className: 'foyer-candidate' },
+              t.div({ className: 'art' }, () => (posters[c.id] ? t.img({ src: posters[c.id], alt: '' }) : t.i({ className: 'ri-image-line txt-hint', ariaHidden: true }))),
+              t.div(
+                { className: 'flex-fill' },
+                t.strong(null, c.title, c.year ? ` (${c.year})` : ''),
+                c.originalTitle ? t.div({ className: 'txt-hint txt-sm' }, c.originalTitle) : null,
+                c.overview ? t.div({ className: 'txt-sm foyer-clamp' }, c.overview) : null,
+                t.a({ className: 'txt-sm', href: `https://www.themoviedb.org/${kind}/${c.id}`, target: '_blank', rel: 'noopener noreferrer' }, `TMDB ${c.id}`),
+              ),
+              t.button(
+                {
+                  type: 'button',
+                  className: () => `btn sm ${data.busy ? 'loading' : ''}`,
+                  disabled: () => data.busy,
+                  onclick: () => correct('match', { tmdbId: c.id }, `It is ${c.title}.`),
+                },
+                t.span({ className: 'txt' }, 'This one'),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   const modal = t.div(
     {
       className: 'modal popup lg',
-      onafterclose: (el) => el?.remove(),
+      onafterclose: (el) => {
+        made.forEach((url) => URL.revokeObjectURL(url));
+        el?.remove();
+      },
     },
     t.header({ className: 'modal-header' }, t.h5({ className: 'm-auto' }, () => data.detail?.item?.title || item.title)),
     t.div(
@@ -393,6 +490,7 @@ function openTitle(item, changed) {
           ),
         );
       },
+      searchSection(item.kind == 'shows' ? 'tv' : 'movie'),
     ),
     t.footer(
       { className: 'modal-footer' },

@@ -91,6 +91,48 @@ func (e *Engine) gridRoutes(admin *router.RouterGroup[*core.RequestEvent]) {
 		err := e.Correct(re.Request.Context(), re.Request.PathValue("collection"), re.Request.PathValue("id"), body.TMDBID)
 		return answerCorrection(re, err)
 	})
+
+	// TMDB's own search, for a superuser to pick a title by rather than
+	// type its id. Never a 401 for TMDB's refusal: the dashboard would take
+	// it for its own session ending.
+	admin.GET("/tmdb/search", func(re *core.RequestEvent) error {
+		q := re.Request.URL.Query()
+		kind := tmdb.Movie
+		if q.Get("kind") == "tv" || q.Get("kind") == Shows {
+			kind = tmdb.Show
+		}
+		year, _ := strconv.Atoi(q.Get("year"))
+		client, language := e.tmdb()
+		if client == nil {
+			return re.Error(http.StatusConflict, "TMDB is not set up: see Settings → Adapters.", nil)
+		}
+		found, err := client.Search(re.Request.Context(), kind, q.Get("q"), year, language)
+		switch {
+		case errors.Is(err, tmdb.ErrRefused):
+			return re.Error(http.StatusConflict, "TMDB refuses the key: see Settings → Adapters.", nil)
+		case err != nil:
+			return re.Error(http.StatusBadGateway, "TMDB could not be asked. Try again in a while.", nil)
+		}
+		return re.JSON(http.StatusOK, map[string]any{"results": found})
+	})
+
+	// A candidate's poster, small, through Foyer: the dashboard's page shows
+	// no picture from elsewhere, and fetches this with the superuser's token.
+	admin.GET("/tmdb/image/{size}/{file}", func(re *core.RequestEvent) error {
+		client, _ := e.tmdb()
+		if client == nil {
+			return re.NotFoundError("", nil)
+		}
+		b, kind, err := client.Poster(re.Request.Context(), re.Request.PathValue("size"), "/"+re.Request.PathValue("file"))
+		switch {
+		case errors.Is(err, tmdb.ErrNoSuchPicture):
+			return re.NotFoundError("", nil)
+		case err != nil:
+			return re.Error(http.StatusBadGateway, "", nil)
+		}
+		re.Response.Header().Set("Cache-Control", "private, max-age=86400")
+		return re.Blob(http.StatusOK, kind, b)
+	})
 }
 
 func answerCorrection(re *core.RequestEvent, err error) error {

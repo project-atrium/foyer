@@ -140,7 +140,7 @@ func fakeTMDB(t *testing.T) *httptest.Server {
 		"movie/Lonely Picture": {{"id": 1002, "title": "Lonely Picture", "original_title": "Lonely Picture", "release_date": "2023-02-17"}},
 		"movie/Twin Title": {
 			{"id": 1003, "title": "Twin Title", "original_title": "Twin Title", "release_date": "2010-01-01"},
-			{"id": 1004, "title": "Twin Title", "original_title": "Twin Title", "release_date": "2020-01-01"},
+			{"id": 1004, "title": "Twin Title", "original_title": "Twin Title", "release_date": "2020-01-01", "poster_path": "/twin2020.png", "overview": "The later one."},
 		},
 		"tv/Big Pack": {
 			{"id": 2009, "name": "Big Pack", "original_name": "Big Pack", "first_air_date": "2021-01-01"},

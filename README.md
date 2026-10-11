@@ -135,7 +135,8 @@ Then make the dashboard's superuser, and a user for each person.
   FFmpeg by category, each tried where it is set, and which of each share's
   folders are libraries; **Library** for every
   title as a poster, the newest added first, a title's files and what TMDB
-  said of it, and Confirm or Set TMDB id where it guessed; **Live Activity**
+  said of it, and Confirm where it guessed, or TMDB searched for the title
+  it is — each candidate with its poster — and that one picked; **Live Activity**
   for what plays now — who, on which device, what, how far, at what rate —
   with Stop; the copies being made for downloads, how far along and how
   fast, with Stop, and those kept, to let go of; and what played before.

@@ -101,6 +101,17 @@ func (h *harness) fetch(path string) (int, http.Header, []byte) {
 	return recorder.Code, recorder.Header(), recorder.Body.Bytes()
 }
 
+// fetchWithToken is fetch with a session's token, as the dashboard sends it:
+// what a page's own <img> cannot.
+func (h *harness) fetchWithToken(t *testing.T, path, token string) (int, http.Header, []byte) {
+	t.Helper()
+	recorder := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, path, nil)
+	req.Header.Set("Authorization", token)
+	h.mux.ServeHTTP(recorder, req)
+	return recorder.Code, recorder.Header(), recorder.Body.Bytes()
+}
+
 // user is one profile, as the household's superuser makes it, and a session
 // for it.
 type user struct {
