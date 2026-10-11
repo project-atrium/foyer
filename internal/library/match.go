@@ -115,6 +115,9 @@ type candidateInfo struct {
 	// Continuing is a series still airing: a season beyond TMDB's may be
 	// coming.
 	Continuing bool `json:"continuing,omitempty"`
+	// TitleHits is how many episodes the files name by title TMDB calls so,
+	// at their season and number — shown beside it on the title's panel.
+	TitleHits int `json:"titleHits,omitempty"`
 }
 
 // ask asks TMDB: Loge's matcher first; where several titles share the name
@@ -139,7 +142,7 @@ func (e *Engine) ask(ctx context.Context, c *candidate, client *tmdb.Client) (de
 		if len(found.Named) == 0 {
 			continue
 		}
-		infos, err := e.describe(ctx, c.kind, found.Named, client)
+		infos, err := e.describe(ctx, c.kind, found.Named, client, c.evidence)
 		if err != nil {
 			return decision{}, nil, err
 		}
@@ -168,7 +171,7 @@ func halves(title string) []string {
 	return out
 }
 
-func (e *Engine) describe(ctx context.Context, kind tmdb.Kind, named []tmdb.Found, client *tmdb.Client) ([]candidateInfo, error) {
+func (e *Engine) describe(ctx context.Context, kind tmdb.Kind, named []tmdb.Found, client *tmdb.Client, ev evidence) ([]candidateInfo, error) {
 	var infos []candidateInfo
 	for _, f := range named[:min(len(named), askAbout)] {
 		info := candidateInfo{ID: f.ID, Year: f.Year}
@@ -189,6 +192,9 @@ func (e *Engine) describe(ctx context.Context, kind tmdb.Kind, named []tmdb.Foun
 				info.Seasons[s.Number] = s.EpisodeCount
 			}
 			info.Continuing = show.Status == "Returning Series" || show.Status == "In Production" || show.Status == "Planned"
+			if info.TitleHits, err = titleHits(ctx, client, f.ID, ev.titles); err != nil {
+				return nil, err
+			}
 		} else {
 			movie, err := client.Movie(ctx, f.ID, "")
 			if errors.Is(err, tmdb.ErrNotFound) {
@@ -208,10 +214,45 @@ func (e *Engine) describe(ctx context.Context, kind tmdb.Kind, named []tmdb.Foun
 	return infos, nil
 }
 
+// titleHits is how many of the episodes the files name by title the series
+// calls so at their season and number — its seasons asked of TMDB at once,
+// only where files name any.
+func titleHits(ctx context.Context, client *tmdb.Client, id int, named []namedEpisode) (int, error) {
+	if len(named) == 0 {
+		return 0, nil
+	}
+	var numbers []int
+	for _, n := range named {
+		if !slices.Contains(numbers, n.season) {
+			numbers = append(numbers, n.season)
+		}
+	}
+	seasons, err := client.Seasons(ctx, id, "", numbers)
+	if err != nil && !errors.Is(err, tmdb.ErrNotFound) {
+		return 0, err
+	}
+	called := map[[2]int]string{}
+	for _, s := range seasons {
+		for _, e := range s.Episodes {
+			called[[2]int{s.Number, e.Number}] = titles.Key(e.Name)
+		}
+	}
+	hits := 0
+	for _, n := range named {
+		name := called[[2]int{n.season, n.episode}]
+		// "Rose" is "Rose"; "The End of the World" may be TMDB's "The End of the World (Part 1)".
+		if name != "" && (name == n.key || len(n.key) >= 6 && strings.HasPrefix(name, n.key+" ") || len(name) >= 6 && strings.HasPrefix(n.key, name+" ")) {
+			hits++
+		}
+	}
+	return hits, nil
+}
+
 // decide picks among several titles of one name by what the files say. Sure
-// where the episodes leave one series able to hold them, or a strong anime
-// mark leaves one anime; else TMDB's first, uncertain — hidden from users
-// until a superuser says.
+// where the episodes leave one series able to hold them, where the titles
+// the files give their episodes are one series' — most of them — or a
+// strong anime mark leaves one anime; else TMDB's first, uncertain —
+// hidden from users until a superuser says.
 func decide(kind tmdb.Kind, infos []candidateInfo, ev evidence) decision {
 	if len(infos) == 0 {
 		return decision{state: none, reason: "TMDB has nothing by this name"}
@@ -231,6 +272,13 @@ func decide(kind tmdb.Kind, infos []candidateInfo, ev evidence) decision {
 			left = fit
 		}
 	}
+	if best, ok := mostTitles(left); ok {
+		// Most of the titles the files give, or a few in a series of few: sure.
+		if best.TitleHits*2 >= len(ev.titles) && best.TitleHits >= min(2, len(ev.titles)) {
+			return decision{id: best.ID, state: sure, reason: "episode titles"}
+		}
+		return decision{id: best.ID, state: uncertain, reason: "episode titles"}
+	}
 	if ev.anime > 0 {
 		var anime []candidateInfo
 		for _, info := range left {
@@ -246,6 +294,22 @@ func decide(kind tmdb.Kind, infos []candidateInfo, ev evidence) decision {
 		}
 	}
 	return decision{id: left[0].ID, state: uncertain, reason: "best guess: " + strings.ToLower(string(kind)) + "s of one name"}
+}
+
+// mostTitles is the one series whose episodes are called as the files call
+// them more often than any other's: none where no series is, or two tie.
+func mostTitles(infos []candidateInfo) (candidateInfo, bool) {
+	var best candidateInfo
+	tie := false
+	for _, info := range infos {
+		switch {
+		case info.TitleHits > best.TitleHits:
+			best, tie = info, false
+		case info.TitleHits == best.TitleHits && info.TitleHits > 0:
+			tie = true
+		}
+	}
+	return best, best.TitleHits > 0 && !tie
 }
 
 // holds says whether a series has room for the episodes a library holds of

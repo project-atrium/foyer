@@ -102,14 +102,27 @@ of the one the name gives.
 **Telling titles of one name apart.** Two series are called One Piece: the
 anime, with over a thousand episodes, and the live action, with seventeen. A
 pack running to episode 1071 can only be the first. Where the episodes do not
-decide, an anime release — a group in brackets, episodes counted from the
+decide, the titles the files give them do: two series called Doctor Who, of
+1963 and of 2005, both have room for a first season's three episodes, but
+only the second's begins "Rose" — the series whose episodes TMDB calls as
+most of the files do is the one, a single title among many only a guess.
+Then an anime release — a group in brackets, episodes counted from the
 start, dual audio — picks the anime. Where nothing decides, it is a guess.
+The title's panel says what told them apart, and how many titles each held.
 
 **Correcting one.** On the Library page, open a title: **Confirm** takes the
-guess; **Set TMDB id** names the title it is (the id in its themoviedb.org
-address). Either is kept for good — a later scan never asks again — and where
-another title already is that one, the two become one, with every file of
-both.
+guess; **Not this title?** searches TMDB for what it is — its name and year
+filled in, each answer with its poster — and **This one** names it so, as
+**Set TMDB id** does with the id in its themoviedb.org address. Either is
+kept for good — a later scan never asks again — and where another title
+already is that one, the two become one, with every file of both.
+
+**Correcting one episode.** A series' file the scan placed wrong — a
+special TMDB names otherwise, an OVA it has as an episode — is said what it
+is with **Correct** on its row: an episode (season 0 for the specials), an
+extra, or as its name reads again. The word is kept by the file's path,
+apart from the file's record, so it holds through every scan and comes back
+with a file that vanished for a while; what was watched follows the file.
 
 ## Episodes counted from the start
 

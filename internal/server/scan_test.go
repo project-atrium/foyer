@@ -111,15 +111,22 @@ func fakeTMDB(t *testing.T) *httptest.Server {
 			"seasons": []any{map[string]any{"season_number": 1, "episode_count": 5}}},
 		2002: {"id": 2002, "name": "Some Show", "original_name": "Some Show", "first_air_date": "2019-01-01", "status": "Returning Series",
 			"number_of_seasons": 1, "number_of_episodes": 8, "seasons": []any{map[string]any{"season_number": 1, "episode_count": 8}}},
+		// Two series of one name, each with room for a first season's three episodes.
+		121: {"id": 121, "name": "Doctor Who", "original_name": "Doctor Who", "first_air_date": "1963-11-23", "status": "Ended",
+			"number_of_seasons": 1, "number_of_episodes": 42, "seasons": []any{map[string]any{"season_number": 1, "episode_count": 42}}},
+		57243: {"id": 57243, "name": "Doctor Who", "original_name": "Doctor Who", "first_air_date": "2005-03-26", "status": "Ended",
+			"number_of_seasons": 1, "number_of_episodes": 13, "seasons": []any{map[string]any{"season_number": 1, "episode_count": 13}}},
 		2003: {"id": 2003, "name": "Single Ep", "original_name": "Single Ep", "first_air_date": "2018-01-01", "status": "Ended",
 			"number_of_seasons": 2, "number_of_episodes": 20,
 			"seasons": []any{map[string]any{"season_number": 1, "episode_count": 10}, map[string]any{"season_number": 2, "episode_count": 10}}},
 	}
 	// Big Pack's seasons run on from each other, as TMDB numbers One Piece.
 	seasons := map[int]map[int][]episode{
-		2001: {0: {{7, "Episode of Somebody: A Long Title"}}, 1: {}, 2: {}},
-		2002: {1: {}},
-		2003: {1: {}, 2: {}},
+		2001:  {0: {{7, "Episode of Somebody: A Long Title"}}, 1: {}, 2: {}},
+		2002:  {1: {}},
+		2003:  {1: {}, 2: {}},
+		121:   {1: {{1, "An Unearthly Child"}, {2, "The Cave of Skulls"}, {3, "The Forest of Fear"}}},
+		57243: {1: {{1, "Rose"}, {2, "The End of the World"}, {3, "The Unquiet Dead"}}},
 	}
 	for n := 1; n <= 12; n++ {
 		seasons[2001][1] = append(seasons[2001][1], episode{n, fmt.Sprintf("Big %d", n)})
@@ -147,6 +154,10 @@ func fakeTMDB(t *testing.T) *httptest.Server {
 			{"id": 2001, "name": "Big Pack", "original_name": "ビッグ", "first_air_date": "2005-04-01"},
 		},
 		"tv/Some Show": {{"id": 2002, "name": "Some Show", "original_name": "Some Show", "first_air_date": "2019-01-01"}},
+		"tv/Doctor Who": {
+			{"id": 121, "name": "Doctor Who", "original_name": "Doctor Who", "first_air_date": "1963-11-23"},
+			{"id": 57243, "name": "Doctor Who", "original_name": "Doctor Who", "first_air_date": "2005-03-26"},
+		},
 		"tv/Single Ep": {{"id": 2003, "name": "Single Ep", "original_name": "Single Ep", "first_air_date": "2018-01-01"}},
 	}
 	art := picture()

@@ -38,7 +38,20 @@ type evidence struct {
 	maxAbsolute int
 	perSeason   map[int]int
 	anime       int
+	// titles are the episodes the files name by season, number and title:
+	// what tells two series of one name apart when their counts cannot.
+	titles []namedEpisode
 }
+
+// namedEpisode is an episode a file names, its title keyed as titles are.
+type namedEpisode struct {
+	season, episode int
+	key             string
+}
+
+// titledMost is how many of a series' named episodes are weighed: enough to
+// tell two series apart, never a season's worth of TMDB's.
+const titledMost = 40
 
 // candidate is one title a library read, and the files that are it.
 type candidate struct {
@@ -107,6 +120,9 @@ func plan(kind string, files []*placedFile) []*candidate {
 			if len(r.Seasons) == 1 && r.Seasons[0] >= 1 {
 				for _, n := range r.Episodes {
 					c.evidence.perSeason[r.Seasons[0]] = max(c.evidence.perSeason[r.Seasons[0]], n)
+				}
+				if key := titles.Key(r.EpisodeTitle); len(r.Episodes) > 0 && len(key) >= 3 && len(c.evidence.titles) < titledMost {
+					c.evidence.titles = append(c.evidence.titles, namedEpisode{season: r.Seasons[0], episode: r.Episodes[0], key: key})
 				}
 			}
 		}

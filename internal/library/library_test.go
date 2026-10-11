@@ -94,6 +94,19 @@ func TestDecidesAmongSeveralOfOneName(t *testing.T) {
 			decision{id: 111110, state: uncertain, reason: "best guess: shows of one name"}},
 		{"films of one name", tmdb.Movie, []candidateInfo{{ID: 1}, {ID: 2}}, evidence{},
 			decision{id: 1, state: uncertain, reason: "best guess: movies of one name"}},
+		// Doctor Who of 1963 and of 2005 both have room for three episodes of a first season.
+		{"the files' episode titles are one series'", tmdb.Show,
+			[]candidateInfo{{ID: 121, Episodes: 800, Seasons: map[int]int{1: 42}}, {ID: 57243, Episodes: 153, Seasons: map[int]int{1: 13}, TitleHits: 3}},
+			evidence{perSeason: map[int]int{1: 3}, titles: make([]namedEpisode, 3)},
+			decision{id: 57243, state: sure, reason: "episode titles"}},
+		{"one title of many is a guess", tmdb.Show,
+			[]candidateInfo{{ID: 121, Seasons: map[int]int{1: 42}}, {ID: 57243, Seasons: map[int]int{1: 13}, TitleHits: 1}},
+			evidence{perSeason: map[int]int{1: 3}, titles: make([]namedEpisode, 3)},
+			decision{id: 57243, state: uncertain, reason: "episode titles"}},
+		{"titles both share say nothing", tmdb.Show,
+			[]candidateInfo{{ID: 121, Seasons: map[int]int{1: 42}, TitleHits: 1}, {ID: 57243, Seasons: map[int]int{1: 13}, TitleHits: 1}},
+			evidence{perSeason: map[int]int{1: 3}, titles: make([]namedEpisode, 3)},
+			decision{id: 121, state: uncertain, reason: "best guess: shows of one name"}},
 	} {
 		if got := decide(c.kind, c.infos, c.ev); got != c.want {
 			t.Errorf("%s: %+v, want %+v", c.name, got, c.want)

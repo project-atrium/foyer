@@ -532,7 +532,10 @@ function openTitle(item, changed) {
                 ? t.p(
                     { className: 'txt-sm txt-hint' },
                     'Also called so: ',
-                    d.identity.candidates.map((c) => `${c.name || ''} ${c.year ? '(' + c.year + ')' : ''} — ${c.id}`).join('; '),
+                    d.identity.candidates
+                      .map((c) => `${c.name || ''} ${c.year ? '(' + c.year + ')' : ''} — ${c.id}${c.titleHits ? `, ${c.titleHits} of the files' episode titles` : ''}`)
+                      .join('; '),
+                    d.identity.reason ? `. Told apart by: ${d.identity.reason}.` : '',
                   )
                 : null,
             ),

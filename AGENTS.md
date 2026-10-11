@@ -173,6 +173,12 @@ Go tests sit beside what they test. Everything else is PocketBase's: `serve`,
   storage — S3 too — so artwork is saved on its own, outside any. A library's
   writes — its scan, its artwork, a probe's results — take its lock, so none
   overwrites what another changed.
+- **Two titles of one name are told apart by what the files say**, never
+  by TMDB's order alone: how far their episodes run, then the titles the
+  files give them — each candidate's seasons asked of TMDB only then, and
+  sure only where most titles are one series' — then anime marks; else a
+  guess, hidden until a superuser says. What told them apart is kept with
+  the candidates (`titleHits`), for the panel to show.
 - **TMDB is asked once per title**, and the answer kept in `identities` by the
   title's key: a superuser's word (`manual`) is never asked again, a guess
   (`uncertain`) waits for one, and "nothing" is asked again after a week.
