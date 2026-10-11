@@ -18,6 +18,7 @@ if (window.app?.routes?.superuserOnly && !app.store._ready) {
   const page = (file, name) => async (route) => (await import(`./extensions/foyer/${file}`))[name](route);
   app.routes.superuserOnly('#/library', page('library.js', 'pageLibrary'));
   app.routes.superuserOnly('#/settings/adapters', page('adapters.js', 'pageAdapters'));
+  app.routes.superuserOnly('#/settings/household', page('household.js', 'pageHousehold'));
 
   // Settings opens on Foyer's own page, and stays lit on PocketBase's: the
   // link moves, PocketBase's #/settings route is left alone.
@@ -31,7 +32,10 @@ if (window.app?.routes?.superuserOnly && !app.store._ready) {
   app.store.headerLinks = at < 0 ? [...links, library] : [...links.slice(0, at), library, ...links.slice(at)];
   // Foyer's group first: the sidebar draws the groups in their keys' order.
   app.store.settingsNavGroups = {
-    Foyer: [{ href: '#/settings/adapters', icon: 'ri-plug-line', label: 'Adapters' }],
+    Foyer: [
+      { href: '#/settings/adapters', icon: 'ri-plug-line', label: 'Adapters' },
+      { href: '#/settings/household', icon: 'ri-home-heart-line', label: 'Household' },
+    ],
     ...app.store.settingsNavGroups,
   };
 }

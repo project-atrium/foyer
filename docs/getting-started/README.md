@@ -57,6 +57,14 @@ A user can change their own name, avatar, PIN and password; only the
 superuser adds or removes one. A forgotten password is set again in the
 dashboard, which ends every session that user had.
 
+**Signing them in on a device.** On Loge, each person signs in with their
+username and password — or, where typing a password is a chore, as on a
+television: **Settings → Household → Pair a device**, choose who should be
+signed in there, and type the code it shows on the device. A code works once,
+for ten minutes, and no password crosses. The Household page also names the
+household — what Loge calls this Foyer — and lists the devices its users are
+signed in on.
+
 ## The library
 
 Everything else is set on the dashboard, under **Settings → Adapters** — the

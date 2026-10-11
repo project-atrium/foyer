@@ -31,10 +31,12 @@ func TestTheDashboardWearsFoyersIcon(t *testing.T) {
 func TestTheDashboardsPagesAreNeverKeptStale(t *testing.T) {
 	h := start(t, options{})
 	for path, kind := range map[string]string{
-		"/_/extensions.js":                "javascript",
-		"/_/extensions/foyer/library.js":  "javascript",
-		"/_/extensions/foyer/adapters.js": "javascript",
-		"/_/extensions/foyer/foyer.css":   "text/css",
+		"/_/extensions.js":                 "javascript",
+		"/_/extensions/foyer/library.js":   "javascript",
+		"/_/extensions/foyer/adapters.js":  "javascript",
+		"/_/extensions/foyer/household.js": "javascript",
+		"/_/extensions/foyer/common.js":    "javascript",
+		"/_/extensions/foyer/foyer.css":    "text/css",
 	} {
 		status, header, body := h.fetch(path)
 		if status != http.StatusOK || len(body) == 0 {
@@ -61,7 +63,7 @@ func TestMainLoadsPagesThatExist(t *testing.T) {
 		t.Error("main.js imports or exports: PocketBase pastes it into a function")
 	}
 	pages := regexp.MustCompile(`page\('([\w.-]+)', '(\w+)'\)`).FindAllSubmatch(main, -1)
-	if len(pages) != 2 {
+	if len(pages) != 3 {
 		t.Fatalf("main.js loads %d pages", len(pages))
 	}
 	for _, p := range pages {

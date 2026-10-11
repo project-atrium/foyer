@@ -170,3 +170,20 @@
   border-radius: var(--borderRadius);
   opacity: 0.8;
 }
+
+/* The Household page: a member's picture, and a pairing code read off the
+   screen and typed on a television. */
+.foyer-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+  display: block;
+}
+
+.foyer-code {
+  font-family: var(--monospaceFontFamily, monospace);
+  font-size: 2.4em;
+  letter-spacing: 0.12em;
+  margin: 12px 0;
+}
