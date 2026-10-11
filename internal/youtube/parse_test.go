@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -148,7 +149,8 @@ func TestTheFeedIsEachChannelsOwnNewestFirst(t *testing.T) {
 		"UCabcdefghijklmnopqrstuv": {"2026-10-08T09:00:00+00:00", "2026-09-30T12:00:00+00:00"},
 		"UCSJ4gkVC6NrvII8umztf0Ow": {"2026-10-10T18:00:00+00:00", "2026-10-01T08:00:00+00:00"},
 	}
-	asked := 0
+	// Asked for several channels at once.
+	var asked atomic.Int32
 	site := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		id := r.URL.Query().Get("channel_id")
 		dates, ok := feeds[id]
@@ -156,7 +158,7 @@ func TestTheFeedIsEachChannelsOwnNewestFirst(t *testing.T) {
 			http.NotFound(w, r)
 			return
 		}
-		asked++
+		asked.Add(1)
 		b, _ := os.ReadFile("testdata/innertube/feed.xml")
 		doc := strings.NewReplacer("CHANNEL", id, "NAME", "Channel "+id[2:5], "VIDEO1", id[2:13], "VIDEO2", id[13:24], "TITLE1", "Newest of "+id[2:5],
 			"TITLE2", "A short of "+id[2:5], "PUBLISHED1", dates[0], "PUBLISHED2", dates[1]).Replace(string(b))
@@ -183,8 +185,8 @@ func TestTheFeedIsEachChannelsOwnNewestFirst(t *testing.T) {
 		t.Error("a short not told apart")
 	}
 	// Kept: asked again, the site is not.
-	before := asked
-	if again, _ := f.Newest(context.Background(), []string{"UCabcdefghijklmnopqrstuv"}, time.Second); len(again) != 2 || asked != before {
-		t.Errorf("asked again: %d videos, %d asks", len(again), asked-before)
+	before := asked.Load()
+	if again, _ := f.Newest(context.Background(), []string{"UCabcdefghijklmnopqrstuv"}, time.Second); len(again) != 2 || asked.Load() != before {
+		t.Errorf("asked again: %d videos, %d asks", len(again), asked.Load()-before)
 	}
 }
