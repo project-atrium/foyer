@@ -253,6 +253,13 @@ Go tests sit beside what they test. Everything else is PocketBase's: `serve`,
   one that does not match what it finds inside: a playlist's address ends
   `.m3u8`, a segment's in its own (`.ts`, `.m4s`), a caption's `.vtt` — a
   playlist of captions has its own route (`s`), whose segments are WebVTT.
+- **A master's sounds stay in the site's order.** A player that reads a
+  master's renditions as one list chooses a sound by rules of its own: VLC 3
+  plays the last group listed — the site lists its richest, AAC at 128 kb/s,
+  last — and ffmpeg's HLS reader, mpv's, gives a bitrate only to a rendition
+  an odd number of pictures share, which mpv then prefers. Listing the
+  richest first moved VLC to HE-AAC at 48 kb/s and mpv not at all: mpv's
+  sound is for the app to choose, beside its picture.
 - **Downloads made smaller come first.** A copy is made to a device's
   settings, once for whoever asks the same (`copies.Key`: the file as it is
   now and the settings as they matter for it), from the file read whole
