@@ -149,6 +149,11 @@ func Bind(app core.App, cfg config.Config) *Server {
 			tool = "yt-dlp"
 		}
 		return tool, true
+	}, func() string {
+		if settings, err := registry.Settings(youtube.Key); err == nil && settings.String("region") != "" {
+			return settings.String("region")
+		}
+		return "US"
 	}, filepath.Join(app.DataDir(), core.LocalTempDirName, "youtube"), s.Streams, s.Playings)
 	// Copies are a cache anyone can make again: never in a backup, and a
 	// restore leaves the ones here where they are.
@@ -161,7 +166,14 @@ func Bind(app core.App, cfg config.Config) *Server {
 	s.Probes = probe.New(app, registry, s.Streams, lib, library.FilesCollection)
 	s.Household = household.New(app)
 	s.Household.Bind()
-	s.Household.Serving(catalogue.Served)
+	s.Household.Serving(func(app core.App) []map[string]any {
+		served := catalogue.Served(app)
+		// The site's videos, while YouTube is switched on.
+		if settings, err := registry.Settings(youtube.Key); err == nil && settings.Enabled {
+			served = append(served, map[string]any{"key": "videos", "type": "videos", "name": "YouTube"})
+		}
+		return served
+	})
 	s.Catalogue = catalogue.New(app)
 	lib.OnScanned(s.Probes.Poke)
 	lib.ProbeNow(s.Probes.Now)
@@ -191,7 +203,16 @@ func Bind(app core.App, cfg config.Config) *Server {
 		s.Library.PlayRoutes(se.Router, s.Streams, s.Playings, s.Remux, s.Copies)
 		s.Remux.Routes(se.Router)
 		s.YouTube.Routes(se.Router)
-		watch.Routes(se.Router, library.Managed, s.Playings.Heard)
+		watch.Routes(se.Router, library.Managed, func(id string) (watch.Item, bool) {
+			if !youtube.ValidID.MatchString(id) {
+				return watch.Item{}, false
+			}
+			item := watch.Item{Collection: watch.Videos, ID: id, Identity: youtube.Identity(id)}
+			if d, ok := s.YouTube.Describe(id); ok {
+				item.Title, item.Subtitle, item.SubtitleID, item.Picture = d.Title, d.Channel, d.ChannelID, d.Thumbnail
+			}
+			return item, true
+		}, s.Playings.Heard)
 		s.Catalogue.Routes(se.Router)
 		userstate.Routes(se.Router)
 		admin := se.Router.Group("/api/foyer/admin")

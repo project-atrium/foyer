@@ -17,9 +17,17 @@ import (
 // to, and its stop — and the request, which says what device sent it.
 type Heard func(r *http.Request, session, user, kind string, positionMs, durationMs int64, paused bool)
 
+// Video is a video of the site's as watch status knows it, by its id: false
+// for no video's id.
+type Video func(id string) (Item, bool)
+
+// Videos is the collection a video of the site's is reported under.
+const Videos = "youtube"
+
 // Routes mounts what a user's player reports to, and reads from. isTitle
-// says whether a collection is a library's; heard hears each report.
-func Routes(r *router.Router[*core.RequestEvent], isTitle func(core.App, string) bool, heard Heard) {
+// says whether a collection is a library's, video what a video of the
+// site's is; heard hears each report.
+func Routes(r *router.Router[*core.RequestEvent], isTitle func(core.App, string) bool, video Video, heard Heard) {
 	resolve := func(re *core.RequestEvent, collection, id string) (*core.Record, error) {
 		if !isTitle(re.App, collection) {
 			return nil, re.NotFoundError("", nil)
@@ -57,13 +65,23 @@ func Routes(r *router.Router[*core.RequestEvent], isTitle func(core.App, string)
 		if body.PositionMs < 0 || body.DurationMs < 0 {
 			return re.BadRequestError("A position is never below 0.", nil)
 		}
-		item, err := resolve(re, body.Collection, body.ID)
-		if err != nil {
-			return err
-		}
-		watched, ok := itemOrExtra(re.App, item, body.File)
-		if !ok {
-			return re.NotFoundError("That is none of this title's extras.", nil)
+		var watched Item
+		if body.Collection == Videos && video != nil {
+			v, ok := video(body.ID)
+			if !ok {
+				return re.NotFoundError("", nil)
+			}
+			watched = v
+		} else {
+			item, err := resolve(re, body.Collection, body.ID)
+			if err != nil {
+				return err
+			}
+			extra, ok := itemOrExtra(re.App, item, body.File)
+			if !ok {
+				return re.NotFoundError("That is none of this title's extras.", nil)
+			}
+			watched = extra
 		}
 		now := time.Now().UTC()
 		if err := update(re.App, re.Auth.Id, watched, func(s State) State { return Apply(s, body.Report, now) }); err != nil {
@@ -85,12 +103,22 @@ func Routes(r *router.Router[*core.RequestEvent], isTitle func(core.App, string)
 		if err := re.BindBody(&body); err != nil {
 			return re.BadRequestError("The request could not be read.", err)
 		}
+		now := time.Now().UTC()
+		mark := func(s State) State { return Mark(s, body.Played, now) }
+		if body.Collection == Videos && video != nil {
+			v, ok := video(body.ID)
+			if !ok {
+				return re.NotFoundError("", nil)
+			}
+			if err := update(re.App, re.Auth.Id, v, mark); err != nil {
+				return re.Error(http.StatusConflict, err.Error(), nil)
+			}
+			return re.NoContent(http.StatusNoContent)
+		}
 		item, err := resolve(re, body.Collection, body.ID)
 		if err != nil {
 			return err
 		}
-		now := time.Now().UTC()
-		mark := func(s State) State { return Mark(s, body.Played, now) }
 		if body.File != "" {
 			extra, ok := itemOrExtra(re.App, item, body.File)
 			if !ok {

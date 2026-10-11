@@ -1,0 +1,265 @@
+{
+ "header": {
+  "pageHeaderRenderer": {
+   "content": {
+    "pageHeaderViewModel": {
+     "title": {
+      "dynamicTextViewModel": {
+       "text": {
+        "content": "Rivers, the Whole Series"
+       }
+      }
+     },
+     "metadata": {
+      "contentMetadataViewModel": {
+       "metadataRows": [
+        {
+         "metadataParts": [
+          {
+           "avatarStack": {
+            "avatarStackViewModel": {
+             "text": {
+              "content": "by Rivers of the World",
+              "commandRuns": [
+               {
+                "onTap": {
+                 "innertubeCommand": {
+                  "browseEndpoint": {
+                   "browseId": "UCabcdefghijklmnopqrstuv"
+                  }
+                 }
+                }
+               }
+              ]
+             }
+            }
+           }
+          }
+         ]
+        },
+        {
+         "metadataParts": [
+          {
+           "text": {
+            "content": "Playlist"
+           }
+          },
+          {
+           "text": {
+            "content": "12 videos"
+           }
+          }
+         ]
+        }
+       ]
+      }
+     },
+     "description": {
+      "descriptionPreviewViewModel": {
+       "description": {
+        "content": "Every river, one film each."
+       }
+      }
+     },
+     "heroImage": {
+      "contentPreviewImageViewModel": {
+       "image": {
+        "sources": [
+         {
+          "url": "https://i.ytimg.com/vi/x3TJFoQWCHA/hqdefault.jpg",
+          "width": 480
+         }
+        ]
+       }
+      }
+     }
+    }
+   }
+  }
+ },
+ "contents": {
+  "twoColumnBrowseResultsRenderer": {
+   "tabs": [
+    {
+     "tabRenderer": {
+      "selected": true,
+      "content": {
+       "sectionListRenderer": {
+        "contents": [
+         {
+          "itemSectionRenderer": {
+           "contents": [
+            {
+             "playlistVideoListRenderer": {
+              "contents": [
+               {
+                "lockupViewModel": {
+                 "contentId": "x3TJFoQWCHA",
+                 "contentType": "LOCKUP_CONTENT_TYPE_VIDEO",
+                 "contentImage": {
+                  "thumbnailViewModel": {
+                   "image": {
+                    "sources": [
+                     {
+                      "url": "https://i.ytimg.com/vi/x3TJFoQWCHA/hqdefault.jpg",
+                      "width": 168,
+                      "height": 94
+                     }
+                    ]
+                   },
+                   "overlays": [
+                    {
+                     "thumbnailBottomOverlayViewModel": {
+                      "badges": [
+                       {
+                        "thumbnailBadgeViewModel": {
+                         "text": "1:35:31",
+                         "badgeStyle": "THUMBNAIL_OVERLAY_BADGE_STYLE_DEFAULT"
+                        }
+                       }
+                      ]
+                     }
+                    }
+                   ]
+                  }
+                 },
+                 "metadata": {
+                  "lockupMetadataViewModel": {
+                   "title": {
+                    "content": "The River, a Film"
+                   },
+                   "metadata": {
+                    "contentMetadataViewModel": {
+                     "metadataRows": [
+                      {
+                       "metadataParts": [
+                        {
+                         "text": {
+                          "content": "Rivers of the World"
+                         }
+                        }
+                       ]
+                      },
+                      {
+                       "metadataParts": [
+                        {
+                         "text": {
+                          "content": "1.2M views"
+                         }
+                        },
+                        {
+                         "text": {
+                          "content": "3 days ago"
+                         }
+                        }
+                       ]
+                      }
+                     ]
+                    }
+                   },
+                   "image": {
+                    "decoratedAvatarViewModel": {
+                     "avatar": {
+                      "avatarViewModel": {
+                       "image": {
+                        "sources": [
+                         {
+                          "url": "https://yt3.ggpht.com/sea=s68",
+                          "width": 68,
+                          "height": 68
+                         }
+                        ]
+                       }
+                      }
+                     },
+                     "rendererContext": {
+                      "commandContext": {
+                       "onTap": {
+                        "innertubeCommand": {
+                         "browseEndpoint": {
+                          "browseId": "UCabcdefghijklmnopqrstuv"
+                         }
+                        }
+                       }
+                      }
+                     }
+                    }
+                   }
+                  }
+                 }
+                }
+               },
+               {
+                "playlistVideoRenderer": {
+                 "videoId": "Ab3dEf6hIj9",
+                 "title": {
+                  "runs": [
+                   {
+                    "text": "The Delta"
+                   }
+                  ]
+                 },
+                 "shortBylineText": {
+                  "runs": [
+                   {
+                    "text": "Rivers of the World",
+                    "navigationEndpoint": {
+                     "browseEndpoint": {
+                      "browseId": "UCabcdefghijklmnopqrstuv",
+                      "canonicalBaseUrl": "/@rivers"
+                     }
+                    }
+                   }
+                  ]
+                 },
+                 "lengthSeconds": "721",
+                 "videoInfo": {
+                  "runs": [
+                   {
+                    "text": "105K views"
+                   },
+                   {
+                    "text": " \u2022 "
+                   },
+                   {
+                    "text": "3 months ago"
+                   }
+                  ]
+                 },
+                 "thumbnail": {
+                  "thumbnails": [
+                   {
+                    "url": "https://i.ytimg.com/vi/Ab3dEf6hIj9/hqdefault.jpg",
+                    "width": 480
+                   }
+                  ]
+                 }
+                }
+               },
+               {
+                "continuationItemViewModel": {
+                 "continuationCommand": {
+                  "innertubeCommand": {
+                   "continuationCommand": {
+                    "token": "4qmFsgJbEiRWTFBMbGFOODhhN3ky",
+                    "request": "CONTINUATION_REQUEST_TYPE_BROWSE"
+                   }
+                  }
+                 }
+                }
+               }
+              ]
+             }
+            }
+           ]
+          }
+         }
+        ]
+       }
+      }
+     }
+    }
+   ]
+  }
+ }
+}

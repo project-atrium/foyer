@@ -93,7 +93,8 @@ internal/hls/        remuxing to HLS: a file's keyframe index — Matroska's Cue
                      ranges — its codec's RFC 6381 name, what play decides for a player's profile, the playlists,
                      the signed ticket in their path, and a job per playing running one ffmpeg
 internal/youtube/    YouTube through Foyer: what yt-dlp says of a video, its streams relayed — every link sealed in an
-                     address of Foyer's own, playlists rewritten — the play route, the adapter
+                     address of Foyer's own, playlists rewritten — the play route, the adapter; the site's own API
+                     read for searches, videos' pages, channels and playlists; channels' feeds; videos' watch status
 internal/copies/     smaller copies for downloads: a device's settings read for a file, the recipe — AV1 and Opus
                      by default — ffmpeg's command, the jobs, the copies kept in pb_data/foyer_copies, their
                      addresses under the stream prefix
@@ -117,7 +118,7 @@ migrations/          0001 users are profiles; 0002 the name, the rate limits, th
                      0006 watch_states; 0007 adapters become connections, a library a folder of one;
                      0008 the household's record, devices, pairing's rate limit; 0009 pictures' rate limit;
                      0010 each user's preferences, subscriptions, playlists, ★, and the seq; 0011 the history of playings;
-                     0012 each file's keyframes
+                     0012 each file's keyframes; 0013 what a video of the site's is, on its watch states
 dev/fakezurg/        a pretend Zurg for running Foyer here, from Zurg's .zurgtorrent records; never in the image
 harness/             Node and vitest, test-only: the app's code that speaks Foyer against the real binary
 Dockerfile           two stages: a Go build, then Debian with Jellyfin's ffmpeg and the binary
@@ -240,6 +241,13 @@ Go tests sit beside what they test. Everything else is PocketBase's: `serve`,
   other is refused. A device holds only Foyer's addresses, each link sealed
   in one (`youtube.Relay`): never hand a device a link of the site's — it
   fails away from home, and it names the house's address.
+- **InnerTube is read loosely, by what each answer holds.** The site
+  changes its answers' shape often — `lockupViewModel` beside
+  `videoRenderer`, a new continuation beside the old — so `collect` walks a
+  whole answer for whatever it knows, wherever it sits, in a fixed order,
+  each once. Never follow a long path to one renderer: the next change
+  breaks it. Ask in English (`hl=en`) always: dates and counts are read as
+  English words.
 - **A relayed address ends in what it is.** ffmpeg's HLS reader, mpv's too,
   refuses a segment whose address names no media extension it allows, or
   one that does not match what it finds inside: a playlist's address ends

@@ -105,6 +105,9 @@ type Item struct {
 	ID          string
 	Identity    string
 	ExternalIDs map[string]string
+	// What a video of the site's is, where it is said: no record of Foyer's
+	// holds it, so its state keeps it for Continue watching.
+	Title, Subtitle, SubtitleID, Picture string
 }
 
 // update changes a user's state for an item, in one transaction, made if it
@@ -130,6 +133,11 @@ func update(app core.App, user string, item Item, change func(State) State) erro
 		r.Set("item_id", item.ID)
 		if item.ExternalIDs != nil {
 			r.Set("external_ids", item.ExternalIDs)
+		}
+		for field, value := range map[string]string{"title": item.Title, "subtitle": item.Subtitle, "subtitle_id": item.SubtitleID, "picture": item.Picture} {
+			if value != "" {
+				r.Set(field, value)
+			}
 		}
 		return tx.Save(r)
 	})

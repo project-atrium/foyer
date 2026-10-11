@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/pocketbase/pocketbase/apis"
@@ -23,20 +24,34 @@ import (
 // Key is the YouTube adapter's key in the registry.
 const Key = "youtube"
 
-// YouTube is the site through Foyer: what yt-dlp says of a video, and its
-// streams relayed.
+// YouTube is the site through Foyer: what yt-dlp says of a video, its
+// streams relayed, and the site's own API for everything else.
 type YouTube struct {
 	Runner   *Runner
 	Relay    *Relay
+	Tube     *InnerTube
+	Feeds    *Feeds
 	playings *sessions.Registry
+	seen     seen
+	mu       sync.Mutex
+	tabs     map[string]channelTabs
 }
 
-// New is YouTube on a server: yt-dlp as the adapter's settings name it,
-// its cache under dir, each playing in playings.
-func New(tool func() (string, bool), dir string, streams *stream.Streamer, playings *sessions.Registry) *YouTube {
+type channelTabs struct {
+	params map[string]string
+	until  time.Time
+}
+
+// New is YouTube on a server: yt-dlp as the adapter's settings name it —
+// none while it is off — its cache under dir, the site asked for region's
+// videos, each playing in playings.
+func New(tool func() (string, bool), region func() string, dir string, streams *stream.Streamer, playings *sessions.Registry) *YouTube {
+	browsing := &http.Client{Timeout: 30 * time.Second}
 	return &YouTube{
 		Runner:   NewRunner(tool, dir),
 		Relay:    NewRelay(streams.Sign, streams.Derive, playings),
+		Tube:     NewInnerTube(browsing, region),
+		Feeds:    NewFeeds(browsing),
 		playings: playings,
 	}
 }
@@ -77,9 +92,11 @@ type Playback struct {
 	Chapters   []ChapterMark `json:"chapters"`
 }
 
-// Routes mounts what a user's player asks a video by, and the relay.
+// Routes mounts what a user's device browses the site by, what its player
+// plays a video by, and the relay.
 func (y *YouTube) Routes(r *router.Router[*core.RequestEvent]) {
 	y.Relay.Routes(r)
+	y.BrowseRoutes(r)
 	r.POST("/api/foyer/videos/play", y.play).Bind(apis.RequireAuth("users"))
 }
 
@@ -165,6 +182,11 @@ func (y *YouTube) play(e *core.RequestEvent) error {
 	for _, c := range info.Chapters {
 		answer.Chapters = append(answer.Chapters, ChapterMark{StartMs: int64(c.Start * 1000), Title: c.Title})
 	}
+	played := &Video{ID: info.ID, Title: info.Title, Thumbnail: info.Picture()}
+	if info.Channel != "" && ValidChannel.MatchString(info.ChannelID) {
+		played.Channel = &Owner{ID: info.ChannelID, Name: info.Channel}
+	}
+	y.seen.remember(played)
 	y.playings.Start(sessions.Session{
 		ID: session, User: e.Auth.Id, UserName: e.Auth.GetString("name"), Device: sessions.DeviceOf(e.Request), Kind: sessions.KindPlay,
 		Item: sessions.Item{Collection: Key, ID: info.ID, Title: info.Title, Subtitle: info.Channel}, File: Key + ":" + info.ID, Mode: "relay",

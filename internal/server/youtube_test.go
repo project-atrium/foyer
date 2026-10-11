@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -215,5 +216,175 @@ func TestAVideoPlaysThroughFoyer(t *testing.T) {
 			t.Fatal("PocketBase wrote no log in time to compare against")
 		}
 		time.Sleep(200 * time.Millisecond)
+	}
+}
+
+// theSitesAPI pretends to be the site's own API and channels' feeds,
+// answering from the shapes in the youtube package's test data.
+func theSitesAPI(t *testing.T) *httptest.Server {
+	t.Helper()
+	read := func(name string) []byte {
+		b, err := os.ReadFile("../youtube/testdata/innertube/" + name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return b
+	}
+	site := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			BrowseID     string `json:"browseId"`
+			Continuation string `json:"continuation"`
+			Context      struct {
+				Client struct {
+					Version string `json:"clientVersion"`
+					Lang    string `json:"hl"`
+				} `json:"client"`
+			} `json:"context"`
+		}
+		if r.Method == http.MethodPost {
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Context.Client.Version != "2.20261010.00.00" || body.Context.Client.Lang != "en" {
+				http.Error(w, "no client", http.StatusBadRequest)
+				return
+			}
+		}
+		switch {
+		case r.URL.Path == "/":
+			_, _ = w.Write([]byte(`<script>ytcfg.set({"INNERTUBE_CLIENT_VERSION":"2.20261010.00.00","VISITOR_DATA":"CgtWaXNpdG9y"})</script>`))
+		case r.URL.Path == "/youtubei/v1/search":
+			_, _ = w.Write(read("search.json"))
+		case r.URL.Path == "/youtubei/v1/next":
+			_, _ = w.Write(read("next.json"))
+		case r.URL.Path == "/youtubei/v1/browse" && strings.HasPrefix(body.BrowseID, "VL"):
+			_, _ = w.Write(read("playlist.json"))
+		case r.URL.Path == "/youtubei/v1/browse":
+			_, _ = w.Write(read("channel.json"))
+		case r.URL.Path == "/feeds/videos.xml":
+			id := r.URL.Query().Get("channel_id")
+			doc := strings.NewReplacer("CHANNEL", id, "NAME", "Rivers of the World", "VIDEO1", "x3TJFoQWCHA", "VIDEO2", "Sh0rtVideo1", "TITLE1", "The River, a Film",
+				"TITLE2", "The river in a minute", "PUBLISHED1", "2026-10-08T09:00:00+00:00", "PUBLISHED2", "2026-09-30T12:00:00+00:00").Replace(string(read("feed.xml")))
+			_, _ = w.Write([]byte(doc))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(site.Close)
+	return site
+}
+
+// The site's videos as a household's device browses them through Foyer: a
+// search narrowed or not, a video's page with what the site suggests, a
+// channel and its tabs, a playlist, the newest of the channels followed —
+// each with the user's own watch status — and what was begun, kept with what
+// it is. Foyer serves them while YouTube is switched on.
+func TestTheSitesVideosAreBrowsedThroughFoyer(t *testing.T) {
+	h := start(t, options{})
+	admin := h.superuser()
+	site := theSitesAPI(t)
+	tool := fakeYtDlp(t, time.Now().Add(5*time.Hour))
+	alex := h.makeUser("alex", map[string]any{"name": "Alex"})
+	if served := h.call(http.MethodGet, "/api/foyer/household", alex.token, nil); len(served.body["served"].([]any)) != 0 {
+		t.Fatalf("served before YouTube is on: %v", served.body["served"])
+	}
+	if got := h.call(http.MethodGet, "/api/foyer/videos/search?q=river", alex.token, nil); got.status != http.StatusNotFound {
+		t.Errorf("a search with YouTube off: %d", got.status)
+	}
+	if got := h.call(http.MethodPut, "/api/foyer/admin/adapters/youtube", admin, map[string]any{"enabled": true, "values": map[string]any{"ytdlp": tool, "region": "DE"}}); got.status != http.StatusOK {
+		t.Fatalf("youtube: %d %v", got.status, got.body)
+	}
+	h.server.YouTube.Tube.Site, h.server.YouTube.Feeds.Site = site.URL, site.URL
+	if served := h.call(http.MethodGet, "/api/foyer/household", alex.token, nil).body["served"].([]any); len(served) != 1 || served[0].(map[string]any)["type"] != "videos" {
+		t.Errorf("served %v", served)
+	}
+
+	// Alex began the film: its watch status rides on every answer naming it.
+	if got := h.call(http.MethodPost, "/api/foyer/videos/play", alex.token, map[string]any{"id": "x3TJFoQWCHA"}); got.status != http.StatusOK {
+		t.Fatalf("play: %d %v", got.status, got.body)
+	}
+	if got := h.call(http.MethodPost, "/api/foyer/watch/progress", alex.token, map[string]any{"collection": "youtube", "id": "x3TJFoQWCHA", "kind": "stopped", "positionMs": 1843000, "durationMs": 5731000}); got.status != http.StatusNoContent {
+		t.Fatalf("progress: %d %v", got.status, got.body)
+	}
+	if got := h.call(http.MethodPost, "/api/foyer/watch/progress", alex.token, map[string]any{"collection": "youtube", "id": "nope", "kind": "stopped", "positionMs": 1}); got.status != http.StatusNotFound {
+		t.Errorf("progress of no video: %d", got.status)
+	}
+
+	search := h.call(http.MethodGet, "/api/foyer/videos/search?q=river+documentary", alex.token, nil)
+	if search.status != http.StatusOK {
+		t.Fatalf("search: %d %v", search.status, search.body)
+	}
+	fits(t, "a search", search.body, fixtureAnswer(t, "routes/video-search.json"))
+	results := search.body["items"].([]any)
+	var kinds []string
+	for _, r := range results {
+		kinds = append(kinds, r.(map[string]any)["kind"].(string))
+	}
+	// Never a short, and the film once.
+	if strings.Join(kinds, ",") != "video,channel,playlist,video" || search.body["next"] == "" {
+		t.Errorf("searched %v", kinds)
+	}
+	film := results[0].(map[string]any)["video"].(map[string]any)
+	if film["watch"].(map[string]any)["positionMs"] != 1843000.0 {
+		t.Errorf("the film's watch status %v", film["watch"])
+	}
+	if videos := h.call(http.MethodGet, "/api/foyer/videos/search?q=river&scope=video", alex.token, nil).body["items"].([]any); len(videos) != 2 {
+		t.Errorf("videos alone: %v", videos)
+	}
+	if more := h.call(http.MethodGet, "/api/foyer/videos/search?scope=channel&cursor=EpoDEhFyaXZlciBkb2N1bWVudGFy", alex.token, nil); more.status != http.StatusOK || len(more.body["items"].([]any)) != 1 {
+		t.Errorf("a page of channels: %d %v", more.status, more.body)
+	}
+	if bad := h.call(http.MethodGet, "/api/foyer/videos/search?q=river&scope=song", alex.token, nil); bad.status != http.StatusBadRequest {
+		t.Errorf("no such scope: %d", bad.status)
+	}
+
+	detail := h.call(http.MethodGet, "/api/foyer/videos/v/x3TJFoQWCHA", alex.token, nil)
+	fits(t, "a video's page", detail.body, fixtureAnswer(t, "routes/video-detail.json"))
+	video := detail.body["video"].(map[string]any)
+	// Its length from what yt-dlp said when it played.
+	if video["durationMs"] != 5731000.0 || video["watch"] == nil || len(detail.body["related"].([]any)) != 2 {
+		t.Errorf("the page %v", detail.body)
+	}
+
+	channel := h.call(http.MethodGet, "/api/foyer/videos/channels/UCabcdefghijklmnopqrstuv", alex.token, nil)
+	fits(t, "a channel", channel.body, fixtureAnswer(t, "routes/video-channel.json"))
+	if tabs := channel.body["tabs"].([]any); len(tabs) != 4 || channel.body["channel"].(map[string]any)["followers"] != 182000.0 {
+		t.Errorf("the channel %v", channel.body)
+	}
+	tab := h.call(http.MethodGet, "/api/foyer/videos/channels/UCabcdefghijklmnopqrstuv/videos", alex.token, nil)
+	fits(t, "a channel's tab", tab.body, fixtureAnswer(t, "routes/video-channel-tab.json"))
+	if len(tab.body["items"].([]any)) != 2 || tab.body["next"] == nil {
+		t.Errorf("the tab %v", tab.body)
+	}
+	if none := h.call(http.MethodGet, "/api/foyer/videos/channels/UCabcdefghijklmnopqrstuv/posts", alex.token, nil); none.status != http.StatusNotFound {
+		t.Errorf("a tab Foyer does not read: %d", none.status)
+	}
+
+	playlist := h.call(http.MethodGet, "/api/foyer/videos/playlists/PLlaN88a7y2_qHDbY9eQbuNTAuEJUSEeuu", alex.token, nil)
+	fits(t, "a playlist", playlist.body, fixtureAnswer(t, "routes/video-playlist.json"))
+	if playlist.body["playlist"].(map[string]any)["videoCount"] != 12.0 || len(playlist.body["items"].([]any)) != 2 {
+		t.Errorf("the playlist %v", playlist.body)
+	}
+
+	feed := h.call(http.MethodPost, "/api/foyer/videos/feed", alex.token, map[string]any{"channels": []string{"UCabcdefghijklmnopqrstuv", "../x"}, "limit": 30})
+	fits(t, "the feed", feed.body, fixtureAnswer(t, "routes/video-feed.json"))
+	if items := feed.body["items"].([]any); len(items) != 1 || items[0].(map[string]any)["video"].(map[string]any)["publishedAt"] != "2026-10-08T09:00:00Z" {
+		t.Errorf("the feed %v", feed.body)
+	}
+
+	resume := h.call(http.MethodGet, "/api/foyer/videos/resume", alex.token, nil)
+	fits(t, "what was begun", resume.body, fixtureAnswer(t, "routes/video-resume.json"))
+	begun := resume.body["items"].([]any)
+	if len(begun) != 1 || begun[0].(map[string]any)["title"] != "The River, a Film" || begun[0].(map[string]any)["channel"].(map[string]any)["name"] != "Rivers of the World" {
+		t.Errorf("begun %v", begun)
+	}
+	// Watched, it is begun no longer.
+	if got := h.call(http.MethodPost, "/api/foyer/watch/played", alex.token, map[string]any{"collection": "youtube", "id": "x3TJFoQWCHA", "played": true}); got.status != http.StatusNoContent {
+		t.Fatalf("played: %d", got.status)
+	}
+	if after := h.call(http.MethodGet, "/api/foyer/videos/resume", alex.token, nil).body["items"].([]any); len(after) != 0 {
+		t.Errorf("still begun %v", after)
+	}
+	// Another user's is their own.
+	kids := h.makeUser("kids", map[string]any{"name": "Kids"})
+	if theirs := h.call(http.MethodGet, "/api/foyer/videos/v/x3TJFoQWCHA", kids.token, nil).body["video"].(map[string]any); theirs["watch"] != nil {
+		t.Errorf("Kids see Alex's: %v", theirs["watch"])
 	}
 }

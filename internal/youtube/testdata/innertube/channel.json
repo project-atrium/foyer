@@ -1,0 +1,351 @@
+{
+ "metadata": {
+  "channelMetadataRenderer": {
+   "externalId": "UCabcdefghijklmnopqrstuv",
+   "title": "Rivers of the World",
+   "description": "Films about the rivers of the world.",
+   "avatar": {
+    "thumbnails": [
+     {
+      "url": "https://yt3.googleusercontent.com/rivers=s900",
+      "width": 900
+     }
+    ]
+   }
+  }
+ },
+ "header": {
+  "pageHeaderRenderer": {
+   "content": {
+    "pageHeaderViewModel": {
+     "title": {
+      "dynamicTextViewModel": {
+       "text": {
+        "content": "Rivers of the World"
+       }
+      }
+     },
+     "image": {
+      "decoratedAvatarViewModel": {
+       "avatar": {
+        "avatarViewModel": {
+         "image": {
+          "sources": [
+           {
+            "url": "https://yt3.googleusercontent.com/rivers=s72",
+            "width": 72
+           },
+           {
+            "url": "https://yt3.googleusercontent.com/rivers=s176",
+            "width": 176
+           }
+          ]
+         }
+        }
+       }
+      }
+     },
+     "banner": {
+      "imageBannerViewModel": {
+       "image": {
+        "sources": [
+         {
+          "url": "https://yt3.googleusercontent.com/rivers-banner=w1060",
+          "width": 1060
+         },
+         {
+          "url": "https://yt3.googleusercontent.com/rivers-banner=w2120",
+          "width": 2120
+         }
+        ]
+       }
+      }
+     },
+     "metadata": {
+      "contentMetadataViewModel": {
+       "metadataRows": [
+        {
+         "metadataParts": [
+          {
+           "text": {
+            "content": "@riversoftheworld"
+           }
+          }
+         ]
+        },
+        {
+         "metadataParts": [
+          {
+           "text": {
+            "content": "182K subscribers"
+           }
+          },
+          {
+           "text": {
+            "content": "437 videos"
+           }
+          }
+         ]
+        }
+       ]
+      }
+     },
+     "description": {
+      "descriptionPreviewViewModel": {
+       "description": {
+        "content": "Films about the rivers of the world."
+       }
+      }
+     }
+    }
+   }
+  }
+ },
+ "contents": {
+  "twoColumnBrowseResultsRenderer": {
+   "tabs": [
+    {
+     "tabRenderer": {
+      "title": "Home",
+      "endpoint": {
+       "commandMetadata": {
+        "webCommandMetadata": {
+         "url": "/@riversoftheworld/featured"
+        }
+       },
+       "browseEndpoint": {
+        "browseId": "UCabcdefghijklmnopqrstuv",
+        "params": "EghmZWF0dXJlZPIGBAoCMgA%3D"
+       }
+      }
+     }
+    },
+    {
+     "tabRenderer": {
+      "title": "Videos",
+      "selected": true,
+      "endpoint": {
+       "commandMetadata": {
+        "webCommandMetadata": {
+         "url": "/@riversoftheworld/videos"
+        }
+       },
+       "browseEndpoint": {
+        "browseId": "UCabcdefghijklmnopqrstuv",
+        "params": "EgZ2aWRlb3PyBgQKAjoA"
+       }
+      },
+      "content": {
+       "richGridRenderer": {
+        "contents": [
+         {
+          "richItemRenderer": {
+           "content": {
+            "lockupViewModel": {
+             "contentId": "x3TJFoQWCHA",
+             "contentType": "LOCKUP_CONTENT_TYPE_VIDEO",
+             "contentImage": {
+              "thumbnailViewModel": {
+               "image": {
+                "sources": [
+                 {
+                  "url": "https://i.ytimg.com/vi/x3TJFoQWCHA/hqdefault.jpg",
+                  "width": 168,
+                  "height": 94
+                 }
+                ]
+               },
+               "overlays": [
+                {
+                 "thumbnailBottomOverlayViewModel": {
+                  "badges": [
+                   {
+                    "thumbnailBadgeViewModel": {
+                     "text": "1:35:31",
+                     "badgeStyle": "THUMBNAIL_OVERLAY_BADGE_STYLE_DEFAULT"
+                    }
+                   }
+                  ]
+                 }
+                }
+               ]
+              }
+             },
+             "metadata": {
+              "lockupMetadataViewModel": {
+               "title": {
+                "content": "The River, a Film"
+               },
+               "metadata": {
+                "contentMetadataViewModel": {
+                 "metadataRows": [
+                  {
+                   "metadataParts": [
+                    {
+                     "text": {
+                      "content": "1.2M views"
+                     }
+                    },
+                    {
+                     "text": {
+                      "content": "3 days ago"
+                     }
+                    }
+                   ]
+                  }
+                 ]
+                }
+               }
+              }
+             }
+            }
+           }
+          }
+         },
+         {
+          "richItemRenderer": {
+           "content": {
+            "lockupViewModel": {
+             "contentId": "Ab3dEf6hIj9",
+             "contentType": "LOCKUP_CONTENT_TYPE_VIDEO",
+             "contentImage": {
+              "thumbnailViewModel": {
+               "image": {
+                "sources": [
+                 {
+                  "url": "https://i.ytimg.com/vi/Ab3dEf6hIj9/hqdefault.jpg",
+                  "width": 168,
+                  "height": 94
+                 }
+                ]
+               },
+               "overlays": [
+                {
+                 "thumbnailBottomOverlayViewModel": {
+                  "badges": [
+                   {
+                    "thumbnailBadgeViewModel": {
+                     "text": "12:01",
+                     "badgeStyle": "THUMBNAIL_OVERLAY_BADGE_STYLE_DEFAULT"
+                    }
+                   }
+                  ]
+                 }
+                }
+               ]
+              }
+             },
+             "metadata": {
+              "lockupMetadataViewModel": {
+               "title": {
+                "content": "The Delta"
+               },
+               "metadata": {
+                "contentMetadataViewModel": {
+                 "metadataRows": [
+                  {
+                   "metadataParts": [
+                    {
+                     "text": {
+                      "content": "105K views"
+                     }
+                    },
+                    {
+                     "text": {
+                      "content": "3 months ago"
+                     }
+                    }
+                   ]
+                  }
+                 ]
+                }
+               }
+              }
+             }
+            }
+           }
+          }
+         },
+         {
+          "continuationItemRenderer": {
+           "continuationEndpoint": {
+            "continuationCommand": {
+             "token": "EpoDEhFyaXZlciBkb2N1bWVudGFyeRqEA0VnSVFBVWdV",
+             "request": "CONTINUATION_REQUEST_TYPE_SEARCH"
+            }
+           }
+          }
+         }
+        ]
+       }
+      }
+     }
+    },
+    {
+     "tabRenderer": {
+      "title": "Shorts",
+      "endpoint": {
+       "commandMetadata": {
+        "webCommandMetadata": {
+         "url": "/@riversoftheworld/shorts"
+        }
+       },
+       "browseEndpoint": {
+        "browseId": "UCabcdefghijklmnopqrstuv",
+        "params": "EgZzaG9ydHPyBgUKA5oBAA%3D%3D"
+       }
+      }
+     }
+    },
+    {
+     "tabRenderer": {
+      "title": "Live",
+      "endpoint": {
+       "commandMetadata": {
+        "webCommandMetadata": {
+         "url": "/@riversoftheworld/streams"
+        }
+       },
+       "browseEndpoint": {
+        "browseId": "UCabcdefghijklmnopqrstuv",
+        "params": "EgdzdHJlYW1z8gYECgJ6AA%3D%3D"
+       }
+      }
+     }
+    },
+    {
+     "tabRenderer": {
+      "title": "Playlists",
+      "endpoint": {
+       "commandMetadata": {
+        "webCommandMetadata": {
+         "url": "/@riversoftheworld/playlists"
+        }
+       },
+       "browseEndpoint": {
+        "browseId": "UCabcdefghijklmnopqrstuv",
+        "params": "EglwbGF5bGlzdHPyBgoKCEIGCgIQaCIA"
+       }
+      }
+     }
+    },
+    {
+     "tabRenderer": {
+      "title": "Posts",
+      "endpoint": {
+       "commandMetadata": {
+        "webCommandMetadata": {
+         "url": "/@riversoftheworld/posts"
+        }
+       },
+       "browseEndpoint": {
+        "browseId": "UCabcdefghijklmnopqrstuv",
+        "params": "EgVwb3N0c_IGBAoCSgA%3D"
+       }
+      }
+     }
+    }
+   ]
+  }
+ }
+}

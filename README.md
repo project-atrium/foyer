@@ -98,8 +98,10 @@ Then make the dashboard's superuser, and a user for each person.
   through Foyer — yt-dlp, here, says where a video's streams are, and Foyer
   relays every playlist, segment and caption, since the site binds its
   links to the address that asked. So a phone away from home plays them,
-  on every player. Browsing, and each user signed in for their own
-  recommendations, come next.
+  on every player. Its searches, channels, playlists and each video's page
+  come through Foyer too, signed out, and a user's follows become their
+  feed; each user's watch status is kept like a film's. Signing in, for
+  each user's own recommendations, comes next.
 - **Downloads made smaller**: a device keeping a film asks for a copy made
   to its own download settings — AV1 and Opus in Matroska by default, 1080p,
   a few GB where the file is tens — and Foyer makes it on the processor,

@@ -1,0 +1,283 @@
+{
+ "contents": {
+  "twoColumnWatchNextResults": {
+   "results": {
+    "results": {
+     "contents": [
+      {
+       "videoPrimaryInfoRenderer": {
+        "title": {
+         "runs": [
+          {
+           "text": "The River, a Film"
+          }
+         ]
+        },
+        "viewCount": {
+         "videoViewCountRenderer": {
+          "viewCount": {
+           "simpleText": "1,204,331 views"
+          },
+          "isLive": false
+         }
+        },
+        "dateText": {
+         "simpleText": "Oct 8, 2026"
+        }
+       }
+      },
+      {
+       "videoSecondaryInfoRenderer": {
+        "owner": {
+         "videoOwnerRenderer": {
+          "title": {
+           "runs": [
+            {
+             "text": "Rivers of the World",
+             "navigationEndpoint": {
+              "browseEndpoint": {
+               "browseId": "UCabcdefghijklmnopqrstuv",
+               "canonicalBaseUrl": "/@rivers"
+              }
+             }
+            }
+           ]
+          },
+          "thumbnail": {
+           "thumbnails": [
+            {
+             "url": "https://yt3.ggpht.com/rivers=s48",
+             "width": 48
+            },
+            {
+             "url": "https://yt3.ggpht.com/rivers=s88",
+             "width": 88
+            }
+           ]
+          },
+          "subscriberCountText": {
+           "simpleText": "182K subscribers"
+          }
+         }
+        },
+        "attributedDescription": {
+         "content": "Two hours down a river, from its spring to the sea."
+        }
+       }
+      }
+     ]
+    }
+   },
+   "secondaryResults": {
+    "secondaryResults": {
+     "results": [
+      {
+       "lockupViewModel": {
+        "contentId": "ZHzUjw5VInQ",
+        "contentType": "LOCKUP_CONTENT_TYPE_VIDEO",
+        "contentImage": {
+         "thumbnailViewModel": {
+          "image": {
+           "sources": [
+            {
+             "url": "https://i.ytimg.com/vi/ZHzUjw5VInQ/hqdefault.jpg",
+             "width": 168,
+             "height": 94
+            }
+           ]
+          },
+          "overlays": [
+           {
+            "thumbnailBottomOverlayViewModel": {
+             "badges": [
+              {
+               "thumbnailBadgeViewModel": {
+                "text": "52:14",
+                "badgeStyle": "THUMBNAIL_OVERLAY_BADGE_STYLE_DEFAULT"
+               }
+              }
+             ]
+            }
+           }
+          ]
+         }
+        },
+        "metadata": {
+         "lockupMetadataViewModel": {
+          "title": {
+           "content": "The Sea, a Film"
+          },
+          "metadata": {
+           "contentMetadataViewModel": {
+            "metadataRows": [
+             {
+              "metadataParts": [
+               {
+                "text": {
+                 "content": "Seas of the World"
+                }
+               }
+              ]
+             },
+             {
+              "metadataParts": [
+               {
+                "text": {
+                 "content": "435K"
+                }
+               },
+               {
+                "text": {
+                 "content": "4mo ago"
+                }
+               }
+              ]
+             }
+            ]
+           }
+          },
+          "image": {
+           "decoratedAvatarViewModel": {
+            "avatar": {
+             "avatarViewModel": {
+              "image": {
+               "sources": [
+                {
+                 "url": "https://yt3.ggpht.com/sea=s68",
+                 "width": 68,
+                 "height": 68
+                }
+               ]
+              }
+             }
+            },
+            "rendererContext": {
+             "commandContext": {
+              "onTap": {
+               "innertubeCommand": {
+                "browseEndpoint": {
+                 "browseId": "UCSJ4gkVC6NrvII8umztf0Ow"
+                }
+               }
+              }
+             }
+            }
+           }
+          }
+         }
+        }
+       }
+      },
+      {
+       "lockupViewModel": {
+        "contentId": "Ab3dEf6hIj9",
+        "contentType": "LOCKUP_CONTENT_TYPE_VIDEO",
+        "contentImage": {
+         "thumbnailViewModel": {
+          "image": {
+           "sources": [
+            {
+             "url": "https://i.ytimg.com/vi/Ab3dEf6hIj9/hqdefault.jpg",
+             "width": 168,
+             "height": 94
+            }
+           ]
+          },
+          "overlays": [
+           {
+            "thumbnailBottomOverlayViewModel": {
+             "badges": [
+              {
+               "thumbnailBadgeViewModel": {
+                "text": "12:01",
+                "badgeStyle": "THUMBNAIL_OVERLAY_BADGE_STYLE_DEFAULT"
+               }
+              }
+             ]
+            }
+           }
+          ]
+         }
+        },
+        "metadata": {
+         "lockupMetadataViewModel": {
+          "title": {
+           "content": "The Delta"
+          },
+          "metadata": {
+           "contentMetadataViewModel": {
+            "metadataRows": [
+             {
+              "metadataParts": [
+               {
+                "text": {
+                 "content": "Seas of the World"
+                }
+               }
+              ]
+             },
+             {
+              "metadataParts": [
+               {
+                "text": {
+                 "content": "1.2M views"
+                }
+               },
+               {
+                "text": {
+                 "content": "1 year ago"
+                }
+               }
+              ]
+             }
+            ]
+           }
+          },
+          "image": {
+           "decoratedAvatarViewModel": {
+            "avatar": {
+             "avatarViewModel": {
+              "image": {
+               "sources": [
+                {
+                 "url": "https://yt3.ggpht.com/sea=s68",
+                 "width": 68,
+                 "height": 68
+                }
+               ]
+              }
+             }
+            },
+            "rendererContext": {
+             "commandContext": {
+              "onTap": {
+               "innertubeCommand": {
+                "browseEndpoint": {
+                 "browseId": "UCSJ4gkVC6NrvII8umztf0Ow"
+                }
+               }
+              }
+             }
+            }
+           }
+          }
+         }
+        }
+       }
+      },
+      {
+       "continuationItemRenderer": {
+        "continuationEndpoint": {
+         "continuationCommand": {
+          "token": "EpoDEhFyaXZlciBkb2N1bWVudGFyeRqEA0VnSVFBVWdV",
+          "request": "CONTINUATION_REQUEST_TYPE_SEARCH"
+         }
+        }
+       }
+      }
+     ]
+    }
+   }
+  }
+ }
+}

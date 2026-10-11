@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns:yt="http://www.youtube.com/xml/schemas/2015" xmlns:media="http://search.yahoo.com/mrss/" xmlns="http://www.w3.org/2005/Atom">
+ <yt:channelId>CHANNEL</yt:channelId>
+ <title>NAME</title>
+ <author><name>NAME</name></author>
+ <entry>
+  <yt:videoId>VIDEO1</yt:videoId>
+  <yt:channelId>CHANNEL</yt:channelId>
+  <title>TITLE1</title>
+  <link rel="alternate" href="https://www.youtube.com/watch?v=VIDEO1"/>
+  <author><name>NAME</name></author>
+  <published>PUBLISHED1</published>
+  <media:group>
+   <media:title>TITLE1</media:title>
+   <media:thumbnail url="https://i2.ytimg.com/vi/VIDEO1/hqdefault.jpg" width="480" height="360"/>
+   <media:description>About TITLE1.</media:description>
+   <media:community><media:statistics views="1204331"/></media:community>
+  </media:group>
+ </entry>
+ <entry>
+  <yt:videoId>VIDEO2</yt:videoId>
+  <yt:channelId>CHANNEL</yt:channelId>
+  <title>TITLE2</title>
+  <link rel="alternate" href="https://www.youtube.com/shorts/VIDEO2"/>
+  <author><name>NAME</name></author>
+  <published>PUBLISHED2</published>
+  <media:group>
+   <media:thumbnail url="https://i2.ytimg.com/vi/VIDEO2/hqdefault.jpg" width="480" height="360"/>
+   <media:community><media:statistics views="2100000"/></media:community>
+  </media:group>
+ </entry>
+</feed>

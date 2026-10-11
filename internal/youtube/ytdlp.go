@@ -102,6 +102,18 @@ func (r *Runner) Video(ctx context.Context, id string) (*Info, error) {
 	return v.(*Info), nil
 }
 
+// peek is what yt-dlp said of a video a little while ago, where it is at
+// hand: nothing is run for it.
+func (r *Runner) peek(id string) (*Info, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	c, ok := r.cache[id]
+	if !ok || !r.now().Before(c.until) {
+		return nil, false
+	}
+	return c.info, true
+}
+
 func (r *Runner) run(ctx context.Context, id string) (*Info, error) {
 	tool, ok := r.tool()
 	if !ok {

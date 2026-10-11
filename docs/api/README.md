@@ -24,7 +24,7 @@ and their rules, and how they fail.
 | `POST /api/foyer/play` | users | `{ collection, id, file?, profile?, startMs? }` → `{ url, expiresAt, session, mode?, file?, remux?, version, versions, chapters }`: a new playing — `session`, what its reports name — and its signed address, for the title's best version or the file asked for — one of its versions, or of a series' `extras`; versions never say where on the share a file lies; `404` for a title the user may not see. The device the call says it came from (`X-Foyer-Device`) is where Live Activity shows it. With the player's `profile` (Loge's `PlayerProfile`), where the player plays the picture and not the file, `url` is the file remuxed to HLS (`mode: "remux"`), starting at `startMs`, with what it carries (`remux: { audio, subtitles }`) and the file's own address beside it (`file`) — see Remux |
 | `POST /api/foyer/download/options` | users | `{ collection, id, file?, encode? }` → `{ options: [{ id, width?, height?, bitrate?, estimatedBytes?, container, videoCodec?, audioCodecs?, hdr?, transcoded }] }`: the ways to keep it — first a smaller copy made to the device's download settings (`encode`: `{ video: av1 \| hevc \| h264, preference: size \| balanced \| quality, maxHeight?, maxBitrate?, hdr, audio: opus \| aac, container: mkv \| mp4 }`), where this Foyer makes copies and one would be a fifth smaller at least — its size once made, an estimate till then — then the file as it is, `original`. The file is read by ffprobe first where it was not; `400` for settings no copy is made to. See Copies |
 | `POST /api/foyer/download` | users | `{ collection, id, file?, option? }` → `{ url, expiresAt, version }`: the file as it is — or, for a copy's `option`, the copy once made, `version` what it is — at a signed address asked for afresh each time: a download that stopped asks again and carries on from the bytes it has, with a `Range`; each ask is a download playing. A copy not yet made answers `202 { preparing: { state: queued \| running, progress?, etaMs? } }`; one that could not be made `422`, until asked again a minute later; `409` where Foyer makes no copy of the file now; `400` for an option it never offers |
-| `POST /api/foyer/watch/progress` | users | `{ collection, id, file?, kind: started \| progress \| stopped \| end, positionMs, durationMs, paused?, session? }` → `204`; `file` names one of the title's extras, which keeps its own; `session` is the playing `/play` made — its reports keep it on Live Activity, and its stop ends it |
+| `POST /api/foyer/watch/progress` | users | `{ collection, id, file?, kind: started \| progress \| stopped \| end, positionMs, durationMs, paused?, session? }` → `204`; `file` names one of the title's extras, which keeps its own; `collection: "youtube"` a video of the site's, by its id; `session` is the playing `/play` made — its reports keep it on Live Activity, and its stop ends it |
 | `POST /api/foyer/watch/played` | users | `{ collection, id, file?, played }` → `204`; a series marks each of its episodes, `file` one of its extras |
 | `POST /api/foyer/me/push` | users | `{ records }`, at most a thousand of the user's own — `profile` and `pin` onto their own record, `preference`, `subscription`, `playlist` and `favoriteChannel` onto their rows, tombstones among them — each judged as the app's `isAccountRecord` judges it → `{ seq }`, all stored, each write with the next seq; or `422 { message, refused: { index, reason } }`, nothing stored |
 | `GET /api/foyer/me/changes` | users | `?after=<seq>&from=<seq>` → `{ records, seq, more?, reset? }`: the user's own records stored since `after`, in that order, tombstones too, 500 to a page — `more` while another follows, from `seq`, with the same `from`; `after=0` is everything kept; `reset` where deletes since the read began (`from`, the first page's `after`) were let go of (after 90 days), or where `after` is past what this Foyer has — gone back to an older copy of itself: read again from 0. A later page's cursor never resets: a read of everything pages by old rows' seqs |
@@ -37,6 +37,13 @@ and their rules, and how they fail.
 | `GET /api/foyer/catalogue/{collection}/{id}/seasons/{season}` | users | `{ episodes }`: a season's in order, each with this user's watch status — or, for `extras`, the extras played as episodes: `id` `extra:<file>`, by the series' record and the file |
 | `GET`, `HEAD /api/foyer/stream/{file}?u&s&exp&sig` | whoever holds the address | the file's bytes, a `Range` passed on: `206` with `Content-Range`; `403` when the signature is wrong or six hours old, or its playing (`s`) was stopped |
 | `POST /api/foyer/videos/play` | users | `{ id, startMs? }` → `{ session, expiresAt, live, durationMs?, sources: [{ url, protocol: hls \| progressive, container?, videoCodec?, audioCodecs?, height? }], subtitles: [{ url, language?, label, auto? }], chapters }`: a video of YouTube's, played through Foyer — a playing, and its sources best first: the site's HLS master, every rendition, dub and caption of it, then the file the site muxed where it still has one; the uploader's captions and the one the site heard in the video's own language. Every address is Foyer's own. `409 { message, reason }` where the site will not play it — `unavailable`, `age`, `members`, `upcoming`, `blocked`, `failed`. See YouTube |
+| `GET /api/foyer/videos/search` | users | `?q&scope=all \| video \| channel \| playlist&cursor` → `{ items: [{ kind: video, video } \| { kind: channel, channel } \| { kind: playlist, playlist }], next? }`: the site's own search, in its order — never a short, which has its channel's own tab; `next` is the site's token for the page after, asked again as `cursor` |
+| `GET /api/foyer/videos/v/{id}` | users | `{ video, related }`: a video's page — its description, its channel with its face and followers, its views and when it went up, its length where yt-dlp said it — and what the site suggests after it |
+| `GET /api/foyer/videos/channels/{id}` | users | `{ channel: { id, name, handle?, avatar?, banner?, followers?, videoCount?, description? }, tabs }`: a channel, and which of its tabs — videos, shorts, live, playlists — it has |
+| `GET /api/foyer/videos/channels/{id}/{tab}` | users | `?cursor` → a page of the tab: its videos, shorts or streams, or its playlists |
+| `GET /api/foyer/videos/playlists/{id}` | users | `?cursor` → `{ playlist, items, next? }`: a playlist — whose, how many videos — and a page of them |
+| `POST /api/foyer/videos/feed` | users | `{ channels, cursor?, limit? }` → `{ items, next?, incomplete? }`: the newest videos of the channels a user follows — five hundred at most — newest first, from each channel's own feed, kept a quarter of an hour; `incomplete` while some are still being read |
+| `GET /api/foyer/videos/resume` | users | `?limit` (20) → `{ items }`: the videos the user began past half a minute and has not finished, the latest first, drawn from what each was when it was reported |
 | `GET /api/foyer/stream/yt/{ticket}/p/{token}.m3u8`, `…/s/{token}.m3u8`, `…/x/{token}.{ext}` | whoever holds the address | the site's playlists, rewritten so every link in them is Foyer's own (`p`; `s`, captions, whose segments are WebVTT), and its bytes passed on by ranges (`x`): segments, a muxed file, a caption. `403` as a stream address; `404` for a token Foyer never sealed; `502` where the site refuses |
 | `GET`, `HEAD /api/foyer/stream/copy/{key}?u&s&exp&sig` | whoever holds the address | a made copy's bytes by ranges, as a file's; `403` as a stream address; `404` once the copy is let go of — the download asks again, and it is made again |
 | `GET /api/foyer/stream/hls/{ticket}/{part}` | whoever holds the address | a remux: `main.m3u8`, `v.m3u8`, `a{k}.m3u8` and `s{k}.m3u8`; `v.mp4` and `a{k}.mp4`, each rendition's initialization; `v{n}.m4s` and `a{k}-{n}.m4s`, its segments; `s{k}-{n}.vtt`, its subtitles. The ticket — the file, the user, the playing, when it expires and the plan, signed — is in the path, so a segment's relative address resolves without a query. `403` as a stream address; `503` for a segment not made in a minute; `502` for a file ffmpeg could not remux |
@@ -204,8 +211,27 @@ and their rules, and how they fail.
   video is, once for every user asking within twenty minutes, never within
   an hour of its links expiring. What it says on failure becomes a reason,
   and no address of the site's reaches a log, an error or a user.
-- **Settings → Adapters → YouTube**: yt-dlp's path; its Test reads a short
-  video the site has kept since its first days, as play would.
+- **Browsing is the site's own API** (InnerTube), as its web pages call
+  it, signed out: searches, a video's page and what it suggests, channels
+  and their tabs, playlists — the web client's version read from the site's
+  own page once a day, in English always, since a video's "3 days ago" is
+  read as English, for the adapter's region. Its answers change shape
+  often, its older renderers beside its newer view models: each is read
+  loosely, by what it is, wherever it sits. A mix — a radio the site makes
+  as it plays — is no playlist a page opens, and is left out.
+- **Following** is each channel's own Atom feed: its newest videos, each
+  with exactly when it went up, read eight channels at a time and kept a
+  quarter of an hour.
+- **Watch status** is the user's, kept by the video's id
+  (`youtube:<id>`) as a library title's is, with what the video is — its
+  title, channel and picture — so Continue watching needs nothing of the
+  site's (migration 0013).
+- **Served while switched on**: the household's answer lists
+  `{ key: "videos", type: "videos" }`, and its devices make a connection of
+  it.
+- **Settings → Adapters → YouTube**: yt-dlp's path, the region the site is
+  asked for; its Test reads a short video the site has kept since its first
+  days, as play would.
 
 ### Copies
 
