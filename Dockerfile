@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 #
-# Foyer, the household's own server: one binary, Jellyfin's ffmpeg beside it,
-# and its data in a volume.
+# Foyer, the household's own server: one binary, Jellyfin's ffmpeg, yt-dlp
+# and Deno beside it, and its data in a volume.
 #
 #   docker build -t foyer .
 #
@@ -35,6 +35,28 @@ RUN apt-get update \
  && ln -s /usr/lib/jellyfin-ffmpeg/ffprobe /usr/local/bin/ffprobe \
  && useradd --system --uid 10001 --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin foyer \
  && mkdir /pb_data && chown foyer /pb_data
+# yt-dlp, which says where a YouTube video's streams are, and Deno, the
+# JavaScript runtime it solves the site's challenges with: their own
+# standalone builds, pinned, and checked against the sums they publish. The
+# site changes often: raise YTDLP_VERSION and build again.
+ARG YTDLP_VERSION=2026.08.19
+ARG DENO_VERSION=v2.9.7
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends unzip \
+ && case "$(dpkg --print-architecture)" in \
+      amd64) yt=yt-dlp_linux; deno=deno-x86_64-unknown-linux-gnu.zip ;; \
+      arm64) yt=yt-dlp_linux_aarch64; deno=deno-aarch64-unknown-linux-gnu.zip ;; \
+      *) echo "no yt-dlp or Deno for $(dpkg --print-architecture)" >&2; exit 1 ;; \
+    esac \
+ && cd /tmp \
+ && curl -fsSLO "https://github.com/yt-dlp/yt-dlp/releases/download/${YTDLP_VERSION}/${yt}" \
+ && curl -fsSL "https://github.com/yt-dlp/yt-dlp/releases/download/${YTDLP_VERSION}/SHA2-256SUMS" | grep " ${yt}\$" | sha256sum -c - \
+ && install -m 755 "${yt}" /usr/local/bin/yt-dlp \
+ && curl -fsSLO "https://github.com/denoland/deno/releases/download/${DENO_VERSION}/${deno}" \
+ && curl -fsSL "https://github.com/denoland/deno/releases/download/${DENO_VERSION}/${deno}.sha256sum" | sha256sum -c - \
+ && unzip -q "${deno}" -d /usr/local/bin \
+ && rm -f "${yt}" "${deno}" \
+ && apt-get purge -y unzip && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*
 COPY --from=build /foyer /usr/local/bin/foyer
 USER foyer
 # Called by its name, the binary keeps pb_data in the working directory: here

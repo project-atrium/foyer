@@ -29,8 +29,13 @@ docker compose exec foyer foyer superuser upsert you@example.com 'a long passwor
 ```
 
 - The image is Debian with Jellyfin's own ffmpeg (`jellyfin-ffmpeg8`, its
-  VAAPI and Quick Sync drivers inside) and the binary, built in a stage of
-  its own from this repository alone. It runs as `foyer`, uid 10001.
+  VAAPI and Quick Sync drivers inside), yt-dlp and Deno — their own
+  standalone builds, pinned by `YTDLP_VERSION` and `DENO_VERSION` and
+  checked against the sums they publish — and the binary, built in a stage
+  of its own from this repository alone. It runs as `foyer`, uid 10001.
+- YouTube changes often, and yt-dlp with it: when videos stop playing,
+  build again with a newer one — `docker compose build --build-arg
+  YTDLP_VERSION=<release>` — and say which on the Adapters page's Test.
 - The data lives in the `pb_data` volume.
 - It listens on 8090, and reports its health from `/api/health`.
 - `docker compose exec foyer foyer …` runs any command —
