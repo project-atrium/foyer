@@ -93,13 +93,6 @@ type Season struct {
 	Unwatched    *int   `json:"unwatched,omitzero"`
 }
 
-// version is a file as a user reads it: what it is, never where on the share
-// it lies — the field shadows the path it embeds.
-type version struct {
-	media.Version
-	Path string `json:"path,omitempty"`
-}
-
 // extraView is an extra as a title's page lists it.
 type extraView struct {
 	File  string `json:"file"`
@@ -110,11 +103,11 @@ type extraView struct {
 
 // Detail is a title's page.
 type Detail struct {
-	Title    Title       `json:"title"`
-	Tagline  string      `json:"tagline"`
-	Versions []version   `json:"versions"`
-	Extras   []extraView `json:"extras"`
-	Seasons  []Season    `json:"seasons,omitempty"`
+	Title    Title          `json:"title"`
+	Tagline  string         `json:"tagline"`
+	Versions []media.Public `json:"versions"`
+	Extras   []extraView    `json:"extras"`
+	Seasons  []Season       `json:"seasons,omitempty"`
 }
 
 // ResumeItem is a film begun, or an episode with its series.

@@ -111,7 +111,7 @@ func (s *Service) season(re *core.RequestEvent) error {
 
 // versionsOf are a title's files still on the share, the one to play first
 // first. A series' are its episodes'.
-func (s *Service) versionsOf(r *core.Record) ([]version, error) {
+func (s *Service) versionsOf(r *core.Record) ([]media.Public, error) {
 	var all []media.Version
 	_ = r.UnmarshalJSONField("versions", &all)
 	ids := make([]string, len(all))
@@ -122,10 +122,10 @@ func (s *Service) versionsOf(r *core.Record) ([]version, error) {
 	if err != nil {
 		return nil, err
 	}
-	out := []version{}
+	out := []media.Public{}
 	for _, v := range all {
 		if here[v.File] {
-			out = append(out, version{Version: v})
+			out = append(out, v.Public())
 		}
 	}
 	return out, nil

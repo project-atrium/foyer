@@ -40,6 +40,13 @@ func TestAUserPlaysATitleThroughFoyer(t *testing.T) {
 	if !strings.HasPrefix(address, "/api/foyer/stream/") || version["quality"] != "4k" || len(got.body["versions"].([]any)) != 2 {
 		t.Fatalf("playback %v", got.body)
 	}
+	// As the app reads it, and never where on the share the file lies.
+	fits(t, "playback", got.body, fixtureAnswer(t, "routes/play.json"))
+	for _, v := range append([]any{version}, got.body["versions"].([]any)...) {
+		if _, ok := v.(map[string]any)["path"]; ok {
+			t.Errorf("a version tells its path: %v", v)
+		}
+	}
 	// Zurg's copy of the 4K file is "2160p": its bytes come through Foyer.
 	status, header, body := s.fetchRange(address, "bytes=1-3")
 	if status != http.StatusPartialContent || body != "160" || header.Get("Content-Range") != "bytes 1-3/5" {
@@ -53,6 +60,45 @@ func TestAUserPlaysATitleThroughFoyer(t *testing.T) {
 	picked := s.call(http.MethodPost, "/api/foyer/play", alex.token, map[string]any{"collection": "movies", "id": film.Id, "file": other})
 	if picked.status != http.StatusOK || picked.body["version"].(map[string]any)["file"] != other {
 		t.Fatalf("picking a version: %d %v", picked.status, picked.body)
+	}
+}
+
+// A download is the file as it is, at an address asked for afresh each
+// time: a copy that stopped asks again, and carries on from the bytes it has.
+func TestADownloadAsksAgainAndCarriesOn(t *testing.T) {
+	s := scanLibrary(t)
+	alex := s.makeUser("alex", nil)
+	film := s.title("movies", "Some Film")
+	got := s.call(http.MethodPost, "/api/foyer/download", alex.token, map[string]any{"collection": "movies", "id": film.Id})
+	if got.status != http.StatusOK {
+		t.Fatalf("download: %d %v", got.status, got.body)
+	}
+	fits(t, "download", got.body, fixtureAnswer(t, "routes/download.json"))
+	version := got.body["version"].(map[string]any)
+	if _, ok := version["path"]; ok || version["quality"] != "4k" {
+		t.Errorf("the version %v", version)
+	}
+	// Zurg's copy is "2160p": two bytes kept, the rest asked for.
+	status, header, body := s.fetchRange(got.body["url"].(string), "bytes=2-")
+	if status != http.StatusPartialContent || body != "60p" || header.Get("Content-Range") != "bytes 2-4/5" {
+		t.Errorf("carrying on: %d %q %v", status, body, header)
+	}
+	// An episode, and a series' extra by its file.
+	pack := s.title("shows", "Big Pack")
+	episode := s.episode(pack, 1, 2)
+	if got := s.call(http.MethodPost, "/api/foyer/download", alex.token, map[string]any{"collection": "shows_episodes", "id": episode.Id}); got.status != http.StatusOK {
+		t.Errorf("an episode: %d %v", got.status, got.body)
+	}
+	if got := s.call(http.MethodPost, "/api/foyer/download", alex.token, map[string]any{"collection": "shows", "id": pack.Id, "file": s.extras(pack)[0]}); got.status != http.StatusOK {
+		t.Errorf("an extra: %d %v", got.status, got.body)
+	}
+	// Nothing for a guess, or for a stranger.
+	twin := s.title("movies", "Twin Title")
+	if got := s.call(http.MethodPost, "/api/foyer/download", alex.token, map[string]any{"collection": "movies", "id": twin.Id}); got.status != http.StatusNotFound {
+		t.Errorf("a guess: %d", got.status)
+	}
+	if got := s.call(http.MethodPost, "/api/foyer/download", "", map[string]any{"collection": "movies", "id": film.Id}); got.status != http.StatusUnauthorized {
+		t.Errorf("a guest: %d", got.status)
 	}
 }
 

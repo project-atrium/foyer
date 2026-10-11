@@ -86,7 +86,7 @@ internal/titles/     Loge's titleKey and bareTitle, ported to the byte; compareI
                      UTF-16 order — and its fold
 internal/parse/      release names: title, year, season and episode, numbers counted from the start, what the file is
 internal/library/    libraries: their collections from one template, the scan — walk, name, identify, place,
-                     sweep, artwork — corrections, and the dashboard's library routes
+                     sweep, artwork — corrections, the dashboard's library routes, and play and download
 internal/media/      what a file is: Loge's MediaVersion, from a release's name or ffprobe
 internal/stream/     signed stream addresses, the Range proxy, the quiet log, the loopback for tools
 internal/ffmpeg/     the tools: where, which versions, the GPU tried; the FFmpeg adapter

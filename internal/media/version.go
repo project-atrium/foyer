@@ -66,6 +66,25 @@ type Version struct {
 	Probed     bool       `json:"probed"`
 }
 
+// Public is a version as a user is handed it: what the file is, never where
+// on the share it lies — its path, kept for Foyer, is shadowed here.
+type Public struct {
+	Version
+	Path string `json:"path,omitempty"`
+}
+
+// Public is the version as a user is handed it.
+func (v Version) Public() Public { return Public{Version: v} }
+
+// PublicAll is versions as a user is handed them.
+func PublicAll(versions []Version) []Public {
+	out := make([]Public, len(versions))
+	for i, v := range versions {
+		out[i] = v.Public()
+	}
+	return out
+}
+
 // Quality is a picture's class, by Loge's own lines (`resolutionName`): a
 // scope film's 1920 by 800 is still FHD.
 func Quality(width, height int) string {
