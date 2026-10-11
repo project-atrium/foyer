@@ -7,7 +7,7 @@ import { failed, send, size, when } from './common.js';
 const perPage = 30;
 
 // What a poll changes of a playing; the rest stays as it first came.
-const changing = ['device', 'client', 'lastSeen', 'quiet', 'positionMs', 'durationMs', 'paused', 'bytes', 'bitrate', 'streams'];
+const changing = ['device', 'client', 'mode', 'speed', 'lastSeen', 'quiet', 'positionMs', 'durationMs', 'paused', 'bytes', 'bitrate', 'streams'];
 
 const modes = { direct: 'Direct', remux: 'Remuxed', transcode: 'Transcoded' };
 
@@ -227,14 +227,16 @@ function playingCard(first, now, stop) {
           : t.div({ className: 'foyer-progress' }, t.div({ style: `width: ${Math.min(100, (100 * now.positionMs) / now.durationMs).toFixed(1)}%` })),
       t.div({ className: 'meta txt-sm' }, () => {
         const labels = [];
-        labels.push(t.span({ className: 'label sm' }, first.kind == 'download' ? 'Download' : modes[first.mode] || first.mode));
+        labels.push(t.span({ className: 'label sm' }, first.kind == 'download' ? 'Download' : modes[now.mode] || now.mode));
         if (now.paused) {
           labels.push(t.span({ className: 'label sm warning' }, 'Paused'));
         }
         if (now.quiet) {
           labels.push(t.span({ className: 'label sm', ariaDescription: app.attrs.tooltip('Nothing heard from it for a while: a phone asleep, or a player closed without a word') }, `Quiet since ${when(now.lastSeen)}`));
         }
-        const facts = [howFar({ kind: first.kind, ...now }), rate(now.bitrate), now.client].filter(Boolean);
+        // A remux's speed is ffmpeg's: how much faster than it plays it is made.
+        const speed = now.mode == 'remux' && now.speed ? `made at ${now.speed.toFixed(1)}×` : '';
+        const facts = [howFar({ kind: first.kind, ...now }), rate(now.bitrate), speed, now.client].filter(Boolean);
         return t.div({ className: 'flex gap-5 flex-wrap' }, labels, t.span({ className: 'txt-hint' }, facts.join(' · ')));
       }),
     ),

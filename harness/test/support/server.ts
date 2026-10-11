@@ -28,6 +28,8 @@ export interface Server {
   addLibrary(connection: string, folder: string, name: string, kind: 'movies' | 'shows'): Promise<string>;
   /** Scan now, and wait until the library holds this many titles. */
   scan(library: string, titles: number): Promise<void>;
+  /** The FFmpeg adapter, switched on or off on the Adapters page: its tools by their names on the PATH. */
+  ffmpeg(enabled: boolean): Promise<void>;
   /** What Live Activity shows playing now. */
   playings(): Promise<readonly Playing[]>;
   /** Live Activity's Stop. */
@@ -43,6 +45,7 @@ export interface Playing {
   readonly user: { readonly id: string; readonly name: string };
   readonly device: { readonly name: string; readonly platform: string };
   readonly kind: string;
+  readonly mode: string;
   readonly item: { readonly title: string };
   readonly positionMs: number;
   readonly bytes: number;
@@ -157,6 +160,14 @@ export async function startServer(): Promise<Server> {
       }, 20_000).catch((error: unknown) => {
         throw new Error(`The scan found too little:\n${output}`, { cause: error });
       });
+    },
+    ffmpeg: async (enabled) => {
+      const response = await fetch(`${url}/api/foyer/admin/adapters/ffmpeg`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: await superuserToken() },
+        body: JSON.stringify({ enabled, values: {} }),
+      });
+      if (!response.ok) throw new Error(`FFmpeg could not be set up (${response.status}): ${await response.text()}`);
     },
     playings: async () => {
       const response = await fetch(`${url}/api/foyer/admin/sessions`, { headers: { Authorization: await superuserToken() } });

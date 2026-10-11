@@ -21,7 +21,7 @@ and their rules, and how they fail.
 | `PATCH /api/foyer/admin/household` | superusers | `{ name }` → the household |
 | `POST /api/foyer/admin/pairings` | superusers | `{ users: [ids] }`, one to ten → `{ code, expiresAt }`: eight characters, `XXXX-XXXX`, good once for ten minutes |
 | `DELETE /api/foyer/admin/devices/{id}` | superusers | `204`: off the list — its sessions end only when its users' passwords change |
-| `POST /api/foyer/play` | users | `{ collection, id, file? }` → `{ url, expiresAt, session, version, versions, chapters }`: a new playing — `session`, what its reports name — and its signed address, for the title's best version or the file asked for — one of its versions, or of a series' `extras`; versions never say where on the share a file lies; `404` for a title the user may not see. The device the call says it came from (`X-Foyer-Device`) is where Live Activity shows it |
+| `POST /api/foyer/play` | users | `{ collection, id, file?, profile?, startMs? }` → `{ url, expiresAt, session, mode?, file?, remux?, version, versions, chapters }`: a new playing — `session`, what its reports name — and its signed address, for the title's best version or the file asked for — one of its versions, or of a series' `extras`; versions never say where on the share a file lies; `404` for a title the user may not see. The device the call says it came from (`X-Foyer-Device`) is where Live Activity shows it. With the player's `profile` (Loge's `PlayerProfile`), where the player plays the picture and not the file, `url` is the file remuxed to HLS (`mode: "remux"`), starting at `startMs`, with what it carries (`remux: { audio, subtitles }`) and the file's own address beside it (`file`) — see Remux |
 | `POST /api/foyer/download` | users | `{ collection, id, file? }` → `{ url, expiresAt, version }`: the file as it is, at a signed address asked for afresh each time — a copy that stopped asks again and carries on from the bytes it has, with a `Range`; each ask is a download playing |
 | `POST /api/foyer/watch/progress` | users | `{ collection, id, file?, kind: started \| progress \| stopped \| end, positionMs, durationMs, paused?, session? }` → `204`; `file` names one of the title's extras, which keeps its own; `session` is the playing `/play` made — its reports keep it on Live Activity, and its stop ends it |
 | `POST /api/foyer/watch/played` | users | `{ collection, id, file?, played }` → `204`; a series marks each of its episodes, `file` one of its extras |
@@ -35,6 +35,7 @@ and their rules, and how they fail.
 | `GET /api/foyer/catalogue/{collection}/{id}/seasons` | users | `{ seasons: [{ key, number?, name, airDate?, episodeCount, posterPath?, unwatched? }] }`: what the series holds, specials as season 0, named as TMDB names them, and its extras last as `extras` |
 | `GET /api/foyer/catalogue/{collection}/{id}/seasons/{season}` | users | `{ episodes }`: a season's in order, each with this user's watch status — or, for `extras`, the extras played as episodes: `id` `extra:<file>`, by the series' record and the file |
 | `GET`, `HEAD /api/foyer/stream/{file}?u&s&exp&sig` | whoever holds the address | the file's bytes, a `Range` passed on: `206` with `Content-Range`; `403` when the signature is wrong or six hours old, or its playing (`s`) was stopped |
+| `GET /api/foyer/stream/hls/{ticket}/{part}` | whoever holds the address | a remux: `main.m3u8`, `v.m3u8`, `a{k}.m3u8` and `s{k}.m3u8`; `v.mp4` and `a{k}.mp4`, each rendition's initialization; `v{n}.m4s` and `a{k}-{n}.m4s`, its segments; `s{k}-{n}.vtt`, its subtitles. The ticket — the file, the user, the playing, when it expires and the plan, signed — is in the path, so a segment's relative address resolves without a query. `403` as a stream address; `503` for a segment not made in a minute; `502` for a file ffmpeg could not remux |
 | `GET /api/foyer/admin/adapters` | superusers | every adapter, by category: `[{ key, category, name, description, notice?, single, planned, fields, defaults, connections: [{ id, adapter, name, enabled, values, status? }] }]`, each secret as `"******"` when set and `""` when not |
 | `PUT /api/foyer/admin/adapters/{key}` | superusers | a single adapter's settings — TMDB's, FFmpeg's: `{ enabled, values }` → its one connection, made by the first save; `400` names each field that will not do, as `values.<key>`, and refuses an adapter set up as connections |
 | `POST /api/foyer/admin/adapters/{key}/test` | superusers | `{ values? }`, values not yet saved, over the adapter's defaults — or a single adapter's saved ones → `{ ok, message, details? }` |
@@ -131,6 +132,38 @@ and their rules, and how they fail.
 - **Playings are kept in memory**, and an address of one Foyer forgot — it
   restarted — is taken up again on its first request, from its history where
   it has one.
+
+### Remux
+
+- **The file as it is wherever the player opens it.** Asked with the
+  player's profile, `play` judges the file as the app's `canPlay` does — its
+  protocol, container, picture, one of its sounds, its height — and only
+  where the player plays the picture and not the file (AVPlayer and
+  Matroska, a browser) does it remux: to HLS of fragmented MP4, the picture
+  copied, so never taller than the file's. What it answers for which profile
+  and file is the app's `adapters/api/fixtures/foyer/decisions.json`, which
+  Foyer's tests decide and the app's hold to `canPlay`. Where neither plays,
+  the file as it is: the app says which player would.
+- **Every sound a rendition, one codec for all of them**: each track as it
+  is where all are one codec the player plays and a remux carries — AAC,
+  AC-3, E-AC-3 — else the first track's where it is such, else E-AC-3 where
+  the player plays it, else AAC; made anew at 5.1 at most. Text subtitles
+  become WebVTT where the player shows WebVTT; pictures (PGS) wait for
+  transcoding.
+- **Only a file whose keyframes are known**, from its own index
+  (`docs/library`), and only one ffprobe has read: a file it has not read is
+  read at `play`, a few megabytes, so the remux carries every sound it has.
+  Dolby Vision with no HDR10 layer beneath (profile 5) is never remuxed.
+  The FFmpeg adapter is what turns remuxing on.
+- **Segments at the file's own keyframes**, about six seconds, named in the
+  playlists before one exists; one ffmpeg per playing cuts exactly there, on
+  the file's own clock — a seek far from what it makes starts it again
+  there, on the same clock. It runs at most eight segments ahead of the
+  player, then waits, and lets go of what the player has passed; a player
+  that stops, a superuser's Stop, or a playing long quiet ends it, and its
+  files go. They are kept in PocketBase's own temporary place, never in a
+  backup and emptied at every start. Live Activity shows the playing as
+  remuxed, and how fast ffmpeg makes it.
 
 ### The Adapters page's routes
 

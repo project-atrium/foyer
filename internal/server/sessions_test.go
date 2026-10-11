@@ -224,7 +224,7 @@ func TestASuperuserStopsAPlaying(t *testing.T) {
 		t.Fatal(err)
 	}
 	request := httptest.NewRequest(http.MethodGet, address, nil)
-	if _, _, ok := restarted.Open(request, id, alex.id, play.body["version"].(map[string]any)["file"].(string), time.Now().Add(time.Hour)); ok {
+	if _, _, ok := restarted.Open(request, id, alex.id, play.body["version"].(map[string]any)["file"].(string), "direct", time.Now().Add(time.Hour)); ok {
 		t.Error("a restart let a stopped playing go on")
 	}
 	// A new playing of the same film plays.

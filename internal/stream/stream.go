@@ -45,10 +45,11 @@ type Opener func(ctx context.Context, file *core.Record, header http.Header, hea
 // Playings are what every address belongs to: a playing, which a superuser
 // may stop.
 type Playings interface {
-	// Open is a request for a playing's bytes begun: its context ends when
-	// the playing is stopped, and done is called as it ends. False for a
-	// playing stopped, or one the address does not belong to.
-	Open(r *http.Request, session, user, file string, expires time.Time) (context.Context, func(), bool)
+	// Open is a request for a playing's bytes begun, served in mode: its
+	// context ends when the playing is stopped, and done is called as it
+	// ends. False for a playing stopped, or one the address does not belong
+	// to.
+	Open(r *http.Request, session, user, file, mode string, expires time.Time) (context.Context, func(), bool)
 	// Sent is bytes of a playing on their way.
 	Sent(session string, n int)
 }
@@ -79,6 +80,22 @@ func (s *Streamer) key() ([]byte, error) {
 		return nil, err
 	}
 	return hkdf.Key(sha256.New, []byte(users.FileToken.Secret), nil, "foyer stream address v1", 32)
+}
+
+// Sign signs what else hands out addresses — a remux's tickets — with a key
+// of its own, drawn from the same secret: regenerating it ends those too.
+func (s *Streamer) Sign(label string, payload []byte) ([]byte, error) {
+	users, err := s.app.FindCachedCollectionByNameOrId("users")
+	if err != nil {
+		return nil, err
+	}
+	key, err := hkdf.Key(sha256.New, []byte(users.FileToken.Secret), nil, "foyer "+label, 32)
+	if err != nil {
+		return nil, err
+	}
+	mac := hmac.New(sha256.New, key)
+	mac.Write(payload)
+	return mac.Sum(nil), nil
 }
 
 // sign is an address's signature: over its file, its user, the playing it
@@ -130,13 +147,13 @@ func (s *Streamer) Routes(r *router.Router[*core.RequestEvent]) {
 		w, req := http.ResponseWriter(e.Response), e.Request
 		if s.playings != nil {
 			session := q.Get("s")
-			ctx, done, allowed := s.playings.Open(req, session, q.Get("u"), file, expires)
+			ctx, done, allowed := s.playings.Open(req, session, q.Get("u"), file, "direct", expires)
 			if !allowed {
 				return e.ForbiddenError("This playing was stopped.", nil)
 			}
 			defer done()
 			req = req.WithContext(ctx)
-			w = &counting{ResponseWriter: w, sent: func(n int) { s.playings.Sent(session, n) }}
+			w = Counted(w, func(n int) { s.playings.Sent(session, n) })
 		}
 		return Proxy(w, req, record.GetString("name"), func(ctx context.Context, header http.Header, head bool) (*http.Response, error) {
 			return s.open(ctx, record, header, head)
@@ -167,6 +184,11 @@ func Quiet() *hook.Handler[*core.RequestEvent] {
 			return nil
 		},
 	}
+}
+
+// Counted is a response that says how much of it went, as it goes.
+func Counted(w http.ResponseWriter, sent func(n int)) http.ResponseWriter {
+	return &counting{ResponseWriter: w, sent: sent}
 }
 
 // counting is a response that says how much of it went.

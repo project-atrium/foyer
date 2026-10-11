@@ -23,6 +23,10 @@ type extra struct {
 	Size  int64  `json:"size,omitempty"`
 }
 
+// VersionOf is what a file is: ffprobe's word once it has looked, its name's
+// until then.
+func VersionOf(file *core.Record) media.Version { return versionOf(file) }
+
 // versionOf is what a file is: ffprobe's word once it has looked, its
 // name's until then.
 func versionOf(file *core.Record) media.Version {

@@ -90,7 +90,8 @@ internal/library/    libraries: their collections from one template, the scan �
 internal/media/      what a file is: Loge's MediaVersion, from a release's name or ffprobe
 internal/stream/     signed stream addresses, the Range proxy, the quiet log, the loopback for tools
 internal/hls/        remuxing to HLS: a file's keyframe index — Matroska's Cues, an MP4's sync samples, read by
-                     ranges — and its codec's RFC 6381 name
+                     ranges — its codec's RFC 6381 name, what play decides for a player's profile, the playlists,
+                     the signed ticket in their path, and a job per playing running one ffmpeg
 internal/sessions/   playings: the one every address belongs to, what plays now and what played, a superuser's Stop —
                      Live Activity's routes
 internal/ffmpeg/     the tools: where, which versions, the GPU tried; the FFmpeg adapter
@@ -199,6 +200,28 @@ Go tests sit beside what they test. Everything else is PocketBase's: `serve`,
   never ffprobe over the whole file to make one. Kept on the file
   (`Engine.Keyframes`, once however many ask), and read again when the file
   changes under its name. Raise `hls.IndexVersion` when what is kept changes.
+- **A remux keeps the file's own clock, in every output.** One ffmpeg per
+  playing writes the picture, each sound and each subtitle track to outputs
+  of their own, and ffmpeg shifts each output's timestamps apart to keep
+  B-frames from going below zero — 83 ms of sound out of step. So every
+  output is `-avoid_negative_ts disabled` with `-copyts`, and the segments
+  are fragmented MP4 with signed composition offsets
+  (`negative_cts_offsets`) and absolute decode times (`frag_discont`); the
+  segmenter counts its cut times from a run's first packet, so they are
+  given from there; and ffmpeg seeks 3/23 s before what it is asked in a file
+  with B-frames, so a run is asked for just past its keyframe
+  (`seekLeadMs`). Each run writes files of its own: one that passes
+  segments an earlier one made never writes over one being read. Held by
+  tests on the files ffmpeg makes, AVPlayer and hls.js having played them.
+- **A remux's address carries its ticket in the path**, signed — AVPlayer
+  resolves a segment's relative address without the playlist's query — and
+  lives under `/api/foyer/stream/`, so `stream.Quiet` keeps it from the log.
+  The plan is in the ticket, so any Foyer — this one after a restart —
+  makes the same remux of it.
+- **A remux carries every sound the file holds, so only a file ffprobe has
+  read is remuxed** — `play` reads one it has not, at once — and only one
+  whose keyframes are known. Never remux by the name's guess: a silent film
+  is worse than "this needs another player".
 - **A tool reads files through the loopback**, never from the share: a grant
   on 127.0.0.1 opens one file for minutes, so ffprobe's arguments and output
   never hold the share's address or password.

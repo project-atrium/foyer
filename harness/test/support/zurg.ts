@@ -27,17 +27,18 @@ export interface Torrent {
   readonly files: readonly string[];
 }
 
-export async function startZurg(torrents: readonly Torrent[]): Promise<Zurg> {
+/** What every file holds: four kilobytes that are not video, unless a test brings a video of its own. */
+export async function startZurg(torrents: readonly Torrent[], options: { readonly video?: Uint8Array } = {}): Promise<Zurg> {
   const directory = mkdtempSync(join(tmpdir(), 'foyer-harness-zurg-'));
   const folder = mkdtempSync(join(directory, 'torrents-'));
+  // Four kilobytes that are not video: nothing here decodes them, and every byte is known.
+  const sample = options.video ?? new Uint8Array(4096).map((_, index) => (index * 7 + 3) % 256);
   torrents.forEach((torrent, index) => {
     const files = Object.fromEntries(
-      torrent.files.map((file) => [file, { path: `/${file}`, bytes: 4096, selected: 1, State: 'ok_file', Ended: torrent.added }]),
+      torrent.files.map((file) => [file, { path: `/${file}`, bytes: sample.length, selected: 1, State: 'ok_file', Ended: torrent.added }]),
     );
     writeFileSync(join(folder, `${index}.zurgtorrent`), JSON.stringify({ Name: torrent.name, Added: torrent.added, SelectedFiles: files }));
   });
-  // Four kilobytes that are not video: nothing here decodes them, and every byte is known.
-  const sample = new Uint8Array(4096).map((_, index) => (index * 7 + 3) % 256);
   const samplePath = join(directory, 'sample.bin');
   writeFileSync(samplePath, sample);
 

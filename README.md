@@ -89,6 +89,10 @@ Then make the dashboard's superuser, and a user for each person.
   address and password never leave the server, and no address reaches a log.
   Every address belongs to a playing — who, on which device, what, how far —
   and a playing you stop ends at once, its addresses refused from then on.
+  A player that cannot open a file as it is — an iPhone's own player and a
+  Matroska film, a browser — is handed it remuxed to HLS, cut at the file's
+  own keyframes, every sound and text subtitle a rendition, made as it
+  watches.
 - **What each file is**, read by ffprobe through Foyer: its picture, codec,
   HDR, audio and subtitle tracks with their languages, chapters. The GPU is
   tried for the transcoding to come.

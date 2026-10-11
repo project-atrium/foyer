@@ -4,6 +4,7 @@ package server
 
 import (
 	"context"
+	"path/filepath"
 	"slices"
 	"sync"
 	"time"
@@ -19,8 +20,10 @@ import (
 	"foyer/internal/dashboard"
 	"foyer/internal/ffmpeg"
 	"foyer/internal/guard"
+	"foyer/internal/hls"
 	"foyer/internal/household"
 	"foyer/internal/library"
+	"foyer/internal/media"
 	"foyer/internal/probe"
 	"foyer/internal/routes"
 	"foyer/internal/sessions"
@@ -41,6 +44,7 @@ type Server struct {
 	Household *household.Service
 	Catalogue *catalogue.Service
 	Playings  *sessions.Registry
+	Remux     *hls.Manager
 }
 
 // collections are Foyer's own static collections: written by its code alone.
@@ -72,12 +76,47 @@ func Bind(app core.App, cfg config.Config) *Server {
 	}
 	s.Playings = sessions.New(app, library.FilesCollection)
 	s.Streams.SetPlayings(s.Playings)
+	fileOf := func(id string) (*core.Record, error) { return app.FindRecordById(library.FilesCollection, id) }
+	s.Remux = hls.NewManager(hls.Options{
+		Log: func(msg string, args ...any) { app.Logger().Warn(msg, args...) },
+		// PocketBase's own temporary place: never in a backup, and emptied at
+		// every start.
+		Root: filepath.Join(app.DataDir(), core.LocalTempDirName, "hls"),
+		Sign: func(payload []byte) ([]byte, error) { return s.Streams.Sign("hls ticket v1", payload) },
+		Tool: func() (string, bool) {
+			settings, err := registry.Settings(ffmpeg.Key)
+			if err != nil || !settings.Enabled {
+				return "", false
+			}
+			tool := ffmpeg.FromSettings(settings).FFmpeg
+			return tool, tool != ""
+		},
+		Grants: s.Streams,
+		Index: func(ctx context.Context, id string) (hls.Index, error) {
+			file, err := fileOf(id)
+			if err != nil {
+				return hls.Index{}, err
+			}
+			return lib.Keyframes(ctx, file)
+		},
+		Version: func(id string) (media.Version, error) {
+			file, err := fileOf(id)
+			if err != nil {
+				return media.Version{}, err
+			}
+			return library.VersionOf(file), nil
+		},
+		Playings: s.Playings,
+	})
+	// A remux stops with its playing, whyever it ends.
+	s.Playings.OnEnd(s.Remux.End)
 	s.Probes = probe.New(app, registry, s.Streams, lib, library.FilesCollection)
 	s.Household = household.New(app)
 	s.Household.Bind()
 	s.Household.Serving(catalogue.Served)
 	s.Catalogue = catalogue.New(app)
 	lib.OnScanned(s.Probes.Poke)
+	lib.ProbeNow(s.Probes.Now)
 	lib.OnIdentityMoved(func(from, to string) error {
 		if err := watch.Move(app, from, to); err != nil {
 			return err
@@ -101,7 +140,8 @@ func Bind(app core.App, cfg config.Config) *Server {
 		if err := s.Playings.Load(); err != nil {
 			return err
 		}
-		s.Library.PlayRoutes(se.Router, s.Streams, s.Playings)
+		s.Library.PlayRoutes(se.Router, s.Streams, s.Playings, s.Remux)
+		s.Remux.Routes(se.Router)
 		watch.Routes(se.Router, library.Managed, s.Playings.Heard)
 		s.Catalogue.Routes(se.Router)
 		userstate.Routes(se.Router)
@@ -150,6 +190,7 @@ func (s *Server) Background() *Server {
 	})
 	s.App.OnTerminate().BindFunc(func(e *core.TerminateEvent) error {
 		cancel()
+		s.Remux.Close()
 		stop, release := context.WithTimeout(context.Background(), 5*time.Second)
 		_ = s.Streams.StopTwin(stop)
 		release()

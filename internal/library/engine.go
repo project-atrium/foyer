@@ -50,7 +50,13 @@ type Engine struct {
 	moved func(from, to string) error
 	// indexes reads each file's keyframe index once, however many ask.
 	indexes singleflight.Group
+	// probeNow has ffprobe read a file at once, for a player waiting on it.
+	probeNow func(ctx context.Context, file *core.Record) bool
 }
+
+// ProbeNow is how a file is read at once, for a player that may need it
+// remuxed: ffprobe, through the probe queue's own way.
+func (e *Engine) ProbeNow(fn func(ctx context.Context, file *core.Record) bool) { e.probeNow = fn }
 
 // OnIdentityMoved calls fn where a title's identity changed — TMDB named it
 // at last, or a superuser did — so what was watched under the old one

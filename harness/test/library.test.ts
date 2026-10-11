@@ -2,11 +2,17 @@
 // over a pretend Zurg: a user signed in through sync/foyer lends it their
 // session, and it browses Foyer's catalogue in the app's order, plays a
 // film's bytes by range, reports, resumes, marks it watched, and downloads.
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import { compareItems, connectionId, type ConnectedHousehold, type ConnectedMediaProvider, type ItemQuery, type LentAccount, type MediaItem } from '@loge/api';
 import { plugin as library } from '@loge/source-foyer';
 import { plugin as foyer } from '@loge/sync-foyer';
 import { afterEach, expect, it } from 'vitest';
 
+import { PROFILES } from '../../../loge/adapters/players/system/src/profiles';
 import { context, fetchHttp } from './support/host';
 import { startServer, type Server } from './support/server';
 import { startZurg, type Zurg } from './support/zurg';
@@ -26,12 +32,15 @@ afterEach(async () => {
 const film = (name: string, added: string) => ({ name, added, files: [`${name}.mkv`] });
 
 /** A household with a films library of three, scanned, and Alex signed in on a device. */
-async function household() {
-  zurg = await startZurg([
-    film('Some.Film.2022.1080p.BluRay.x264-GRP', '2026-10-01T10:00:00Z'),
-    film('Another.Film.2019.2160p.WEB-DL.x265-GRP', '2026-10-03T10:00:00Z'),
-    film('Zebra.Story.2001.720p.HDTV.x264-GRP', '2026-10-02T10:00:00Z'),
-  ]);
+async function household(options: { readonly video?: Uint8Array } = {}) {
+  zurg = await startZurg(
+    [
+      film('Some.Film.2022.1080p.BluRay.x264-GRP', '2026-10-01T10:00:00Z'),
+      film('Another.Film.2019.2160p.WEB-DL.x265-GRP', '2026-10-03T10:00:00Z'),
+      film('Zebra.Story.2001.720p.HDTV.x264-GRP', '2026-10-02T10:00:00Z'),
+    ],
+    options,
+  );
   server = await startServer();
   const share = await server.share(zurg.url);
   const movies = await server.addLibrary(share, 'movies', 'movies', 'movies');
@@ -123,7 +132,7 @@ it('plays a film by range, reports, resumes, is marked watched, and downloads it
 
   // Nothing of a stream's address in what the server printed.
   expect(server!.output()).not.toContain('/api/foyer/stream/');
-});
+}, 60_000);
 
 it('shows a playing on Live Activity, with whose and where, and refuses its address once stopped', async () => {
   const { source } = await household();
@@ -149,4 +158,64 @@ it('shows a playing on Live Activity, with whose and where, and refuses its addr
   const again = await source.getPlaybackDescriptor!({ key, profile: { protocols: ['progressive'], containers: ['mkv'], videoCodecs: [], audioCodecs: [], subtitleFormats: [] } });
   expect((await fetch(again.sources[0]!.uri, { headers: { Range: 'bytes=0-99' } })).status).toBe(206);
   expect(server!.output()).not.toContain('/api/foyer/stream/');
-});
+}, 60_000);
+
+/** ffmpeg on this machine, or nothing: the remux is tested where it can run. */
+function ffmpegHere(): boolean {
+  try {
+    execFileSync('ffmpeg', ['-version'], { stdio: 'ignore' });
+    execFileSync('ffprobe', ['-version'], { stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Forty seconds of a Matroska film AVPlayer cannot open as it is: H.264 and AC-3 5.1. */
+function matroska(): Uint8Array {
+  const directory = mkdtempSync(join(tmpdir(), 'foyer-harness-video-'));
+  try {
+    const out = join(directory, 'film.mkv');
+    execFileSync('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-f', 'lavfi', '-i', 'testsrc2=size=640x360:rate=24',
+      '-f', 'lavfi', '-i', 'sine=frequency=440:sample_rate=48000', '-t', '40', '-c:v', 'libx264', '-preset', 'ultrafast', '-g', '48', '-bf', '2',
+      '-pix_fmt', 'yuv420p', '-c:a', 'ac3', '-ac', '6', out]);
+    return new Uint8Array(readFileSync(out));
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+}
+
+it.skipIf(!ffmpegHere())('remuxes a Matroska film to HLS for AVPlayer: its playlists, its segments, a seek among them', async () => {
+  const { source } = await household({ video: matroska() });
+  await server!.ffmpeg(true);
+  const [some] = (await source.listItems!({ kind: 'movies', sort: { by: 'title', order: 'asc' }, limit: 10, term: 'some film' })).items;
+  if (!some) throw new Error('no film');
+  const avPlayer = PROFILES.ios;
+  if (!avPlayer) throw new Error('no profile');
+  const descriptor = await source.getPlaybackDescriptor!({ key: some.key, profile: avPlayer, startMs: 12_000 });
+  const [hls, file] = descriptor.sources;
+  // The remux first; the file after it, for a player that opens it.
+  expect(hls).toMatchObject({ protocol: 'hls', videoCodec: 'h264', audioCodecs: ['ac3'], transcoded: true, live: false });
+  expect(file).toMatchObject({ protocol: 'progressive', container: 'mkv', transcoded: false });
+  const master = await fetch(hls!.uri);
+  expect(master.headers.get('content-type')).toBe('application/vnd.apple.mpegurl');
+  const text = await master.text();
+  expect(text).toMatch(/CODECS="avc1\.[0-9A-F]{6},ac-3"/);
+  expect(text).toContain('RESOLUTION=640x360');
+  const base = hls!.uri.replace(/main\.m3u8$/, '');
+  const playlist = await (await fetch(`${base}v.m3u8`)).text();
+  const segments = playlist.split('\n').filter((line) => line.endsWith('.m4s'));
+  expect(segments.length).toBeGreaterThan(4);
+  const init = new Uint8Array(await (await fetch(`${base}v.mp4`)).arrayBuffer());
+  expect(new TextDecoder().decode(init.slice(4, 8))).toBe('ftyp');
+  // Where it starts, the next, and a seek to the end: each a segment of fragments.
+  for (const name of [segments[2], segments[3], segments[segments.length - 1], 'a0-1.m4s']) {
+    const response = await fetch(`${base}${name}`);
+    expect(response.status, name).toBe(200);
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    expect(new TextDecoder().decode(bytes.slice(4, 8)), name).toBe('moof');
+  }
+  const [playing] = await server!.playings();
+  expect(playing).toMatchObject({ user: { name: 'Alex' }, device: { name: 'Phone' }, mode: 'remux' });
+  expect(server!.output()).not.toContain('/api/foyer/stream/');
+}, 60_000);

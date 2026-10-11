@@ -86,8 +86,11 @@ type Session struct {
 	Kind     string
 	Item     Item
 	File     string
-	// How it is served: direct, as the file is.
+	// How it is served: direct, as the file is, or remux.
 	Mode string
+	// Speed is how fast a remux runs, as ffmpeg says: 12.5 is twelve and a
+	// half times as fast as it plays.
+	Speed float64
 	// What asks for its bytes: the player's engine, by its User-Agent.
 	Client     string
 	Started    time.Time
@@ -126,6 +129,21 @@ type Registry struct {
 	// Playings that ended of themselves and could still be asked for: a
 	// request under one brings it back as it was.
 	ended map[string]*Session
+	// onEnd are told of each playing that ends, for whatever runs for it.
+	onEnd []func(id string)
+}
+
+// OnEnd tells fn of each playing that ends, whyever it ends: what runs for
+// a playing — a remux — stops with it.
+func (r *Registry) OnEnd(fn func(id string)) { r.onEnd = append(r.onEnd, fn) }
+
+// Speed is how fast a playing's remux runs.
+func (r *Registry) Speed(session string, speed float64) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if s, ok := r.live[session]; ok {
+		s.Speed = speed
+	}
 }
 
 // New keeps the playings of app, whose files are in the collection files.
@@ -159,7 +177,7 @@ func (r *Registry) Start(s Session) {
 // stopped, or one its address does not belong to. A playing Foyer does not
 // know — it restarted, or let it go while quiet — goes on, as it was where
 // the history has it.
-func (r *Registry) Open(req *http.Request, session, user, file string, expires time.Time) (context.Context, func(), bool) {
+func (r *Registry) Open(req *http.Request, session, user, file, mode string, expires time.Time) (context.Context, func(), bool) {
 	r.mu.Lock()
 	_, stopped := r.revoked[session]
 	_, known := r.live[session]
@@ -198,6 +216,9 @@ func (r *Registry) Open(req *http.Request, session, user, file string, expires t
 	}
 	if agent := req.UserAgent(); agent != "" {
 		s.Client = clip(agent, 200)
+	}
+	if mode != "" {
+		s.Mode = mode
 	}
 	s.LastSeen, s.stopping = r.now(), false
 	running, cancel := context.WithCancel(req.Context())
@@ -344,6 +365,9 @@ func (r *Registry) keep(s *Session, revoked bool) {
 	if s == nil {
 		return
 	}
+	for _, fn := range r.onEnd {
+		fn(s.ID)
+	}
 	record, err := r.app.FindRecordById(Collection, s.history)
 	if err != nil {
 		c, err := r.app.FindCollectionByNameOrId(Collection)
@@ -437,6 +461,7 @@ type View struct {
 	Device     Device    `json:"device"`
 	Kind       string    `json:"kind"`
 	Mode       string    `json:"mode"`
+	Speed      float64   `json:"speed,omitzero"`
 	Client     string    `json:"client,omitempty"`
 	Item       Item      `json:"item"`
 	Started    time.Time `json:"started"`
@@ -472,7 +497,7 @@ func (r *Registry) List() []View {
 			}
 		}
 		views = append(views, View{
-			ID: s.ID, User: ViewUser{ID: s.User, Name: s.UserName}, Device: s.Device, Kind: s.Kind, Mode: s.Mode, Client: s.Client, Item: s.Item,
+			ID: s.ID, User: ViewUser{ID: s.User, Name: s.UserName}, Device: s.Device, Kind: s.Kind, Mode: s.Mode, Speed: s.Speed, Client: s.Client, Item: s.Item,
 			Started: s.Started, LastSeen: s.LastSeen, Quiet: now.Sub(s.LastSeen) > QuietAfter,
 			PositionMs: s.PositionMs, DurationMs: s.DurationMs, Paused: s.Paused, Bytes: s.Bytes,
 			Bitrate: sent * 8 / rateWindow, Streams: len(s.running),

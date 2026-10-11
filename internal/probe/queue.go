@@ -140,6 +140,17 @@ func (q *Queue) Once(ctx context.Context) (int, error) {
 	return probed, nil
 }
 
+// Now probes one file at once, for someone waiting on it — a player that
+// may need it remuxed — where the FFmpeg adapter is switched on: whether
+// what it is is known now.
+func (q *Queue) Now(ctx context.Context, file *core.Record) bool {
+	s, err := q.adapters.Settings(ffmpeg.Key)
+	if err != nil || !s.Enabled {
+		return false
+	}
+	return q.probe(ctx, ffmpeg.FromSettings(s), file)
+}
+
 // allowed counts a probe against the minute's share, and says whether it may
 // go.
 func (q *Queue) allowed() bool {
