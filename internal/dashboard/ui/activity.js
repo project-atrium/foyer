@@ -1,7 +1,8 @@
 // Live Activity: what plays now — who, on which device, what, how far, its
-// bytes and their rate, and the player's engine — with Stop; and what
-// played before. Read every two seconds while the page is open and shown,
-// quietly: a server that did not answer is said once, not as a toast a poll.
+// bytes and their rate, and the player's engine — with Stop; the smaller
+// copies being made for downloads, and those kept; and what played before.
+// Read every two seconds while the page is open and shown, quietly: a
+// server that did not answer is said once, not as a toast a poll.
 import { failed, send, size, when } from './common.js';
 
 const perPage = 30;
@@ -9,7 +10,26 @@ const perPage = 30;
 // What a poll changes of a playing; the rest stays as it first came.
 const changing = ['device', 'client', 'mode', 'speed', 'lastSeen', 'quiet', 'positionMs', 'durationMs', 'paused', 'bytes', 'bitrate', 'streams'];
 
-const modes = { direct: 'Direct', remux: 'Remuxed', transcode: 'Transcoded' };
+const modes = { direct: 'Direct', remux: 'Remuxed', transcode: 'Transcoded', copy: 'Smaller copy' };
+
+// What a poll changes of a copy being made.
+const makingNow = ['state', 'progress', 'speed', 'etaMs', 'error', 'started'];
+
+const names = { av1: 'AV1', hevc: 'HEVC', h264: 'H.264', opus: 'Opus', aac: 'AAC', mkv: 'Matroska', mp4: 'MP4' };
+const preferences = { size: 'smaller file', balanced: 'balanced', quality: 'better picture' };
+
+// madeAs is what a copy is made to, in a line: AV1 · 1080p · balanced · Opus · Matroska.
+function madeAs(e = {}) {
+  return [names[e.video] || e.video, e.maxHeight ? `${e.maxHeight}p` : null, preferences[e.preference], names[e.audio] || e.audio, names[e.container] || e.container, e.hdr ? 'HDR' : null]
+    .filter(Boolean)
+    .join(' · ');
+}
+
+// minutes is a time left as people say it: 25 min, 1 h 5 min.
+function minutes(ms) {
+  const m = Math.max(1, Math.round(ms / 60000));
+  return m >= 60 ? `${Math.floor(m / 60)} h ${m % 60} min` : `${m} min`;
+}
 
 // clock is a position as a player shows it: 1:02:03, or 2:03.
 function clock(ms) {
@@ -45,11 +65,15 @@ function howFar(p) {
 
 export function pageActivity() {
   app.store.title = 'Live Activity';
-  const data = store({ ids: [], loading: true, unreachable: false, history: [], historyPage: 0, historyMore: false, historyLoading: false });
+  const data = store({ ids: [], making: [], kept: [], loading: true, unreachable: false, history: [], historyPage: 0, historyMore: false, historyLoading: false });
   // Each playing as it first came, and a store of what changes, which a poll
   // writes in place: the list is drawn again only when a playing comes or
   // goes, and a poster is never fetched twice.
   const playing = {};
+  // The copies being made likewise; those kept are drawn again only when
+  // one comes, goes or is asked for.
+  const copies = {};
+  let keptSaid = '';
   let poll;
 
   async function refresh() {
@@ -77,6 +101,31 @@ export function pageActivity() {
       }
       if (ended.length) {
         loadHistory(true);
+      }
+      const made = await send('/api/foyer/admin/copies');
+      const keys = (made.making || []).map((c) => c.key);
+      for (const view of made.making || []) {
+        const known = copies[view.key];
+        if (!known) {
+          copies[view.key] = { first: view, now: store(Object.fromEntries(makingNow.map((k) => [k, view[k]]))) };
+          continue;
+        }
+        for (const k of makingNow) {
+          if (JSON.stringify(known.now[k]) !== JSON.stringify(view[k])) {
+            known.now[k] = view[k];
+          }
+        }
+      }
+      for (const key of Object.keys(copies).filter((key) => !keys.includes(key))) {
+        delete copies[key];
+      }
+      if (keys.join() !== data.making.join()) {
+        data.making = keys;
+      }
+      const said = JSON.stringify((made.kept || []).map((k) => [k.key, k.asked]));
+      if (said !== keptSaid) {
+        keptSaid = said;
+        data.kept = made.kept || [];
       }
       data.unreachable = false;
     } catch (err) {
@@ -128,6 +177,46 @@ export function pageActivity() {
     );
   }
 
+  function stopCopy(c) {
+    app.modals.confirm(
+      t.div(
+        null,
+        t.p(null, `Stop making the copy of ${c.title || 'this'}?`),
+        t.p({ className: 'txt-hint' }, 'Nothing of it is kept. A device that still wants it asks again, and it is made again.'),
+      ),
+      async () => {
+        try {
+          await send(`/api/foyer/admin/copies/${c.key}/stop`, { method: 'POST' });
+        } catch (err) {
+          failed(err);
+        }
+        refresh();
+      },
+      null,
+      { yesButton: 'Stop' },
+    );
+  }
+
+  function removeCopy(k) {
+    app.modals.confirm(
+      t.div(
+        null,
+        t.p(null, `Let go of the copy of ${k.title || 'this'}?`),
+        t.p({ className: 'txt-hint' }, 'A device that kept it keeps it. Asked for again, it is made again.'),
+      ),
+      async () => {
+        try {
+          await send(`/api/foyer/admin/copies/${k.key}`, { method: 'DELETE' });
+        } catch (err) {
+          failed(err);
+        }
+        refresh();
+      },
+      null,
+      { yesButton: 'Let go' },
+    );
+  }
+
   return t.div(
     {
       pbEvent: 'foyerActivity',
@@ -173,6 +262,23 @@ export function pageActivity() {
               data.ids.map((id) => playingCard(playing[id].first, playing[id].now, stop)),
             );
           },
+        ),
+        t.div(
+          { className: 'foyer-section' },
+          t.header(null, t.h5(null, 'Copies for downloads'), () => (data.making.length ? t.span({ className: 'label sm' }, String(data.making.length)) : null)),
+          () => {
+            if (data.loading) {
+              return null;
+            }
+            if (!data.making.length) {
+              return t.p({ className: 'txt-hint' }, data.kept.length ? 'No copy is being made.' : 'No copy is being made, and none is kept. A device keeping a film asks for one, made to its own settings.');
+            }
+            return t.div(
+              { className: 'foyer-playings' },
+              data.making.map((key) => copyCard(copies[key].first, copies[key].now, stopCopy)),
+            );
+          },
+          () => keptTable(data.kept, removeCopy),
         ),
         t.div(
           { className: 'foyer-section' },
@@ -228,6 +334,9 @@ function playingCard(first, now, stop) {
       t.div({ className: 'meta txt-sm' }, () => {
         const labels = [];
         labels.push(t.span({ className: 'label sm' }, first.kind == 'download' ? 'Download' : modes[now.mode] || now.mode));
+        if (first.kind == 'download' && now.mode == 'copy') {
+          labels.push(t.span({ className: 'label sm' }, modes.copy));
+        }
         if (now.paused) {
           labels.push(t.span({ className: 'label sm warning' }, 'Paused'));
         }
@@ -275,7 +384,75 @@ function historyTable(items) {
           t.td(
             { className: 'txt-right' },
             h.kind == 'download' ? t.span({ className: 'label sm' }, 'Download') : null,
+            h.mode == 'copy' ? t.span({ className: 'label sm m-l-5' }, modes.copy) : null,
             h.revoked ? t.span({ className: 'label sm danger m-l-5' }, 'Stopped') : null,
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+// copyCard draws a copy being made from what never changes of it, and reads
+// what a poll changes only inside functions, as a playing's card does.
+function copyCard(first, now, stop) {
+  return t.div(
+    { className: 'foyer-playing' },
+    t.div({ className: 'art' }, t.i({ className: 'ri-file-reduce-line', ariaHidden: true })),
+    t.div(
+      { className: 'about' },
+      t.div({ className: 'title' }, first.title || 'A file no longer in the library'),
+      t.div({ className: 'txt-hint txt-sm' }, [madeAs(first.encode), first.estimatedBytes ? `about ${size(first.estimatedBytes)}` : ''].filter(Boolean).join(' · ')),
+      first.by ? t.div({ className: 'who txt-sm' }, t.i({ className: 'ri-user-line', ariaHidden: true }), t.span(null, first.by)) : null,
+      () => (now.state == 'running' ? t.div({ className: 'foyer-progress' }, t.div({ style: `width: ${Math.min(100, 100 * now.progress).toFixed(1)}%` })) : null),
+      t.div({ className: 'meta txt-sm' }, () => {
+        const label = { queued: 'Waiting', running: 'Being made', failed: 'Could not be made' }[now.state] || now.state;
+        // How fast is ffmpeg's: how much faster than the film runs it is made.
+        const facts =
+          now.state == 'running'
+            ? [`${Math.floor(100 * now.progress)} %`, now.speed ? `made at ${now.speed.toFixed(1)}×` : '', now.etaMs ? `${minutes(now.etaMs)} left` : '']
+            : [now.state == 'failed' ? now.error : ''];
+        return t.div(
+          { className: 'flex gap-5 flex-wrap' },
+          t.span({ className: `label sm ${now.state == 'failed' ? 'danger' : ''}` }, label),
+          t.span({ className: 'txt-hint' }, facts.filter(Boolean).join(' · ')),
+        );
+      }),
+    ),
+    t.div(
+      { className: 'actions' },
+      t.button(
+        { type: 'button', className: 'btn sm transparent danger', onclick: () => stop({ ...first, ...now }) },
+        t.i({ className: 'ri-stop-circle-line', ariaHidden: true }),
+        t.span({ className: 'txt' }, 'Stop'),
+      ),
+    ),
+  );
+}
+
+// keptTable is the copies kept, the latest asked for first.
+function keptTable(items, remove) {
+  if (!items.length) {
+    return null;
+  }
+  return t.table(
+    { className: 'foyer-table m-t-sm' },
+    t.thead(null, t.tr(null, t.th(null, 'Kept'), t.th(null, 'Made as'), t.th(null, 'Size'), t.th(null, 'Last asked for'), t.th(null, ''))),
+    t.tbody(
+      null,
+      items.map((k) =>
+        t.tr(
+          null,
+          t.td({ className: 'foyer-what' }, t.strong(null, k.title || '—'), k.by ? t.span({ className: 'txt-hint' }, ` · ${k.by}`) : null),
+          t.td({ className: 'txt-sm' }, madeAs(k.encode)),
+          t.td({ className: 'txt-sm' }, size(k.size)),
+          t.td({ className: 'txt-sm' }, when(k.asked)),
+          t.td(
+            { className: 'txt-right' },
+            t.button(
+              { type: 'button', className: 'btn sm transparent', ariaLabel: `Let go of the copy of ${k.title || 'this'}`, onclick: () => remove(k) },
+              t.i({ className: 'ri-delete-bin-line', ariaHidden: true }),
+            ),
           ),
         ),
       ),

@@ -123,7 +123,8 @@ Then make the dashboard's superuser, and a user for each person.
   title as a poster, the newest added first, a title's files and what TMDB
   said of it, and Confirm or Set TMDB id where it guessed; **Live Activity**
   for what plays now — who, on which device, what, how far, at what rate —
-  with Stop, and what played before.
+  with Stop; the copies being made for downloads, how far along and how
+  fast, with Stop, and those kept, to let go of; and what played before.
 - **`go test ./...` proves it.**
 - **The image** — Debian with Jellyfin's ffmpeg, for VAAPI and Quick Sync —
   builds and runs, with its compose files; the GPU's override is untried
