@@ -48,14 +48,26 @@ func (p *playings) Speed(_ string, speed float64) {
 	p.mu.Unlock()
 }
 
-// film makes ninety seconds of a Matroska film: H.264 with B-frames,
+// paced writes at about 4 MB/s.
+type paced struct{ http.ResponseWriter }
+
+func (p paced) Write(b []byte) (int, error) {
+	n, err := p.ResponseWriter.Write(b)
+	time.Sleep(time.Duration(n) * time.Second / (4 << 20))
+	return n, err
+}
+
+// film makes a Matroska film of so many seconds: H.264 with B-frames,
 // keyframes two seconds apart, AC-3 5.1 in Japanese and AAC stereo in
-// English, and English subtitles at 1 s, 60 s and 85 s.
-func film(t *testing.T, ffmpeg string) string {
+// English, and English subtitles at 1 s, 60 s and ten seconds from the end.
+func film(t *testing.T, ffmpeg string, length int) string {
 	t.Helper()
 	dir := t.TempDir()
 	srt := filepath.Join(dir, "subs.srt")
-	if err := os.WriteFile(srt, []byte("1\n00:00:01,000 --> 00:00:04,000\nHello there\n\n2\n00:01:00,000 --> 00:01:03,500\nA minute in\n\n3\n00:01:25,000 --> 00:01:28,000\nNear the end\n"), 0o600); err != nil {
+	end := vttStamp(int64(length-10) * 1000)
+	cues := "1\n00:00:01,000 --> 00:00:04,000\nHello there\n\n2\n00:01:00,000 --> 00:01:03,500\nA minute in\n\n3\n" +
+		strings.ReplaceAll(end, ".", ",") + " --> " + strings.ReplaceAll(vttStamp(int64(length-7)*1000), ".", ",") + "\nNear the end\n"
+	if err := os.WriteFile(srt, []byte(cues), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	out := filepath.Join(dir, "film.mkv")
@@ -63,7 +75,7 @@ func film(t *testing.T, ffmpeg string) string {
 		"-f", "lavfi", "-i", "testsrc2=size=640x360:rate=24000/1001",
 		"-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000",
 		"-f", "lavfi", "-i", "sine=frequency=660:sample_rate=48000",
-		"-i", srt, "-t", "90",
+		"-i", srt, "-t", strconv.Itoa(length),
 		"-map", "0:v", "-map", "1:a", "-map", "2:a", "-map", "3:s",
 		"-c:v", "libx264", "-preset", "ultrafast", "-g", "48", "-keyint_min", "48", "-sc_threshold", "0", "-bf", "2", "-pix_fmt", "yuv420p",
 		"-c:a:0", "ac3", "-ac:a:0", "6", "-c:a:1", "aac", "-ac:a:1", "2", "-c:s", "srt",
@@ -141,10 +153,26 @@ func timescale(t *testing.T, init []byte) uint64 {
 	return scale
 }
 
-func TestAFileIsRemuxedToHLSAtItsOwnKeyframes(t *testing.T) {
-	ffmpegPath, _ := tools(t)
-	file := film(t, ffmpegPath)
+// remuxed is a Manager over a film served as the loopback serves it — at a
+// share's pace, about 4 MB/s, where paced — and a ticket for the AVPlayer
+// it decides for: the film's subtitles in the plan, where with.
+type remuxed struct {
+	m        *Manager
+	ticket   Ticket
+	idx      Index
+	segments []Segment
+	served   *loopback
+	plays    *playings
+	root     string
+}
+
+func remuxOf(t *testing.T, ffmpegPath string, length int, slow, withSubtitles bool) remuxed {
+	t.Helper()
+	file := film(t, ffmpegPath, length)
 	served := &loopback{server: httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if slow {
+			w = paced{w}
+		}
 		http.ServeFile(w, r, file)
 	}))}
 	t.Cleanup(served.server.Close)
@@ -155,9 +183,11 @@ func TestAFileIsRemuxedToHLSAtItsOwnKeyframes(t *testing.T) {
 	}
 	version := media.Version{
 		Container: "mkv", DurationMs: idx.DurationMs, Bitrate: 2_000_000,
-		Video:     &media.Video{Codec: "h264", Width: 640, Height: 360},
-		Audio:     []media.Audio{{Codec: "ac3", Channels: 6, Language: "ja", Default: true}, {Codec: "aac", Channels: 2, Language: "en"}},
-		Subtitles: []media.Subtitle{{Format: "srt", Language: "en"}},
+		Video: &media.Video{Codec: "h264", Width: 640, Height: 360},
+		Audio: []media.Audio{{Codec: "ac3", Channels: 6, Language: "ja", Default: true}, {Codec: "aac", Channels: 2, Language: "en"}},
+	}
+	if withSubtitles {
+		version.Subtitles = []media.Subtitle{{Format: "srt", Language: "en"}}
 	}
 	ios := Profile{Protocols: []string{"progressive", "hls"}, Containers: []string{"mp4"}, VideoCodecs: []string{"h264", "hevc"},
 		AudioCodecs: []string{"aac", "ac3", "eac3"}, SubtitleFormats: []string{"vtt"}, MaxHeight: 2160}
@@ -182,6 +212,13 @@ func TestAFileIsRemuxedToHLSAtItsOwnKeyframes(t *testing.T) {
 	})
 	t.Cleanup(m.Close)
 	ticket := Ticket{File: "f1", User: "u1", Session: "s1", Expires: time.Now().Add(time.Hour).Unix(), Plan: decision.Plan}
+	return remuxed{m: m, ticket: ticket, idx: idx, segments: Segments(idx), served: served, plays: plays, root: root}
+}
+
+func TestAFileIsRemuxedToHLSAtItsOwnKeyframes(t *testing.T) {
+	ffmpegPath, _ := tools(t)
+	x := remuxOf(t, ffmpegPath, 90, false, true)
+	m, ticket, segments := x.m, x.ticket, x.segments
 
 	// The address is the ticket, signed, in the path.
 	address, err := m.Address(ticket)
@@ -206,7 +243,6 @@ func TestAFileIsRemuxedToHLSAtItsOwnKeyframes(t *testing.T) {
 			t.Errorf("the master playlist lacks %s:\n%s", want, master)
 		}
 	}
-	segments := Segments(idx)
 	if len(segments) < 14 || segments[1].StartMs < 6000 || segments[1].StartMs > 6100 {
 		t.Fatalf("segments %v", segments)
 	}
@@ -237,8 +273,48 @@ func TestAFileIsRemuxedToHLSAtItsOwnKeyframes(t *testing.T) {
 	if vtt := get(t, m, ticket, "s0-0.vtt").Body.String(); !strings.Contains(vtt, "00:00:01.000 --> 00:00:04.000\nHello there") || !strings.HasPrefix(vtt, "WEBVTT\n") {
 		t.Errorf("the first subtitles:\n%s", vtt)
 	}
+	if vtt := get(t, m, ticket, "s0-"+itoa(SegmentAt(segments, 80_000))+".vtt").Body.String(); !strings.Contains(vtt, "Near the end") {
+		t.Errorf("the subtitles near the end:\n%s", vtt)
+	}
+	x.plays.mu.Lock()
+	if x.plays.speed <= 0 {
+		t.Error("ffmpeg's speed was never told")
+	}
+	x.plays.mu.Unlock()
 
-	// Far ahead of the player, the run waits, and its read of the share with it.
+	// Its playing ends: the run stops, the segments go, the loopback closes.
+	m.End("s1")
+	if _, err := os.Stat(filepath.Join(x.root, "hls", "s1")); !os.IsNotExist(err) {
+		t.Errorf("the segments stayed: %v", err)
+	}
+	if x.served.revoked.Load() != 1 {
+		t.Errorf("the loopback grant was revoked %d times", x.served.revoked.Load())
+	}
+	if m.Running() != 0 {
+		t.Error("ffmpeg ran on")
+	}
+}
+
+// At a share's pace, a run waits once its slowest rendition — the sound made
+// anew — is far enough ahead of the player, and a seek past what it made
+// starts a new run there, on the same clock. Without subtitles: a subtitle
+// output in the same ffmpeg holds back every sound made anew until the
+// file's end, when the share is slow (AGENTS.md), which is still to mend.
+func TestARemuxWaitsForThePlayerAndStartsAgainOnASeek(t *testing.T) {
+	ffmpegPath, _ := tools(t)
+	x := remuxOf(t, ffmpegPath, 300, true, false)
+	m, ticket, segments := x.m, x.ticket, x.segments
+	if len(segments) < 49 {
+		t.Fatalf("segments %v", segments)
+	}
+	init := get(t, m, ticket, "v.mp4").Body.Bytes()
+	scale := timescale(t, init)
+	for _, name := range []string{"v0.m4s", "v1.m4s", "v2.m4s", "a0-2.m4s", "a1-2.m4s"} {
+		if segment := get(t, m, ticket, name).Body.Bytes(); string(segment[4:8]) != "moof" {
+			t.Fatalf("%s begins %q", name, segment[4:8])
+		}
+	}
+
 	j := m.jobs["s1"]
 	waitUntil(t, "the run paused ahead of the player", func() bool {
 		j.mu.Lock()
@@ -246,13 +322,16 @@ func TestAFileIsRemuxedToHLSAtItsOwnKeyframes(t *testing.T) {
 		return j.run.paused
 	})
 	j.mu.Lock()
-	if ahead := j.run.produced - j.asked; ahead > aheadMax || ahead < aheadMax-1 {
+	ahead, made := j.run.slowest(j.kinds()...)-j.asked, j.run.madeOf("v")
+	j.mu.Unlock()
+	// What ffmpeg finished is read a look late: a few more may come.
+	if ahead < aheadMax || ahead > aheadMax+4 {
 		t.Errorf("paused %d segments ahead", ahead)
 	}
-	j.mu.Unlock()
-
-	// A seek far ahead starts again there, on the same clock.
 	last := len(segments) - 2
+	if last <= made+restartAhead {
+		t.Fatalf("the run made %d of %d segments: no seek past it", made, len(segments))
+	}
 	segment := get(t, m, ticket, "v"+itoa(last)+".m4s").Body.Bytes()
 	if got := int64(tfdt(t, segment) * 1000 / scale); got != segments[last].StartMs {
 		t.Errorf("after the seek, segment %d starts at %d ms, the playlist at %d", last, got, segments[last].StartMs)
@@ -263,30 +342,8 @@ func TestAFileIsRemuxedToHLSAtItsOwnKeyframes(t *testing.T) {
 	if runs != 2 {
 		t.Errorf("%d runs, one each side of the seek", runs)
 	}
-	minute := SegmentAt(segments, 60_000)
-	if vtt := get(t, m, ticket, "s0-"+itoa(minute)+".vtt").Body.String(); minute < last-4 && !strings.Contains(vtt, "A minute in") {
-		t.Logf("the minute's subtitles, which no run went through: %q", vtt)
-	}
-	near := SegmentAt(segments, 85_000)
-	if vtt := get(t, m, ticket, "s0-"+itoa(near)+".vtt").Body.String(); !strings.Contains(vtt, "Near the end") {
-		t.Errorf("the subtitles near the end:\n%s", vtt)
-	}
-	plays.mu.Lock()
-	if plays.speed <= 0 {
-		t.Error("ffmpeg's speed was never told")
-	}
-	plays.mu.Unlock()
-
-	// Its playing ends: the run stops, the segments go, the loopback closes.
-	m.End("s1")
-	if _, err := os.Stat(filepath.Join(root, "hls", "s1")); !os.IsNotExist(err) {
-		t.Errorf("the segments stayed: %v", err)
-	}
-	if served.revoked.Load() != 1 {
-		t.Errorf("the loopback grant was revoked %d times", served.revoked.Load())
-	}
-	if m.Running() != 0 {
-		t.Error("ffmpeg ran on")
+	if audio := get(t, m, ticket, "a1-"+itoa(last)+".m4s").Body.Bytes(); string(audio[4:8]) != "moof" {
+		t.Errorf("the sound after the seek begins %q", audio[4:8])
 	}
 }
 

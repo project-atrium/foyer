@@ -228,13 +228,16 @@ type span struct{ from, to int64 }
 
 // run is one ffmpeg, from one segment on.
 type run struct {
-	id       int
-	start    int
-	files    runFiles
-	cancel   context.CancelFunc
-	cmd      *exec.Cmd
-	exited   chan struct{}
+	id     int
+	start  int
+	files  runFiles
+	cancel context.CancelFunc
+	cmd    *exec.Cmd
+	exited chan struct{}
+	// produced is the last segment of the picture this run finished; made,
+	// each rendition's — a sound made anew falls behind a picture copied.
 	produced int
+	made     map[string]int
 	// span is the run's entry in covered.
 	span   int
 	paused bool
@@ -244,6 +247,23 @@ type run struct {
 	errOut *bytes.Buffer
 }
 
+// madeOf is the last segment of a rendition this run finished.
+func (r *run) madeOf(kind string) int {
+	if n, ok := r.made[kind]; ok {
+		return n
+	}
+	return r.start - 1
+}
+
+// slowest is the last segment every one of the renditions named has.
+func (r *run) slowest(kinds ...string) int {
+	slowest := r.produced
+	for _, kind := range kinds {
+		slowest = min(slowest, r.madeOf(kind))
+	}
+	return slowest
+}
+
 func (r *run) over() bool {
 	select {
 	case <-r.exited:
@@ -251,6 +271,16 @@ func (r *run) over() bool {
 	default:
 		return false
 	}
+}
+
+// kinds are the job's renditions made of segments: the picture, and each
+// sound.
+func (j *job) kinds() []string {
+	kinds := []string{"v"}
+	for k := range j.ticket.Plan.Audio {
+		kinds = append(kinds, "a"+strconv.Itoa(k))
+	}
+	return kinds
 }
 
 // broadcast tells every request waiting that something changed. Its caller
@@ -289,18 +319,26 @@ func (j *job) await(ctx context.Context, ready func() (bool, error)) error {
 
 // need makes sure segment n of the picture or a sound is being made: by the
 // run going, once it is near enough and goes on, or by a new run from n.
-// Its caller holds the lock.
+// Only the picture moves a run that is going: a player asks for a sound
+// it is not playing too, ahead or behind, and a run started there would
+// leave the picture. Its caller holds the lock.
 func (j *job) need(kind string, n int) error {
 	if j.done[kind][n] != "" {
 		return nil
 	}
-	// Where a player asks, picture or sound, is where it is.
-	j.asked = n
 	r := j.run
-	if r != nil && !r.over() && n >= r.start && n <= r.produced+restartAhead {
-		if r.paused && r.produced-n < aheadResume {
+	going := r != nil && !r.over()
+	if kind == "v" || !going {
+		j.asked = n
+	}
+	if going && n >= r.start && n <= r.madeOf(kind)+restartAhead {
+		// A run waiting goes on once the rendition furthest behind is near.
+		if r.paused && r.slowest(j.kinds()...)-n < aheadResume {
 			r.resume()
 		}
+		return nil
+	}
+	if going && kind != "v" {
 		return nil
 	}
 	if r != nil && r.over() && r.err != nil && r.produced < r.start && n == r.start {
@@ -329,7 +367,7 @@ func (j *job) start(n int) error {
 		cancel()
 		return err
 	}
-	r := &run{id: j.runs, start: n, files: files, cancel: cancel, cmd: cmd, exited: make(chan struct{}), produced: n - 1,
+	r := &run{id: j.runs, start: n, files: files, cancel: cancel, cmd: cmd, exited: make(chan struct{}), produced: n - 1, made: map[string]int{},
 		listAt: map[string]int64{}, vttAt: make([]int64, len(j.ticket.Plan.Subtitles)), errOut: &bytes.Buffer{}}
 	cmd.Stderr = &limited{w: r.errOut, left: 8 << 10}
 	if err := cmd.Start(); err != nil {
@@ -392,10 +430,7 @@ func (j *job) progress(r *run, out io.Reader) {
 // keeps the run within reach of the player. Its caller holds the lock.
 func (j *job) poll(r *run) bool {
 	changed := false
-	kinds := []string{"v"}
-	for k := range j.ticket.Plan.Audio {
-		kinds = append(kinds, "a"+strconv.Itoa(k))
-	}
+	kinds := j.kinds()
 	for _, kind := range kinds {
 		for _, n := range readList(r.files.list(kind), r.listAt, kind, r.id) {
 			if j.done[kind] == nil {
@@ -408,6 +443,9 @@ func (j *job) poll(r *run) bool {
 				_ = os.Remove(r.files.segment(kind, n))
 			}
 			changed = true
+			if n > r.madeOf(kind) {
+				r.made[kind] = n
+			}
 			if kind == "v" && n > r.produced {
 				r.produced = n
 				j.covered[r.span].to = j.segments[n].EndMs
@@ -430,19 +468,29 @@ func (j *job) poll(r *run) bool {
 	}
 	if changed {
 		j.prune()
-		if r == j.run && !r.paused && r.produced-j.asked >= aheadMax {
+		// Waits only once every rendition is far enough ahead: paused, the
+		// one behind would never catch up.
+		if r == j.run && !r.paused && r.slowest(kinds...)-j.asked >= aheadMax {
 			r.pause()
 		}
 	}
 	return changed
 }
 
-// prune lets go of segments the player has gone past: a few kept for a step
-// back. Its caller holds the lock.
+// prune lets go of segments the player has gone past — a few kept for a
+// step back — and of an earlier run's ahead of it, which a seek left. The
+// run going keeps what it made ahead: its renditions do not keep pace, and
+// it waits once the slowest is far enough ahead. Its caller holds the lock.
 func (j *job) prune() {
+	current := ""
+	if j.run != nil {
+		current = fmt.Sprintf("-r%d_", j.run.id)
+	}
 	for _, done := range j.done {
 		for n, path := range done {
-			if n < j.asked-keepBehind || n > j.asked+aheadMax+restartAhead+keepBehind {
+			behind := n < j.asked-keepBehind
+			left := n > j.asked+aheadMax+restartAhead+keepBehind && !strings.Contains(filepath.Base(path), current)
+			if behind || left {
 				// One being read is read to its end: the file goes once it is closed.
 				_ = os.Remove(path)
 				delete(done, n)

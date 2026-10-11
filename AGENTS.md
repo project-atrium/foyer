@@ -213,6 +213,16 @@ Go tests sit beside what they test. Everything else is PocketBase's: `serve`,
   (`seekLeadMs`). Each run writes files of its own: one that passes
   segments an earlier one made never writes over one being read. Held by
   tests on the files ffmpeg makes, AVPlayer and hls.js having played them.
+- **A remux's renditions do not keep pace with each other.** ffmpeg copies
+  a picture far faster than it makes a sound anew, so a run waits only once
+  its slowest rendition is far enough ahead (`slowest`), keeps what it made
+  ahead, and only the picture's requests move it: a player asks for a sound
+  it is not playing too, ahead or behind. **Known, still to mend:** a
+  subtitle output in the same ffmpeg — copied or made WebVTT — holds back
+  every sound made anew until the file ends when the share is slow, because
+  ffmpeg keeps its encoders in step with the sparse subtitle stream; copies
+  are not held. The mend planned: each sound made anew in an ffmpeg of its
+  own, fed the copied track through a pipe.
 - **A remux's address carries its ticket in the path**, signed — AVPlayer
   resolves a segment's relative address without the playlist's query — and
   lives under `/api/foyer/stream/`, so `stream.Quiet` keeps it from the log.

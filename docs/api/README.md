@@ -158,12 +158,17 @@ and their rules, and how they fail.
 - **Segments at the file's own keyframes**, about six seconds, named in the
   playlists before one exists; one ffmpeg per playing cuts exactly there, on
   the file's own clock — a seek far from what it makes starts it again
-  there, on the same clock. It runs at most eight segments ahead of the
-  player, then waits, and lets go of what the player has passed; a player
+  there, on the same clock. It runs until its slowest rendition is eight
+  segments ahead of the player, then waits, and lets go of what the player
+  has passed; a player
   that stops, a superuser's Stop, or a playing long quiet ends it, and its
   files go. They are kept in PocketBase's own temporary place, never in a
   backup and emptied at every start. Live Activity shows the playing as
   remuxed, and how fast ffmpeg makes it.
+- **Known, still to mend:** where a remux carries text subtitles and makes a
+  sound anew, a slow share holds that sound back until ffmpeg reaches the
+  file's end — ffmpeg keeps its encoders in step with the subtitles — so a
+  player waits for it.
 
 ### The Adapters page's routes
 

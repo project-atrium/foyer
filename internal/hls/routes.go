@@ -189,7 +189,9 @@ func (j *job) serveSegment(w http.ResponseWriter, r *http.Request, kind string, 
 			delete(j.done[kind], n)
 			return false, j.need(kind, n)
 		}
-		j.asked = n
+		if kind == "v" {
+			j.asked = n
+		}
 		file = f
 		return true, nil
 	})
