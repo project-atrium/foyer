@@ -91,8 +91,13 @@ Then make the dashboard's superuser, and a user for each person.
   HDR, audio and subtitle tracks with their languages, chapters. The GPU is
   tried for the transcoding to come.
 - **Watch status**, each user's own, kept by Foyer by Loge's rules — with
-  resume, and a series marked by its episodes. A title TMDB names later, or
-  you correct, takes what was watched with it.
+  resume, a series marked by its episodes, and its extras kept apart. A
+  title TMDB names later, or you correct, takes what was watched with it.
+- **The catalogue Loge reads**: each kind across every library as one list,
+  in the app's own order and paged by it, so a scan between two pages moves
+  nothing; a title's page, a series' seasons and episodes and its extras,
+  the genres, and what each of you began — and the household's answer says
+  Foyer serves its library.
 - **The dashboard** wears Foyer's icon, and is where Foyer is set up:
   **Settings → Adapters**, which Settings opens on — the shares, TMDB and
   FFmpeg by category, each tried where it is set, and which of each share's

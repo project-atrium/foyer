@@ -15,16 +15,21 @@ and their rules, and how they fail.
 | Route | Who | Answer |
 | --- | --- | --- |
 | `GET /api/foyer/info` | anyone | `{ serverVersion, protocol, household: { id, name } }`: the version, always the app's, the protocol Loge's Foyer adapters speak (1), and the household — its id is what a device keys this Foyer by |
-| `GET /api/foyer/household` | users | `{ household, members: [{ id, username, name, avatar?, hasPin }], served: [] }`: who else is in the household — names and pictures, never a PIN or an email — and what this Foyer serves |
+| `GET /api/foyer/household` | users | `{ household, members: [{ id, username, name, avatar?, hasPin }], served: [{ key, type, name }] }`: who else is in the household — names and pictures, never a PIN or an email — and what this Foyer serves: `{ key: "library", type: "library", name: "Library" }` while a library is switched on; each device in the household runs it as a connection of its own |
 | `POST /api/foyer/pair` | anyone with a code — five tries a minute per address | `{ code, device: { installation, name, platform, appVersion } }` → `{ household, users: [{ member, pin, token }] }`: the sessions of the users the code names, each with its own PIN; the code is spent; any code that will not do is the same `400` |
 | `GET /api/foyer/admin/household` | superusers | `{ household, members, devices: [{ id, name, platform, appVersion, users, paired, lastSeen }] }` |
 | `PATCH /api/foyer/admin/household` | superusers | `{ name }` → the household |
 | `POST /api/foyer/admin/pairings` | superusers | `{ users: [ids] }`, one to ten → `{ code, expiresAt }`: eight characters, `XXXX-XXXX`, good once for ten minutes |
 | `DELETE /api/foyer/admin/devices/{id}` | superusers | `204`: off the list — its sessions end only when its users' passwords change |
 | `POST /api/foyer/play` | users | `{ collection, id, file? }` → `{ url, expiresAt, version, versions, chapters }`: a signed address for the title's best version, or the file asked for — one of its versions, or of a series' `extras`; `404` for a title the user may not see |
-| `POST /api/foyer/watch/progress` | users | `{ collection, id, kind: started \| progress \| stopped \| end, positionMs, durationMs, paused?, session? }` → `204` |
-| `POST /api/foyer/watch/played` | users | `{ collection, id, played }` → `204`; a series marks each of its episodes |
-| `GET /api/foyer/watch/resume` | users | `?limit` (20) → `{ items: [{ collection, id, identity, title, showTitle?, season?, episode?, positionMs, durationMs, watched, lastPlayedAt }] }`, the latest first |
+| `POST /api/foyer/watch/progress` | users | `{ collection, id, file?, kind: started \| progress \| stopped \| end, positionMs, durationMs, paused?, session? }` → `204`; `file` names one of the title's extras, which keeps its own |
+| `POST /api/foyer/watch/played` | users | `{ collection, id, file?, played }` → `204`; a series marks each of its episodes, `file` one of its extras |
+| `GET /api/foyer/catalogue` | users | `?kind=movies \| shows&sort=title \| releaseDate \| addedAt \| rating&order=asc \| desc&limit&cursor&term&genre` → `{ items: [title], nextCursor? }`: every library of the kind that is switched on as one list, 50 to a page (100 at most), in exactly Loge's `compareItems` order, each title with this user's watch status — a series' from its episodes. `nextCursor` holds the last title's keys, so a scan between two pages moves nothing; a guess and a title whose files are gone are never listed; `term` finds every word in a title's names and year, case and accents aside; `genre` is one genre, as Loge keys it |
+| `GET /api/foyer/catalogue/genres` | users | `?kind` → `{ genres }`: every genre a kind's listed titles are filed under, each once, as TMDB spells it |
+| `GET /api/foyer/catalogue/resume` | users | `?limit` (20) → `{ items: [{ kind: "movie", title } \| { kind: "episode", episode, show }] }`: what this user began past 30 seconds and has not finished, the latest first; a series' extra comes as one of its episodes |
+| `GET /api/foyer/catalogue/{collection}/{id}` | users | `{ title, tagline, versions, extras, seasons? }`: a title's page — its files still on the share, the one to play first first, never where on the share they lie; a series' seasons; `404` for a guess or a library switched off |
+| `GET /api/foyer/catalogue/{collection}/{id}/seasons` | users | `{ seasons: [{ key, number?, name, airDate?, episodeCount, posterPath?, unwatched? }] }`: what the series holds, specials as season 0, named as TMDB names them, and its extras last as `extras` |
+| `GET /api/foyer/catalogue/{collection}/{id}/seasons/{season}` | users | `{ episodes }`: a season's in order, each with this user's watch status — or, for `extras`, the extras played as episodes: `id` `extra:<file>`, by the series' record and the file |
 | `GET`, `HEAD /api/foyer/stream/{file}?u&exp&sig` | whoever holds the address | the file's bytes, a `Range` passed on: `206` with `Content-Range`; `403` when the signature is wrong or six hours old |
 | `GET /api/foyer/admin/adapters` | superusers | every adapter, by category: `[{ key, category, name, description, notice?, single, planned, fields, defaults, connections: [{ id, adapter, name, enabled, values, status? }] }]`, each secret as `"******"` when set and `""` when not |
 | `PUT /api/foyer/admin/adapters/{key}` | superusers | a single adapter's settings — TMDB's, FFmpeg's: `{ enabled, values }` → its one connection, made by the first save; `400` names each field that will not do, as `values.<key>`, and refuses an adapter set up as connections |
@@ -60,6 +65,25 @@ and their rules, and how they fail.
 - **A title's identity that changes takes its watch status with it**: TMDB
   naming it at last, or a superuser. Two titles become one: watched if either
   was, played as often as both, and where the later playing left off.
+- **An extra keeps its own** — a film, an OVA, a special TMDB lacks that came
+  with a series — by its title's identity and what the extra is:
+  `tmdb:tv:37854/extra:4f0e9c1d2b3a5867`. A better copy of it keeps what was
+  watched, and it moves with its title.
+
+### The catalogue
+
+- **What Loge reads of the library**, as `@loge/api`'s `foyer.ts` reads it:
+  the app's `adapters/api/fixtures/foyer/routes/` hold an example of each
+  answer, and the Go tests hold every answer to their keys.
+- **In the app's own order.** Loge merges every source's pages by one
+  comparison, so a page comes sorted as it sorts: by the value, a missing one
+  first ascending and last descending, then the lowered title, then Loge's id
+  for it, `collection/id`. The titles keep their keys for it (`docs/library`)
+  and a page is the next few after the last one's keys — never an offset.
+- **A field a title lacks is absent**, never empty or 0: an empty sort title
+  would sort as it is, and a rating of 0 is nobody's.
+- **A library switched off** on the dashboard is neither scanned nor in the
+  catalogue.
 
 ### Streams
 
@@ -73,7 +97,9 @@ and their rules, and how they fail.
 - **No stream address is ever logged**, a refused one neither: it opens the
   file to whoever holds it.
 - Streams have a rate limit of their own: 600 requests in 10 seconds per
-  address, before the catch-all.
+  address, before the catch-all. So do the pictures PocketBase's file route
+  serves — posters, backdrops, stills — so a TV scrolling its rows never
+  starves its own reports.
 
 ### The Adapters page's routes
 

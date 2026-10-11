@@ -6,7 +6,9 @@ package watch
 
 import (
 	"errors"
+	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/core"
@@ -173,4 +175,27 @@ func Move(app core.App, from, to string) error {
 		}
 		return nil
 	})
+}
+
+// MoveExtras gives what was watched of a title's extras to its new identity
+// with it: an extra is known by its title's identity (identity.Extra).
+func MoveExtras(app core.App, from, to string) error {
+	if from == "" || to == "" || from == to {
+		return nil
+	}
+	prefix := from + "/extra:"
+	var identities []string
+	// Not LIKE: SQLite's takes no escape unless told, and an identity may hold an underscore.
+	err := app.DB().Select("identity").Distinct(true).From(Collection).
+		Where(dbx.NewExp("substr([[identity]], 1, {:n}) = {:prefix}", dbx.Params{"n": utf8.RuneCountInString(prefix), "prefix": prefix})).
+		Column(&identities)
+	if err != nil {
+		return err
+	}
+	for _, id := range identities {
+		if err := Move(app, id, to+"/extra:"+strings.TrimPrefix(id, prefix)); err != nil {
+			return err
+		}
+	}
+	return nil
 }

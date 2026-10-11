@@ -13,12 +13,12 @@ import (
 type Video struct {
 	Codec     string  `json:"codec,omitempty"`
 	Profile   string  `json:"profile,omitempty"`
-	Width     int     `json:"width,omitempty"`
-	Height    int     `json:"height,omitempty"`
-	FrameRate float64 `json:"frame_rate,omitempty"`
-	BitDepth  int     `json:"bit_depth,omitempty"`
+	Width     int     `json:"width,omitzero"`
+	Height    int     `json:"height,omitzero"`
+	FrameRate float64 `json:"frame_rate,omitzero"`
+	BitDepth  int     `json:"bit_depth,omitzero"`
 	HDR       string  `json:"hdr,omitempty"`
-	Bitrate   int64   `json:"bitrate,omitempty"`
+	Bitrate   int64   `json:"bitrate,omitzero"`
 }
 
 type Audio struct {
@@ -26,20 +26,20 @@ type Audio struct {
 	Profile       string `json:"profile,omitempty"`
 	Language      string `json:"language,omitempty"`
 	Label         string `json:"label,omitempty"`
-	Channels      int    `json:"channels,omitempty"`
+	Channels      int    `json:"channels,omitzero"`
 	ChannelLayout string `json:"channel_layout,omitempty"`
-	Bitrate       int64  `json:"bitrate,omitempty"`
+	Bitrate       int64  `json:"bitrate,omitzero"`
 	Spatial       string `json:"spatial,omitempty"`
-	Default       bool   `json:"default,omitempty"`
+	Default       bool   `json:"default,omitzero"`
 }
 
 type Subtitle struct {
 	Format          string `json:"format,omitempty"`
 	Language        string `json:"language,omitempty"`
 	Label           string `json:"label,omitempty"`
-	Forced          bool   `json:"forced,omitempty"`
-	Default         bool   `json:"default,omitempty"`
-	HearingImpaired bool   `json:"hearing_impaired,omitempty"`
+	Forced          bool   `json:"forced,omitzero"`
+	Default         bool   `json:"default,omitzero"`
+	HearingImpaired bool   `json:"hearing_impaired,omitzero"`
 	Delivery        string `json:"delivery"`
 }
 
@@ -54,12 +54,12 @@ type Version struct {
 	File       string     `json:"file"`
 	Path       string     `json:"path"`
 	Label      string     `json:"label,omitempty"`
-	Size       int64      `json:"size,omitempty"`
+	Size       int64      `json:"size,omitzero"`
 	Quality    string     `json:"quality,omitempty"`
 	Container  string     `json:"container,omitempty"`
-	DurationMs int64      `json:"duration_ms,omitempty"`
-	Bitrate    int64      `json:"bitrate,omitempty"`
-	Video      *Video     `json:"video,omitempty"`
+	DurationMs int64      `json:"duration_ms,omitzero"`
+	Bitrate    int64      `json:"bitrate,omitzero"`
+	Video      *Video     `json:"video,omitzero"`
 	Audio      []Audio    `json:"audio"`
 	Subtitles  []Subtitle `json:"subtitles"`
 	Chapters   []Chapter  `json:"chapters,omitempty"`

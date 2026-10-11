@@ -1,6 +1,7 @@
 package identity
 
 import (
+	"strings"
 	"testing"
 
 	"foyer/internal/fixtures"
@@ -35,6 +36,30 @@ func TestIdentitiesAreLoges(t *testing.T) {
 		if got != want {
 			t.Errorf("got %q, want %q", got, want)
 		}
+	}
+}
+
+// An extra is its title's, by what it is: a better copy keeps its status,
+// another extra of another title never shares it.
+func TestAnExtraIsItsTitles(t *testing.T) {
+	red := Extra(Show(37854), "movie", "One Piece Film: Red", "Films/One.Piece.Film.Red.2022.1080p.mkv")
+	if !strings.HasPrefix(red, "tmdb:tv:37854/extra:") || len(red) != len("tmdb:tv:37854/extra:")+16 {
+		t.Fatalf("Extra = %q", red)
+	}
+	if again := Extra(Show(37854), "movie", "One Piece Film - RED", "Films/One.Piece.Film.Red.2022.2160p.mkv"); again != red {
+		t.Errorf("a better copy is another extra: %q", again)
+	}
+	if other := Extra(Show(1), "movie", "One Piece Film: Red", ""); other == red {
+		t.Error("two titles share an extra")
+	}
+	if ova := Extra(Show(37854), "ova", "One Piece Film: Red", ""); ova == red {
+		t.Error("an OVA and a film of one name are one")
+	}
+	if byFile := Extra(Show(37854), "extra", "", "Extras/Making Of.mkv"); byFile != Extra(Show(37854), "extra", "making of", "") {
+		t.Errorf("an extra with no name is not known by its file's: %q", byFile)
+	}
+	if Extra("", "movie", "One Piece Film: Red", "") != "" {
+		t.Error("an extra of a title with no identity has one")
 	}
 }
 

@@ -47,9 +47,9 @@ func TestEachUserKeepsWhatTheyWatched(t *testing.T) {
 		t.Fatalf("a direct write: %d", got.status)
 	}
 
-	resume := s.call(http.MethodGet, "/api/foyer/watch/resume", alex.token, nil)
-	items := resume.body["items"].([]any)
-	if resume.status != http.StatusOK || len(items) != 1 || items[0].(map[string]any)["title"] != "Some Film" {
+	resume := s.call(http.MethodGet, "/api/foyer/catalogue/resume", alex.token, nil)
+	items, _ := resume.body["items"].([]any)
+	if resume.status != http.StatusOK || len(items) != 1 || items[0].(map[string]any)["title"].(map[string]any)["title"] != "Some Film" {
 		t.Fatalf("resume: %d %v", resume.status, resume.body)
 	}
 
@@ -59,7 +59,7 @@ func TestEachUserKeepsWhatTheyWatched(t *testing.T) {
 	if state := s.state(alex, "tmdb:movie:1001"); !state.GetBool("watched") || state.GetInt("play_count") != 1 || state.GetInt("position_ms") != 0 {
 		t.Fatalf("after the end: %v", state.PublicExport())
 	}
-	if items := s.call(http.MethodGet, "/api/foyer/watch/resume", alex.token, nil).body["items"].([]any); len(items) != 0 {
+	if items := s.call(http.MethodGet, "/api/foyer/catalogue/resume", alex.token, nil).body["items"].([]any); len(items) != 0 {
 		t.Fatalf("still resumed: %v", items)
 	}
 }

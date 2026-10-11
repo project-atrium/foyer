@@ -6,7 +6,9 @@ package identity
 
 import (
 	"fmt"
+	"path"
 	"strconv"
+	"strings"
 
 	"foyer/internal/titles"
 )
@@ -53,4 +55,24 @@ func Hash(identity string) string {
 		return hash
 	}
 	return fmt.Sprintf("%08x%08x", pass(0x811c9dc5), pass(0x050c5d1f))
+}
+
+// Extra is one of a title's extras — a film, an OVA, a featurette that came
+// with it — by the title's identity and what the extra is, never by its
+// file: `tmdb:tv:37854/extra:4f0e9c1d2b3a5867`. A better copy of the extra
+// keeps what was watched of it, and it moves with its title. Foyer's own:
+// Loge reads it and never makes one. Nothing where the title has none.
+func Extra(title, kind, name, file string) string {
+	if title == "" {
+		return ""
+	}
+	key := titles.Key(name)
+	if key == "" {
+		// An extra with no name is known by its file's.
+		key = titles.Key(strings.TrimSuffix(path.Base(file), path.Ext(file)))
+	}
+	if key == "" {
+		key = file
+	}
+	return title + "/extra:" + Hash(kind+"\n"+key)
 }

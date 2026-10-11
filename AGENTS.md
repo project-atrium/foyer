@@ -91,7 +91,9 @@ internal/media/      what a file is: Loge's MediaVersion, from a release's name 
 internal/stream/     signed stream addresses, the Range proxy, the quiet log, the loopback for tools
 internal/ffmpeg/     the tools: where, which versions, the GPU tried; the FFmpeg adapter
 internal/probe/      ffprobe's answers as versions, and the queue of files waiting for it
-internal/watch/      each user's watch status: Loge's rules, the routes, an identity's history moved
+internal/watch/      each user's watch status: Loge's rules, the routes, an identity's history moved, extras with it
+internal/catalogue/  the library as Loge reads it: keyset pages in compareItems' order, a title's page, seasons,
+                     episodes and extras, genres, what was begun — each with its user's watch status; what is served
 internal/identity/   Loge's watchIdentity and identityHash, ported
 internal/dashboard/  the dashboard's icon and pages — Library, Settings → Adapters: a PocketBase UI extension,
                      plain JavaScript, embedded
@@ -100,7 +102,7 @@ internal/fixtures/   reads what both sides must answer alike from the app beside
 migrations/          0001 users are profiles; 0002 the name, the rate limits, the first superuser; 0003 adapters;
                      0004 libraries, media_entries, media_files, identities; 0005 streams' rate limit;
                      0006 watch_states; 0007 adapters become connections, a library a folder of one;
-                     0008 the household's record, devices, pairing's rate limit
+                     0008 the household's record, devices, pairing's rate limit; 0009 pictures' rate limit
 dev/fakezurg/        a pretend Zurg for running Foyer here, from Zurg's .zurgtorrent records; never in the image
 harness/             Node and vitest, test-only: the app's code that speaks Foyer against the real binary
 Dockerfile           two stages: a Go build, then Debian with Jellyfin's ffmpeg and the binary
@@ -218,6 +220,15 @@ Go tests sit beside what they test. Everything else is PocketBase's: `serve`,
   corrects the rest. A season folder never takes a number counted from the
   series' start — a pack's "Season 01" can hold episode 62 — and Zurg's
   ` (id)` suffix is stripped before anything is read.
+- **PocketBase answers in `encoding/json/v2`**, where `omitempty` leaves out
+  only what is empty as JSON — `""`, `null`, `{}`, `[]` — and a `0` or a
+  `false` goes out. An optional number or flag in an answer is `omitzero`:
+  a rating of 0 sent is a rating the app sorts by.
+- **The catalogue is what Loge reads, and pages by keys.** Its order is
+  `compareItems`' to the byte, a page is what sorts after the last one's keys
+  — never `OFFSET`, which a scan between two pages would shift — and what a
+  user may not see is never in it: a guess, a title whose files are gone, a
+  library switched off. A field a title lacks is absent, never empty.
 - **Titles are keyed as Loge keys them.** `internal/titles` is `@loge/api`'s
   `titleKey` and `bareTitle`, and its tests are Loge's: change one, change
   both.
@@ -288,7 +299,8 @@ Go tests sit beside what they test. Everything else is PocketBase's: `serve`,
 **Users are profiles, and the library runs.** PocketBase v0.40.4, used as a
 Go framework: `users` as profiles with their PINs; a WebDAV share's folders
 — Zurg's — as libraries, named by TMDB, read by ffprobe and streamed through signed
-addresses; each user's watch status; the dashboard's Library and Adapters
+addresses; each user's watch status; the catalogue Loge reads it by, in
+the app's own order; the dashboard's Library and Adapters
 pages — adapters set up as connections, several shares among them, Settings
 opening on Foyer's own. `go test ./...` proves it, and the dashboard was driven headless in
 Chrome against a pretend Zurg and the real TMDB. The account-sync protocol is

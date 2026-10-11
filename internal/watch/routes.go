@@ -2,7 +2,6 @@ package watch
 
 import (
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -10,10 +9,9 @@ import (
 	"github.com/pocketbase/pocketbase/apis"
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/router"
-)
 
-// resumeFrom is how far in a title must be to be resumed: less is a look.
-const resumeFrom = 30_000
+	"foyer/internal/identity"
+)
 
 // Routes mounts what a user's player reports to, and reads from. isTitle
 // says whether a collection is a library's.
@@ -40,6 +38,8 @@ func Routes(r *router.Router[*core.RequestEvent], isTitle func(core.App, string)
 		var body struct {
 			Collection string `json:"collection"`
 			ID         string `json:"id"`
+			// One of the title's extras, played by its file.
+			File string `json:"file"`
 			Report
 		}
 		if err := re.BindBody(&body); err != nil {
@@ -57,8 +57,12 @@ func Routes(r *router.Router[*core.RequestEvent], isTitle func(core.App, string)
 		if err != nil {
 			return err
 		}
+		watched, ok := itemOrExtra(re.App, item, body.File)
+		if !ok {
+			return re.NotFoundError("That is none of this title's extras.", nil)
+		}
 		now := time.Now().UTC()
-		if err := update(re.App, re.Auth.Id, itemOf(re.App, item), func(s State) State { return Apply(s, body.Report, now) }); err != nil {
+		if err := update(re.App, re.Auth.Id, watched, func(s State) State { return Apply(s, body.Report, now) }); err != nil {
 			return re.Error(http.StatusConflict, err.Error(), nil)
 		}
 		return re.NoContent(http.StatusNoContent)
@@ -68,6 +72,7 @@ func Routes(r *router.Router[*core.RequestEvent], isTitle func(core.App, string)
 		var body struct {
 			Collection string `json:"collection"`
 			ID         string `json:"id"`
+			File       string `json:"file"`
 			Played     bool   `json:"played"`
 		}
 		if err := re.BindBody(&body); err != nil {
@@ -79,6 +84,16 @@ func Routes(r *router.Router[*core.RequestEvent], isTitle func(core.App, string)
 		}
 		now := time.Now().UTC()
 		mark := func(s State) State { return Mark(s, body.Played, now) }
+		if body.File != "" {
+			extra, ok := itemOrExtra(re.App, item, body.File)
+			if !ok {
+				return re.NotFoundError("That is none of this title's extras.", nil)
+			}
+			if err := update(re.App, re.Auth.Id, extra, mark); err != nil {
+				return re.Error(http.StatusConflict, err.Error(), nil)
+			}
+			return re.NoContent(http.StatusNoContent)
+		}
 		// A series is marked by its episodes.
 		if episodes, err := re.App.FindCollectionByNameOrId(body.Collection + "_episodes"); err == nil && item.GetString("show") == "" {
 			list, err := re.App.FindAllRecords(episodes.Name, dbx.HashExp{"show": item.Id})
@@ -97,54 +112,28 @@ func Routes(r *router.Router[*core.RequestEvent], isTitle func(core.App, string)
 		}
 		return re.NoContent(http.StatusNoContent)
 	}).Bind(apis.RequireAuth("users"))
+}
 
-	r.GET("/api/foyer/watch/resume", func(re *core.RequestEvent) error {
-		limit, _ := strconv.Atoi(re.Request.URL.Query().Get("limit"))
-		limit = min(max(limit, 1), 100)
-		if re.Request.URL.Query().Get("limit") == "" {
-			limit = 20
+// itemOrExtra is what is watched: the title, or the one of its extras whose
+// file is named — known by the title's identity and what the extra is. False
+// for a file that is none of its extras.
+func itemOrExtra(app core.App, r *core.Record, file string) (Item, bool) {
+	if file == "" {
+		return itemOf(app, r), true
+	}
+	var extras []struct {
+		File  string `json:"file"`
+		Path  string `json:"path"`
+		Kind  string `json:"kind"`
+		Title string `json:"title"`
+	}
+	_ = r.UnmarshalJSONField("extras", &extras)
+	for _, x := range extras {
+		if x.File == file {
+			return Item{Collection: r.Collection().Name, ID: r.Id, Identity: identity.Extra(r.GetString("identity"), x.Kind, x.Title, x.Path)}, true
 		}
-		states, err := re.App.FindRecordsByFilter(Collection, "user = {:user} && position_ms >= {:from}", "-last_played_at", limit*2, 0,
-			dbx.Params{"user": re.Auth.Id, "from": resumeFrom})
-		if err != nil {
-			return err
-		}
-		info, err := re.RequestInfo()
-		if err != nil {
-			return err
-		}
-		items := []map[string]any{}
-		for _, s := range states {
-			if len(items) >= limit {
-				break
-			}
-			collection := s.GetString("item_collection")
-			if !isTitle(re.App, collection) {
-				continue
-			}
-			item, err := re.App.FindRecordById(collection, s.GetString("item_id"))
-			if err != nil {
-				continue
-			}
-			if ok, _ := re.App.CanAccessRecord(item, info, item.Collection().ViewRule); !ok {
-				continue
-			}
-			entry := map[string]any{
-				"collection": collection, "id": item.Id, "identity": s.GetString("identity"), "title": item.GetString("title"),
-				"positionMs": s.GetInt64("position_ms"), "durationMs": s.GetInt64("duration_ms"), "watched": s.GetBool("watched"),
-				"lastPlayedAt": s.GetDateTime("last_played_at").Time(),
-			}
-			if show := item.GetString("show"); show != "" {
-				if parent, err := re.App.FindRecordById(strings.TrimSuffix(collection, "_episodes"), show); err == nil {
-					entry["showTitle"] = parent.GetString("title")
-					entry["showId"] = parent.Id
-				}
-				entry["season"], entry["episode"] = item.GetInt("season"), item.GetInt("episode")
-			}
-			items = append(items, entry)
-		}
-		return re.JSON(http.StatusOK, map[string]any{"items": items})
-	}).Bind(apis.RequireAuth("users"))
+	}
+	return Item{}, false
 }
 
 // itemOf is a title as watch status knows it: its identity, and the

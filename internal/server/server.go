@@ -14,6 +14,7 @@ import (
 	"foyer/internal/adapters"
 	"foyer/internal/adapters/tmdb"
 	"foyer/internal/adapters/webdav"
+	"foyer/internal/catalogue"
 	"foyer/internal/config"
 	"foyer/internal/dashboard"
 	"foyer/internal/ffmpeg"
@@ -36,6 +37,7 @@ type Server struct {
 	Streams   *stream.Streamer
 	Probes    *probe.Queue
 	Household *household.Service
+	Catalogue *catalogue.Service
 }
 
 // collections are Foyer's own static collections: written by its code alone.
@@ -65,8 +67,15 @@ func Bind(app core.App, cfg config.Config) *Server {
 	s.Probes = probe.New(app, registry, s.Streams, lib, library.FilesCollection)
 	s.Household = household.New(app)
 	s.Household.Bind()
+	s.Household.Serving(catalogue.Served)
+	s.Catalogue = catalogue.New(app)
 	lib.OnScanned(s.Probes.Poke)
-	lib.OnIdentityMoved(func(from, to string) error { return watch.Move(app, from, to) })
+	lib.OnIdentityMoved(func(from, to string) error {
+		if err := watch.Move(app, from, to); err != nil {
+			return err
+		}
+		return watch.MoveExtras(app, from, to)
+	})
 	guard.Bind(app, s.managed)
 	app.OnServe().BindFunc(func(se *core.ServeEvent) error {
 		// Never PocketBase's installer: on a server with no superuser it opens a
@@ -82,6 +91,7 @@ func Bind(app core.App, cfg config.Config) *Server {
 		s.Streams.Routes(se.Router)
 		s.Library.PlayRoutes(se.Router, s.Streams)
 		watch.Routes(se.Router, library.Managed)
+		s.Catalogue.Routes(se.Router)
 		admin := se.Router.Group("/api/foyer/admin")
 		admin.Bind(apis.RequireSuperuserAuth())
 		s.Adapters.Routes(admin)
