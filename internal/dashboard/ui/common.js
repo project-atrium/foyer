@@ -1,5 +1,5 @@
-// What Foyer's settings pages share: calling Foyer, saying what went wrong,
-// dates as the dashboard writes them, and PocketBase's own settings sidebar,
+// What Foyer's pages share: calling Foyer, saying what went wrong, dates as
+// the dashboard writes them, sizes, and PocketBase's own settings sidebar,
 // which it does not export — its groups, Foyer's first among them.
 
 export function send(path, options = {}) {
@@ -14,6 +14,21 @@ export function failed(err) {
 
 export function when(iso) {
   return iso ? app.utils.toLocalDatetime(iso) : '';
+}
+
+// size is bytes as people read them: 4.2 GB.
+export function size(bytes) {
+  if (!bytes) {
+    return '';
+  }
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let n = bytes;
+  let unit = 0;
+  while (n >= 1024 && unit < units.length - 1) {
+    n /= 1024;
+    unit++;
+  }
+  return `${n.toFixed(n >= 10 || unit == 0 ? 0 : 1)} ${units[unit]}`;
 }
 
 // PocketBase's own settings sidebar, which it does not export: its groups,

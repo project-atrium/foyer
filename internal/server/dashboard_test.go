@@ -35,6 +35,7 @@ func TestTheDashboardsPagesAreNeverKeptStale(t *testing.T) {
 		"/_/extensions/foyer/library.js":   "javascript",
 		"/_/extensions/foyer/adapters.js":  "javascript",
 		"/_/extensions/foyer/household.js": "javascript",
+		"/_/extensions/foyer/activity.js":  "javascript",
 		"/_/extensions/foyer/common.js":    "javascript",
 		"/_/extensions/foyer/foyer.css":    "text/css",
 	} {
@@ -63,7 +64,7 @@ func TestMainLoadsPagesThatExist(t *testing.T) {
 		t.Error("main.js imports or exports: PocketBase pastes it into a function")
 	}
 	pages := regexp.MustCompile(`page\('([\w.-]+)', '(\w+)'\)`).FindAllSubmatch(main, -1)
-	if len(pages) != 3 {
+	if len(pages) != 4 {
 		t.Fatalf("main.js loads %d pages", len(pages))
 	}
 	for _, p := range pages {

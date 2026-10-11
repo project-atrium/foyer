@@ -1,5 +1,7 @@
 // The Library page: every library's titles as posters, the newest added
 // first — and a title's panel, where a guess is confirmed or corrected.
+import { size } from './common.js';
+
 const perPage = 48;
 
 const states = {
@@ -26,20 +28,6 @@ function posterURL(item, thumb) {
     return '';
   }
   return app.pb.files.getURL({ collectionId: item.collectionId, collectionName: item.collectionName, id: item.id }, item.poster, { thumb });
-}
-
-function size(bytes) {
-  if (!bytes) {
-    return '';
-  }
-  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-  let n = bytes;
-  let unit = 0;
-  while (n >= 1024 && unit < units.length - 1) {
-    n /= 1024;
-    unit++;
-  }
-  return `${n.toFixed(n >= 10 || unit == 0 ? 0 : 1)} ${units[unit]}`;
 }
 
 // added is the day a title's newest file came, as PocketBase writes dates.

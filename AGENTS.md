@@ -99,8 +99,8 @@ internal/userstate/  what each user keeps for themselves — preferences, follow
 internal/catalogue/  the library as Loge reads it: keyset pages in compareItems' order, a title's page, seasons,
                      episodes and extras, genres, what was begun — each with its user's watch status; what is served
 internal/identity/   Loge's watchIdentity and identityHash, ported
-internal/dashboard/  the dashboard's icon and pages — Library, Settings → Adapters: a PocketBase UI extension,
-                     plain JavaScript, embedded
+internal/dashboard/  the dashboard's icon and pages — Library, Live Activity, Settings → Adapters and Household:
+                     a PocketBase UI extension, plain JavaScript, embedded
 internal/version/    the version, always the app's: its `npm run release` moves both; the protocol Loge's adapters speak
 internal/fixtures/   reads what both sides must answer alike from the app beside Foyer; tests only, skipping without it
 migrations/          0001 users are profiles; 0002 the name, the rate limits, the first superuser; 0003 adapters;
@@ -314,6 +314,12 @@ Go tests sit beside what they test. Everything else is PocketBase's: `serve`,
     Application page. Foyer's settings come first by building
     `settingsNavGroups` as `{Foyer, ...groups}`, and the header's Settings
     link points at Foyer's page with an `isActive` for any `#/settings`.
+  - **A page that polls redraws nothing but what changed.** Live Activity
+    keeps each playing as it first came and a store of what a poll changes,
+    written in place: rebuilt every two seconds, every poster would be
+    fetched again.
+  - **`--fieldsGap` is not PocketBase's everywhere** — only inside some of
+    its forms. `foyer.css` gives it its 10px wherever it uses it.
   - **Foyer's files are served `no-cache`** (`dashboard.Fresh`): outside
     `--dev` PocketBase lets a browser keep `/_/` two weeks, and last
     version's pages would call this version's routes.
