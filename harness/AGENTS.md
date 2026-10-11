@@ -10,7 +10,9 @@ app's `adapters/api/fixtures/foyer/` keep the two sides' answers alike; this
 keeps the *adapters* in step: the Loge code that speaks Foyer — `@loge/api`'s
 protocol module now, and the Foyer adapters as they come — against the real
 binary: `sync/foyer` pairs a device, signs users in, renews a session and
-is refused once a password changes (`test/household.test.ts`); and
+is refused once a password changes (`test/household.test.ts`), and carries
+a user's own lists, follows and ★ between their devices and to nobody else
+(`test/state.test.ts`); and
 `sources/foyer`, lent a signed-in user's session, browses a library scanned
 from a pretend Zurg in the app's own order, plays a film's bytes by range,
 reports, resumes, marks it watched and downloads it (`test/library.test.ts`).

@@ -42,11 +42,19 @@ func Routes(r *router.Router[*core.RequestEvent]) {
 	}).Bind(users)
 
 	r.GET("/api/foyer/me/changes", func(re *core.RequestEvent) error {
-		after, err := strconv.ParseInt(re.Request.URL.Query().Get("after"), 10, 64)
+		q := re.Request.URL.Query()
+		after, err := strconv.ParseInt(q.Get("after"), 10, 64)
 		if err != nil || after < 0 {
 			return re.BadRequestError("after is a seq: a whole number from 0.", nil)
 		}
-		page, err := Changes(re.App, re.Auth.Id, after, pageSize)
+		// Where the read began: the first page's after, unless said.
+		from := after
+		if q.Has("from") {
+			if from, err = strconv.ParseInt(q.Get("from"), 10, 64); err != nil || from < 0 || from > after {
+				return re.BadRequestError("from is where the read began: a seq, from 0 to after.", nil)
+			}
+		}
+		page, err := Changes(re.App, re.Auth.Id, after, from, pageSize)
 		if err != nil {
 			return re.InternalServerError("", err)
 		}

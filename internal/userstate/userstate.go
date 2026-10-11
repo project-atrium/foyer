@@ -241,9 +241,12 @@ func seqOf(app core.App, name string) (int64, error) {
 }
 
 // Changes is a page of what changed in a user's state after a seq, in the
-// order it was stored, tombstones too — or a reset, where deletes since were
-// let go of. After 0 is everything Foyer keeps.
-func Changes(app core.App, user string, after int64, limit int) (Page, error) {
+// order it was stored, tombstones too — or a reset, where deletes since the
+// read began (from, the first page's after) were let go of. A later page's
+// cursor is never judged so: a read of everything pages by the seqs of the
+// rows it returns, and an old row's lies below what was pruned. After 0 is
+// everything Foyer keeps.
+func Changes(app core.App, user string, after, from int64, limit int) (Page, error) {
 	// Read first: a write committing after it has a seq past it, and comes with the next read.
 	now, err := seqOf(app, "state")
 	if err != nil {
@@ -253,9 +256,9 @@ func Changes(app core.App, user string, after int64, limit int) (Page, error) {
 	if err != nil {
 		return Page{}, err
 	}
-	// Deletes since were let go of — or this Foyer went back to an older copy of itself, and lost what it
-	// had stored since: either way, the device reads everything again.
-	if after > 0 && (after < pruned || after > now) {
+	// Deletes since the read began were let go of — or this Foyer went back to an older copy of itself,
+	// and lost what it had stored since: either way, the device reads everything again.
+	if from > 0 && from < pruned || after > now {
 		return Page{Records: []map[string]any{}, Reset: true}, nil
 	}
 	type row struct {

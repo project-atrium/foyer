@@ -166,14 +166,14 @@ func TestDeletesReachEveryDeviceThenReset(t *testing.T) {
 	}
 
 	// A page at a time, in the order last stored: a row written again moves to the end.
-	first, err := userstate.Changes(h.app, alex.id, 0, 2)
+	first, err := userstate.Changes(h.app, alex.id, 0, 0, 2)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(first.Records) != 2 || !first.More || first.Records[0]["key"] != "a" || first.Records[1]["key"] != "c" {
 		t.Fatalf("the first page %+v", first)
 	}
-	second, err := userstate.Changes(h.app, alex.id, first.Seq, 2)
+	second, err := userstate.Changes(h.app, alex.id, first.Seq, 0, 2)
 	if err != nil || len(second.Records) != 1 || second.More || second.Records[0]["key"] != "b" || second.Records[0]["deleted"] != true {
 		t.Fatalf("the second page %+v %v", second, err)
 	}
@@ -195,6 +195,20 @@ func TestDeletesReachEveryDeviceThenReset(t *testing.T) {
 	}
 	if ahead := h.changes(alex, 1_000_000); ahead["reset"] != true {
 		t.Errorf("a cursor past what Foyer has reads %v", ahead)
+	}
+	// A read of everything pages on past what was let go of: only where a read began decides a reset.
+	for _, id := range []string{"d", "e", "f"} {
+		push(follow(id))
+	}
+	page, err := userstate.Changes(h.app, alex.id, 0, 0, 1)
+	if err != nil || !page.More {
+		t.Fatalf("the first page of everything %+v %v", page, err)
+	}
+	if next, err := userstate.Changes(h.app, alex.id, page.Seq, 0, 1); err != nil || next.Reset || len(next.Records) != 1 {
+		t.Errorf("a later page of everything reads %+v %v", next, err)
+	}
+	if got := h.call(http.MethodGet, "/api/foyer/me/changes?after=1&from=2", alex.token, nil); got.status != http.StatusBadRequest {
+		t.Errorf("a read that began after its own page: %d", got.status)
 	}
 	// A user gone takes everything of theirs.
 	record, _ := h.app.FindRecordById("users", alex.id)
