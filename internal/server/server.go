@@ -32,6 +32,7 @@ import (
 	"foyer/internal/stream"
 	"foyer/internal/userstate"
 	"foyer/internal/watch"
+	"foyer/internal/youtube"
 )
 
 // Server is Foyer on one PocketBase app: what Bind made, for main and the
@@ -48,6 +49,7 @@ type Server struct {
 	Playings  *sessions.Registry
 	Remux     *hls.Manager
 	Copies    *copies.Manager
+	YouTube   *youtube.YouTube
 }
 
 // collections are Foyer's own static collections: written by its code alone.
@@ -67,7 +69,7 @@ var collections = []string{
 func Bind(app core.App, cfg config.Config) *Server {
 	// What is built first: an adapter that is built takes its planned
 	// stand-in's place.
-	built := []adapters.Adapter{webdav.Adapter(), tmdb.Adapter(), ffmpeg.Adapter()}
+	built := []adapters.Adapter{webdav.Adapter(), tmdb.Adapter(), ffmpeg.Adapter(), youtube.Adapter()}
 	registry := adapters.NewRegistry(app, append(built, adapters.Planned()...)...)
 	lib := library.New(app, registry)
 	s := &Server{
@@ -135,6 +137,19 @@ func Bind(app core.App, cfg config.Config) *Server {
 		Sign:   func(payload []byte) ([]byte, error) { return s.Streams.Sign(copies.SignLabel, payload) },
 		Log:    func(msg string, args ...any) { app.Logger().Warn(msg, args...) },
 	})
+	// yt-dlp's cache and Deno's in PocketBase's own temporary place: never in
+	// a backup, and emptied at every start.
+	s.YouTube = youtube.New(func() (string, bool) {
+		settings, err := registry.Settings(youtube.Key)
+		if err != nil || !settings.Enabled {
+			return "", false
+		}
+		tool := settings.String("ytdlp")
+		if tool == "" {
+			tool = "yt-dlp"
+		}
+		return tool, true
+	}, filepath.Join(app.DataDir(), core.LocalTempDirName, "youtube"), s.Streams, s.Playings)
 	// Copies are a cache anyone can make again: never in a backup, and a
 	// restore leaves the ones here where they are.
 	for _, backups := range []*hook.Hook[*core.BackupEvent]{app.OnBackupCreate(), app.OnBackupRestore()} {
@@ -175,6 +190,7 @@ func Bind(app core.App, cfg config.Config) *Server {
 		}
 		s.Library.PlayRoutes(se.Router, s.Streams, s.Playings, s.Remux, s.Copies)
 		s.Remux.Routes(se.Router)
+		s.YouTube.Routes(se.Router)
 		watch.Routes(se.Router, library.Managed, s.Playings.Heard)
 		s.Catalogue.Routes(se.Router)
 		userstate.Routes(se.Router)

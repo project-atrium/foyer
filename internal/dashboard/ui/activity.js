@@ -10,7 +10,7 @@ const perPage = 30;
 // What a poll changes of a playing; the rest stays as it first came.
 const changing = ['device', 'client', 'mode', 'speed', 'lastSeen', 'quiet', 'positionMs', 'durationMs', 'paused', 'bytes', 'bitrate', 'streams'];
 
-const modes = { direct: 'Direct', remux: 'Remuxed', transcode: 'Transcoded', copy: 'Smaller copy' };
+const modes = { direct: 'Direct', remux: 'Remuxed', transcode: 'Transcoded', copy: 'Smaller copy', relay: 'Relayed' };
 
 // What a poll changes of a copy being made.
 const makingNow = ['state', 'progress', 'speed', 'etaMs', 'error', 'started'];

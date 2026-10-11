@@ -63,7 +63,7 @@ func TestAPlannedAdapterIsListedAndCannotBeSetUp(t *testing.T) {
 	h := start(t, options{})
 	admin := h.superuser()
 	got := h.call(http.MethodGet, "/api/foyer/admin/adapters", admin, nil)
-	for key, category := range map[string]string{"jellyfin": "sources", "stalker": "iptv", "trakt": "tracking", "youtube": "sources"} {
+	for key, category := range map[string]string{"jellyfin": "sources", "stalker": "iptv", "trakt": "tracking", "yattee": "sources"} {
 		view := typeView(t, got.list, key)
 		if view["planned"] != true || view["category"] != category || len(view["fields"].([]any)) == 0 {
 			t.Errorf("%s: %v", key, view)

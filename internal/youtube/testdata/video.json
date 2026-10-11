@@ -1,0 +1,42 @@
+{
+  "id": "x3TJFoQWCHA",
+  "title": "The River, a Film",
+  "description": "Two hours down a river.",
+  "channel": "Rivers of the World",
+  "channel_id": "UCabcdefghijklmnopqrstuv",
+  "channel_follower_count": 182000,
+  "duration": 5731,
+  "timestamp": 1759912800,
+  "view_count": 1204331,
+  "is_live": false,
+  "live_status": "not_live",
+  "language": "en",
+  "thumbnails": [
+    {"url": "https://i.ytimg.com/vi/x3TJFoQWCHA/hqdefault.jpg", "width": 480, "height": 360},
+    {"url": "https://i.ytimg.com/vi_webp/x3TJFoQWCHA/maxresdefault.webp", "width": 1920, "height": 1080},
+    {"url": "https://i.ytimg.com/vi/x3TJFoQWCHA/maxresdefault.jpg", "width": 1280, "height": 720}
+  ],
+  "formats": [
+    {"format_id": "sb0", "ext": "mhtml", "protocol": "mhtml", "url": "https://i.ytimg.com/sb/x3TJFoQWCHA/storyboard3_L0/default.jpg", "vcodec": "none", "acodec": "none"},
+    {"format_id": "233", "ext": "mp4", "protocol": "m3u8_native", "url": "https://manifest.googlevideo.com/api/manifest/hls_playlist/expire/EXPIRE/id/x3/itag/233/file/index.m3u8", "manifest_url": "https://manifest.googlevideo.com/api/manifest/hls_variant/expire/EXPIRE/id/x3/file/index.m3u8", "vcodec": "none", "acodec": "mp4a.40.5"},
+    {"format_id": "616", "ext": "mp4", "protocol": "m3u8_native", "url": "https://manifest.googlevideo.com/api/manifest/hls_playlist/expire/EXPIRE/id/x3/itag/616/file/index.m3u8", "manifest_url": "https://manifest.googlevideo.com/api/manifest/hls_variant/expire/EXPIRE/id/x3/file/index.m3u8", "vcodec": "vp09.00.40.08", "acodec": "none", "width": 1920, "height": 1080, "fps": 24},
+    {"format_id": "18", "ext": "mp4", "protocol": "https", "url": "https://rr1---sn-test.googlevideo.com/videoplayback?expire=EXPIRE&ip=203.0.113.7&itag=18&mime=video%2Fmp4", "vcodec": "avc1.42001E", "acodec": "mp4a.40.2", "width": 640, "height": 360, "fps": 24, "filesize": 4096},
+    {"format_id": "137", "ext": "mp4", "protocol": "https", "url": "https://rr1---sn-test.googlevideo.com/videoplayback?expire=EXPIRE&ip=203.0.113.7&itag=137", "vcodec": "avc1.640028", "acodec": "none", "width": 1920, "height": 1080},
+    {"format_id": "140", "ext": "m4a", "protocol": "https", "url": "https://rr1---sn-test.googlevideo.com/videoplayback?expire=EXPIRE&ip=203.0.113.7&itag=140", "vcodec": "none", "acodec": "mp4a.40.2"}
+  ],
+  "subtitles": {
+    "en": [
+      {"ext": "json3", "url": "https://www.youtube.com/api/timedtext?v=x3TJFoQWCHA&lang=en&fmt=json3", "name": "English"},
+      {"ext": "vtt", "url": "https://www.youtube.com/api/timedtext?v=x3TJFoQWCHA&lang=en&fmt=vtt", "name": "English"}
+    ],
+    "live_chat": [{"ext": "json", "url": "https://www.youtube.com/live_chat_replay?v=x3TJFoQWCHA"}]
+  },
+  "automatic_captions": {
+    "en-orig": [{"ext": "vtt", "url": "https://www.youtube.com/api/timedtext?v=x3TJFoQWCHA&lang=en&kind=asr", "name": "English (Original)"}],
+    "de": [{"ext": "vtt", "url": "https://www.youtube.com/api/timedtext?v=x3TJFoQWCHA&lang=en&kind=asr&tlang=de", "name": "German"}]
+  },
+  "chapters": [
+    {"start_time": 0, "end_time": 312, "title": "Opening"},
+    {"start_time": 312, "end_time": 5731, "title": "The river"}
+  ]
+}

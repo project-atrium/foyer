@@ -94,6 +94,12 @@ Then make the dashboard's superuser, and a user for each person.
   file's own keyframes, every sound and text subtitle a rendition, made as it
   watches: off until you turn it on under FFmpeg, since mpv and VLC open the
   file as it is.
+- **YouTube through Foyer**: a household's devices play the site's videos
+  through Foyer — yt-dlp, here, says where a video's streams are, and Foyer
+  relays every playlist, segment and caption, since the site binds its
+  links to the address that asked. So a phone away from home plays them,
+  on every player. Browsing, and each user signed in for their own
+  recommendations, come next.
 - **Downloads made smaller**: a device keeping a film asks for a copy made
   to its own download settings — AV1 and Opus in Matroska by default, 1080p,
   a few GB where the file is tens — and Foyer makes it on the processor,

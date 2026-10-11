@@ -92,6 +92,8 @@ internal/stream/     signed stream addresses, the Range proxy, the quiet log, th
 internal/hls/        remuxing to HLS: a file's keyframe index — Matroska's Cues, an MP4's sync samples, read by
                      ranges — its codec's RFC 6381 name, what play decides for a player's profile, the playlists,
                      the signed ticket in their path, and a job per playing running one ffmpeg
+internal/youtube/    YouTube through Foyer: what yt-dlp says of a video, its streams relayed — every link sealed in an
+                     address of Foyer's own, playlists rewritten — the play route, the adapter
 internal/copies/     smaller copies for downloads: a device's settings read for a file, the recipe — AV1 and Opus
                      by default — ffmpeg's command, the jobs, the copies kept in pb_data/foyer_copies, their
                      addresses under the stream prefix
@@ -232,6 +234,17 @@ Go tests sit beside what they test. Everything else is PocketBase's: `serve`,
   lives under `/api/foyer/stream/`, so `stream.Quiet` keeps it from the log.
   The plan is in the ticket, so any Foyer — this one after a restart —
   makes the same remux of it.
+- **YouTube's links are bound to the address that asked for them, so
+  Foyer relays every one.** yt-dlp asks from home, over IPv4, and the relay
+  fetches over IPv4 too: a link asked for over one and fetched over the
+  other is refused. A device holds only Foyer's addresses, each link sealed
+  in one (`youtube.Relay`): never hand a device a link of the site's — it
+  fails away from home, and it names the house's address.
+- **A relayed address ends in what it is.** ffmpeg's HLS reader, mpv's too,
+  refuses a segment whose address names no media extension it allows, or
+  one that does not match what it finds inside: a playlist's address ends
+  `.m3u8`, a segment's in its own (`.ts`, `.m4s`), a caption's `.vtt` — a
+  playlist of captions has its own route (`s`), whose segments are WebVTT.
 - **Downloads made smaller come first.** A copy is made to a device's
   settings, once for whoever asks the same (`copies.Key`: the file as it is
   now and the settings as they matter for it), from the file read whole

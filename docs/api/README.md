@@ -36,6 +36,8 @@ and their rules, and how they fail.
 | `GET /api/foyer/catalogue/{collection}/{id}/seasons` | users | `{ seasons: [{ key, number?, name, airDate?, episodeCount, posterPath?, unwatched? }] }`: what the series holds, specials as season 0, named as TMDB names them, and its extras last as `extras` |
 | `GET /api/foyer/catalogue/{collection}/{id}/seasons/{season}` | users | `{ episodes }`: a season's in order, each with this user's watch status — or, for `extras`, the extras played as episodes: `id` `extra:<file>`, by the series' record and the file |
 | `GET`, `HEAD /api/foyer/stream/{file}?u&s&exp&sig` | whoever holds the address | the file's bytes, a `Range` passed on: `206` with `Content-Range`; `403` when the signature is wrong or six hours old, or its playing (`s`) was stopped |
+| `POST /api/foyer/videos/play` | users | `{ id, startMs? }` → `{ session, expiresAt, live, durationMs?, sources: [{ url, protocol: hls \| progressive, container?, videoCodec?, audioCodecs?, height? }], subtitles: [{ url, language?, label, auto? }], chapters }`: a video of YouTube's, played through Foyer — a playing, and its sources best first: the site's HLS master, every rendition, dub and caption of it, then the file the site muxed where it still has one; the uploader's captions and the one the site heard in the video's own language. Every address is Foyer's own. `409 { message, reason }` where the site will not play it — `unavailable`, `age`, `members`, `upcoming`, `blocked`, `failed`. See YouTube |
+| `GET /api/foyer/stream/yt/{ticket}/p/{token}.m3u8`, `…/s/{token}.m3u8`, `…/x/{token}.{ext}` | whoever holds the address | the site's playlists, rewritten so every link in them is Foyer's own (`p`; `s`, captions, whose segments are WebVTT), and its bytes passed on by ranges (`x`): segments, a muxed file, a caption. `403` as a stream address; `404` for a token Foyer never sealed; `502` where the site refuses |
 | `GET`, `HEAD /api/foyer/stream/copy/{key}?u&s&exp&sig` | whoever holds the address | a made copy's bytes by ranges, as a file's; `403` as a stream address; `404` once the copy is let go of — the download asks again, and it is made again |
 | `GET /api/foyer/stream/hls/{ticket}/{part}` | whoever holds the address | a remux: `main.m3u8`, `v.m3u8`, `a{k}.m3u8` and `s{k}.m3u8`; `v.mp4` and `a{k}.mp4`, each rendition's initialization; `v{n}.m4s` and `a{k}-{n}.m4s`, its segments; `s{k}-{n}.vtt`, its subtitles. The ticket — the file, the user, the playing, when it expires and the plan, signed — is in the path, so a segment's relative address resolves without a query. `403` as a stream address; `503` for a segment not made in a minute; `502` for a file ffmpeg could not remux |
 | `GET /api/foyer/admin/adapters` | superusers | every adapter, by category: `[{ key, category, name, description, notice?, single, planned, fields, defaults, connections: [{ id, adapter, name, enabled, values, status? }] }]`, each secret as `"******"` when set and `""` when not |
@@ -179,6 +181,31 @@ and their rules, and how they fail.
   sound anew, a slow share holds that sound back until ffmpeg reaches the
   file's end — ffmpeg keeps its encoders in step with the subtitles — so a
   player waits for it.
+
+### YouTube
+
+- **The site's links are bound to the address that asked for them.** A
+  video's streams, as yt-dlp finds them, open only from the house that
+  asked: a phone away from home, or on another network at home, is
+  refused on every player — as it was with Yattee Server, whose links are
+  bound to the house. So a household's devices play YouTube through Foyer:
+  yt-dlp asks from home, and Foyer fetches every playlist, segment and
+  caption for the device, over IPv4 as yt-dlp asked.
+- **Every link a device holds is sealed**: the site's own, deflated and
+  sealed (AES-GCM) under a key drawn from the users' file-token secret, in
+  an address under the stream prefix that carries the playing's signed
+  ticket. Nothing to keep per playing, a restart forgets nothing, a sealed
+  link opens only to the site's hosts, and a device never learns the house's
+  address, which the site writes into each link.
+- **Each address ends in what it is** — `.m3u8`, `.ts`, `.m4s`, `.mp4`,
+  `.vtt`: ffmpeg's HLS reader, mpv's too, refuses a segment whose address
+  names no media extension, or one that is not what it finds inside.
+- **yt-dlp, here** — with Deno for the site's challenges — says what a
+  video is, once for every user asking within twenty minutes, never within
+  an hour of its links expiring. What it says on failure becomes a reason,
+  and no address of the site's reaches a log, an error or a user.
+- **Settings → Adapters → YouTube**: yt-dlp's path; its Test reads a short
+  video the site has kept since its first days, as play would.
 
 ### Copies
 

@@ -85,17 +85,23 @@ func (s *Streamer) key() ([]byte, error) {
 // Sign signs what else hands out addresses — a remux's tickets — with a key
 // of its own, drawn from the same secret: regenerating it ends those too.
 func (s *Streamer) Sign(label string, payload []byte) ([]byte, error) {
-	users, err := s.app.FindCachedCollectionByNameOrId("users")
-	if err != nil {
-		return nil, err
-	}
-	key, err := hkdf.Key(sha256.New, []byte(users.FileToken.Secret), nil, "foyer "+label, 32)
+	key, err := s.Derive(label)
 	if err != nil {
 		return nil, err
 	}
 	mac := hmac.New(sha256.New, key)
 	mac.Write(payload)
 	return mac.Sum(nil), nil
+}
+
+// Derive is a key of its own for label, drawn from the same secret as every
+// address's: what seals a relayed link is ended with them.
+func (s *Streamer) Derive(label string) ([]byte, error) {
+	users, err := s.app.FindCachedCollectionByNameOrId("users")
+	if err != nil {
+		return nil, err
+	}
+	return hkdf.Key(sha256.New, []byte(users.FileToken.Secret), nil, "foyer "+label, 32)
 }
 
 // sign is an address's signature: over its file, its user, the playing it
