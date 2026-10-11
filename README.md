@@ -100,8 +100,9 @@ Then make the dashboard's superuser, and a user for each person.
   links to the address that asked. So a phone away from home plays them,
   on every player. Its searches, channels, playlists and each video's page
   come through Foyer too, signed out, and a user's follows become their
-  feed; each user's watch status is kept like a film's. Signing in, for
-  each user's own recommendations, comes next.
+  feed; each user's watch status is kept like a film's. A video is kept for
+  offline as the site's own renditions, at the height a device asks.
+  Signing in, for each user's own recommendations, comes next.
 - **Downloads made smaller**: a device keeping a film asks for a copy made
   to its own download settings — AV1 and Opus in Matroska by default, 1080p,
   a few GB where the file is tens — and Foyer makes it on the processor,
@@ -115,6 +116,11 @@ Then make the dashboard's superuser, and a user for each person.
 - **Watch status**, each user's own, kept by Foyer by Loge's rules — with
   resume, a series marked by its episodes, and its extras kept apart. A
   title TMDB names later, or you correct, takes what was watched with it.
+- **Trakt, each user's own**, kept in step every ten minutes, both ways or
+  Foyer's way alone: connected from Loge with a code typed at
+  trakt.tv/activate, the household's history comes in from Trakt — where
+  Jellyfin's plugin has been sending it for years — and every play after
+  goes both ways.
 - **What each of you keeps for yourselves** — preferences, the channels you
   follow, your lists, your ★ — on Foyer, and on every device you sign in on,
   each change in the order it was made; deletes are kept 90 days for a device

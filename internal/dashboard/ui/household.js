@@ -1,7 +1,7 @@
 // The Household page, under Settings: what the household is called, who is
-// in it, the devices they are signed in on, and a code that signs chosen
-// users in on a new device — a television, where typing a password with a
-// remote is a chore.
+// in it — and whose Trakt is kept in step — the devices they are signed in
+// on, and a code that signs chosen users in on a new device — a television,
+// where typing a password with a remote is a chore.
 import { failed, send, settingsSidebar, when } from './common.js';
 
 export function pageHousehold() {
@@ -11,16 +11,43 @@ export function pageHousehold() {
   // Kept out of the store: whatever a reactive child reads while it builds
   // its elements, it is redrawn for.
   let view = { household: {}, members: [], devices: [] };
+  // Each user's Trakt, by their id.
+  let trakt = {};
 
   async function load() {
     data.loading = true;
     try {
-      view = await send('/api/foyer/admin/household');
+      const [household, integrations] = await Promise.all([
+        send('/api/foyer/admin/household'),
+        send('/api/foyer/admin/integrations').catch(() => ({ integrations: [] })),
+      ]);
+      view = household;
+      trakt = Object.fromEntries((integrations.integrations || []).map((i) => [i.user.id, i]));
       form.name = view.household.name || '';
     } catch (err) {
       failed(err);
     }
     data.loading = false;
+  }
+
+  function letGo(member) {
+    app.modals.confirm(
+      t.div(
+        null,
+        t.p(null, `Let go of ${member.name}’s Trakt?`),
+        t.p({ className: 'txt-hint' }, 'Its access is revoked at Trakt, and nothing more is kept in step. What was watched stays, here and there. They can connect again from Loge.'),
+      ),
+      async () => {
+        try {
+          await send(`/api/foyer/admin/integrations/${member.id}/trakt`, { method: 'DELETE' });
+          load();
+        } catch (err) {
+          failed(err);
+        }
+      },
+      null,
+      { yesButton: 'Let go' },
+    );
   }
 
   async function rename(e) {
@@ -106,7 +133,7 @@ export function pageHousehold() {
               t.button({ className: () => `btn expanded ${data.saving ? 'loading' : ''}`, disabled: () => data.saving }, t.span({ className: 'txt' }, 'Save')),
             ),
           ),
-          membersSection(view.members),
+          membersSection(view.members, trakt, letGo),
           devicesSection(view.devices, forget),
         );
       }),
@@ -115,7 +142,22 @@ export function pageHousehold() {
   );
 }
 
-function membersSection(members) {
+// traktOf is a user's Trakt in a line: whose account, how it runs, when it was last in step.
+function traktOf(i) {
+  switch (i?.state) {
+    case 'connected':
+      return [i.account || 'Connected', { send: 'sent only', off: 'off' }[i.mode], i.lastSync ? when(i.lastSync) : null].filter(Boolean).join(' · ');
+    case 'connecting':
+      return 'Connecting…';
+    case 'refused':
+      return 'To connect again';
+    case 'failed':
+      return 'Not connected';
+  }
+  return '';
+}
+
+function membersSection(members, trakt, letGo) {
   return t.div(
     { className: 'foyer-section' },
     t.header(
@@ -131,7 +173,7 @@ function membersSection(members) {
     members.length
       ? t.table(
           { className: 'foyer-table' },
-          t.thead(null, t.tr(null, t.th(null, ''), t.th(null, 'Name'), t.th(null, 'Username'), t.th(null, 'PIN'), t.th(null, ''))),
+          t.thead(null, t.tr(null, t.th(null, ''), t.th(null, 'Name'), t.th(null, 'Username'), t.th(null, 'PIN'), t.th(null, 'Trakt'), t.th(null, ''))),
           t.tbody(
             null,
             members.map((m) =>
@@ -141,7 +183,17 @@ function membersSection(members) {
                 t.td({ className: 'path' }, m.name),
                 t.td(null, m.username),
                 t.td(null, m.hasPin ? t.i({ className: 'ri-lock-line', ariaDescription: app.attrs.tooltip('A PIN locks this profile') }) : ''),
-                t.td({ className: 'txt-right' }, t.a({ className: 'btn sm transparent', href: `#/collections?collection=users&record=${m.id}` }, t.span({ className: 'txt' }, 'Edit'))),
+                t.td(
+                  { className: `txt-sm ${trakt[m.id]?.state === 'refused' ? 'txt-danger' : ''}`, title: trakt[m.id]?.error || '' },
+                  traktOf(trakt[m.id]),
+                ),
+                t.td(
+                  { className: 'txt-right' },
+                  trakt[m.id]
+                    ? t.button({ type: 'button', className: 'btn sm transparent danger', onclick: () => letGo(m) }, t.span({ className: 'txt' }, 'Let go of Trakt'))
+                    : null,
+                  t.a({ className: 'btn sm transparent', href: `#/collections?collection=users&record=${m.id}` }, t.span({ className: 'txt' }, 'Edit')),
+                ),
               ),
             ),
           ),

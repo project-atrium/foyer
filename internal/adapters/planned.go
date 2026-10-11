@@ -94,14 +94,6 @@ func Planned() []Adapter {
 			},
 		},
 		{
-			Key: "trakt", Category: Tracking, Name: "Trakt", Planned: true, Single: true,
-			Description: "Each user's watch history kept in step with their own Trakt account, both ways.",
-			Fields: []Field{
-				{Key: "clientId", Label: "Client ID", Type: Text, Required: true, Help: "Of the household's own app, made at developer.trakt.tv."},
-				{Key: "clientSecret", Label: "Client secret", Type: Password, Required: true, Help: "Stored on this server as typed."},
-			},
-		},
-		{
 			Key: "simkl", Category: Tracking, Name: "Simkl", Planned: true, Single: true,
 			Description: "Each user's watch history kept in step with their own Simkl account.",
 			Fields:      []Field{{Key: "clientId", Label: "Client ID", Type: Text, Required: true}},

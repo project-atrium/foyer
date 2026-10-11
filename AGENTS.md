@@ -104,6 +104,9 @@ internal/sessions/   playings: the one every address belongs to, what plays now 
 internal/ffmpeg/     the tools: where, which versions, the GPU tried; the FFmpeg adapter
 internal/probe/      ffprobe's answers as versions, and the queue of files waiting for it
 internal/watch/      each user's watch status: Loge's rules, the routes, an identity's history moved, extras with it
+internal/trakt/      each user's own Trakt: connected by a code typed at trakt.tv, kept in step every ten minutes by
+                     plays counted from what both sides last agreed, both ways or Foyer's way alone; the client,
+                     and trakttest, a pretend Trakt for the tests
 internal/userstate/  what each user keeps for themselves — preferences, follows, lists, ★ — pushed whole and read back
                      by seq, their name and PIN onto their own record; tombstones let go of after 90 days
 internal/catalogue/  the library as Loge reads it: keyset pages in compareItems' order, a title's page, seasons,
@@ -119,7 +122,8 @@ migrations/          0001 users are profiles; 0002 the name, the rate limits, th
                      0006 watch_states; 0007 adapters become connections, a library a folder of one;
                      0008 the household's record, devices, pairing's rate limit; 0009 pictures' rate limit;
                      0010 each user's preferences, subscriptions, playlists, ★, and the seq; 0011 the history of playings;
-                     0012 each file's keyframes; 0013 what a video of the site's is, on its watch states
+                     0012 each file's keyframes; 0013 what a video of the site's is, on its watch states;
+                     0014 each user's integrations, and what each state agreed with a tracker
 dev/fakezurg/        a pretend Zurg for running Foyer here, from Zurg's .zurgtorrent records; never in the image
 harness/             Node and vitest, test-only: the app's code that speaks Foyer against the real binary
 Dockerfile           two stages: a Go build, then Debian with Jellyfin's ffmpeg and the binary
@@ -310,6 +314,14 @@ Go tests sit beside what they test. Everything else is PocketBase's: `serve`,
   title's identity changes, `watch.Move` gives its history to the new one —
   only once the change is kept, and never while another title still goes by
   the old one. A guess has no identity, so nothing is kept for it.
+- **A tracker is kept in step from what both sides last agreed**, kept on
+  each state (`remote.<provider>`): plays counted, so a play on either side
+  is one on the other, and a change is never sent back. Never by comparing
+  watched flags alone — a play again after an unwatch would be lost — and
+  never by a device's clock: a play goes to Trakt at when Foyer heard of it.
+  Only what TMDB named is sent. A token Trakt refuses parks the connection
+  for the user to connect again: never a retry loop, never a `401` to the
+  device.
 - **Watch status follows Loge's rules, on the server**: a stop at 90 % or the
   end is watched and watched holds; a report at 0 never lowers a position; a
   playing's end sent twice counts once. Nothing decides by a device's clock.

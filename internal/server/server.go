@@ -30,6 +30,7 @@ import (
 	"foyer/internal/routes"
 	"foyer/internal/sessions"
 	"foyer/internal/stream"
+	"foyer/internal/trakt"
 	"foyer/internal/userstate"
 	"foyer/internal/watch"
 	"foyer/internal/youtube"
@@ -50,6 +51,7 @@ type Server struct {
 	Remux     *hls.Manager
 	Copies    *copies.Manager
 	YouTube   *youtube.YouTube
+	Trakt     *trakt.Service
 }
 
 // collections are Foyer's own static collections: written by its code alone.
@@ -61,6 +63,7 @@ var collections = []string{
 	userstate.Collections[userstate.KindPreference], userstate.Collections[userstate.KindSubscription],
 	userstate.Collections[userstate.KindPlaylist], userstate.Collections[userstate.KindFavoriteChannel],
 	sessions.Collection,
+	trakt.Collection,
 }
 
 // Bind binds Foyer's guard, routes and dashboard pages, and starts nothing:
@@ -69,7 +72,7 @@ var collections = []string{
 func Bind(app core.App, cfg config.Config) *Server {
 	// What is built first: an adapter that is built takes its planned
 	// stand-in's place.
-	built := []adapters.Adapter{webdav.Adapter(), tmdb.Adapter(), ffmpeg.Adapter(), youtube.Adapter()}
+	built := []adapters.Adapter{webdav.Adapter(), tmdb.Adapter(), ffmpeg.Adapter(), youtube.Adapter(), trakt.Adapter()}
 	registry := adapters.NewRegistry(app, append(built, adapters.Planned()...)...)
 	lib := library.New(app, registry)
 	s := &Server{
@@ -156,6 +159,13 @@ func Bind(app core.App, cfg config.Config) *Server {
 		return "US"
 	}, filepath.Join(app.DataDir(), core.LocalTempDirName, "youtube"), s.Streams, s.Playings)
 	s.YouTube.Copies = s.Copies
+	s.Trakt = trakt.NewService(app, func() (string, string, bool) {
+		settings, err := registry.Settings(trakt.Key)
+		if err != nil || !settings.Enabled {
+			return "", "", false
+		}
+		return settings.String("clientId"), settings.String("clientSecret"), true
+	})
 	// Copies are a cache anyone can make again: never in a backup, and a
 	// restore leaves the ones here where they are.
 	for _, backups := range []*hook.Hook[*core.BackupEvent]{app.OnBackupCreate(), app.OnBackupRestore()} {
@@ -223,6 +233,7 @@ func Bind(app core.App, cfg config.Config) *Server {
 		s.Copies.Routes(se.Router, admin, s.Playings)
 		s.Library.Routes(admin)
 		s.Household.Routes(se.Router, admin)
+		s.Trakt.Routes(se.Router, admin)
 		s.Library.HookRoutes(se.Router)
 		// Read by PocketBase's own handler for UI extensions, which runs last.
 		se.Router.BindFunc(dashboard.Fresh)
@@ -257,6 +268,7 @@ func (s *Server) Background() *Server {
 		})
 		wg.Go(func() { s.Probes.Run(ctx) })
 		wg.Go(func() { s.Copies.Run(ctx) })
+		wg.Go(func() { s.Trakt.Run(ctx) })
 		wg.Go(func() { s.pruneTombstones(ctx) })
 		wg.Go(func() { s.sweepPlayings(ctx) })
 		return se.Next()

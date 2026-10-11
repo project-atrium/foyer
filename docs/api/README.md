@@ -44,11 +44,17 @@ and their rules, and how they fail.
 | `GET /api/foyer/videos/playlists/{id}` | users | `?cursor` → `{ playlist, items, next? }`: a playlist — whose, how many videos — and a page of them |
 | `POST /api/foyer/videos/feed` | users | `{ channels, cursor?, limit? }` → `{ items, next?, incomplete? }`: the newest videos of the channels a user follows — five hundred at most — newest first, from each channel's own feed, kept a quarter of an hour; `incomplete` while some are still being read |
 | `GET /api/foyer/videos/resume` | users | `?limit` (20) → `{ items }`: the videos the user began past half a minute and has not finished, the latest first, drawn from what each was when it was reported |
+| `GET /api/foyer/me/integrations` | users | `{ integrations: [{ key: "trakt", name, available, state?: connecting \| connected \| refused \| failed, mode?: two-way \| send \| off, account?, code?: { userCode, verificationUrl, expiresAt }, lastSync?, error? }] }`: the user's own Trakt — `available` while the household set Trakt up; never a token. See Trakt |
+| `POST /api/foyer/me/integrations/trakt/connect` | users | → the integration, `connecting`, with the code to type at `verificationUrl`; one still good is handed out again. Foyer asks Trakt whether it was entered, at Trakt's interval, until it was, was denied, or ran out. `409` where Trakt is not set up |
+| `PATCH /api/foyer/me/integrations/trakt` | users | `{ mode: two-way \| send \| off }` → the integration: both ways, Foyer's way alone, or nothing — and read again at once |
+| `DELETE /api/foyer/me/integrations/trakt` | users | `204`: the token revoked at Trakt, as far as it answers, and what Foyer agreed with it let go of |
 | `POST /api/foyer/videos/download/options` | users | `{ id, encode? }` → `{ options: [{ id, width, height, bitrate, estimatedBytes, container, videoCodec, audioCodecs, hdr?, transcoded: false }] }`: the ways a video can be kept — the site's own renditions at each height the device's settings allow, the tallest first and four at most; the same shape as a title's. `409 { message, reason }` as play's, and where making copies is off |
 | `POST /api/foyer/videos/download` | users | `{ id, option }` → `{ url, expiresAt, version }` once Foyer has kept the video, `202 { preparing: { state, progress?, etaMs? } }` while yt-dlp fetches it — ask again — `422` where it could not, and `409` where the site no longer offers that way, or will not play the video. See YouTube |
 | `GET /api/foyer/stream/yt/{ticket}/p/{token}.m3u8`, `…/s/{token}.m3u8`, `…/x/{token}.{ext}` | whoever holds the address | the site's playlists, rewritten so every link in them is Foyer's own (`p`; `s`, captions, whose segments are WebVTT), and its bytes passed on by ranges (`x`): segments, a muxed file, a caption. `403` as a stream address; `404` for a token Foyer never sealed; `502` where the site refuses |
 | `GET`, `HEAD /api/foyer/stream/copy/{key}?u&s&exp&sig` | whoever holds the address | a made copy's bytes by ranges, as a file's; `403` as a stream address; `404` once the copy is let go of — the download asks again, and it is made again |
 | `GET /api/foyer/stream/hls/{ticket}/{part}` | whoever holds the address | a remux: `main.m3u8`, `v.m3u8`, `a{k}.m3u8` and `s{k}.m3u8`; `v.mp4` and `a{k}.mp4`, each rendition's initialization; `v{n}.m4s` and `a{k}-{n}.m4s`, its segments; `s{k}-{n}.vtt`, its subtitles. The ticket — the file, the user, the playing, when it expires and the plan, signed — is in the path, so a segment's relative address resolves without a query. `403` as a stream address; `503` for a segment not made in a minute; `502` for a file ffmpeg could not remux |
+| `GET /api/foyer/admin/integrations` | superusers | `{ integrations: [{ user: { id, name }, provider, state, mode, account, lastSync, error }] }`: every user's Trakt, for the Household page |
+| `DELETE /api/foyer/admin/integrations/{user}/trakt` | superusers | `204`: a user's Trakt let go of, as the user would |
 | `GET /api/foyer/admin/adapters` | superusers | every adapter, by category: `[{ key, category, name, description, notice?, single, planned, fields, defaults, connections: [{ id, adapter, name, enabled, values, status? }] }]`, each secret as `"******"` when set and `""` when not |
 | `PUT /api/foyer/admin/adapters/{key}` | superusers | a single adapter's settings — TMDB's, FFmpeg's: `{ enabled, values }` → its one connection, made by the first save; `400` names each field that will not do, as `values.<key>`, and refuses an adapter set up as connections |
 | `POST /api/foyer/admin/adapters/{key}/test` | superusers | `{ values? }`, values not yet saved, over the adapter's defaults — or a single adapter's saved ones → `{ ok, message, details? }` |
@@ -93,6 +99,37 @@ and their rules, and how they fail.
   with a series — by its title's identity and what the extra is:
   `tmdb:tv:37854/extra:4f0e9c1d2b3a5867`. A better copy of it keeps what was
   watched, and it moves with its title.
+
+### Trakt
+
+- **Each user's own Trakt, through the household's app.** The superuser sets
+  the app up once (Settings → Adapters → Trakt: the Client ID and secret of
+  an app made at trakt.tv, its redirect `urn:ietf:wg:oauth:2.0:oob`); each
+  user connects their own account from Loge, with a code typed at
+  trakt.tv/activate — never a password. Its tokens are hidden in
+  `integrations`, renewed before they end; a renewal Trakt refuses parks
+  the connection as `refused`, to connect again — never a loop, and never a
+  `401` to a device, which would take it for its own session ending.
+- **Kept in step every ten minutes**, by plays counted. On each state,
+  `remote.trakt` keeps what Foyer and Trakt last agreed of it — Trakt's
+  plays, Foyer's count, watched or not — so each side's change since is
+  told apart, goes to the other, and is never sent back. Where both changed,
+  watched wins. Where Trakt says nothing changed and nothing changed here,
+  Trakt is asked one question (`last_activities`).
+- **The first time, Trakt's history comes in, and what it lacks goes**: a
+  film or episode watched there is watched here, as often and when; one
+  watched only here is sent once, at when Foyer heard of it.
+- **Two-way**, the default: a play, a watch and an unwatch on either side
+  reach the other. **Send** is Foyer's way alone: what is watched here
+  reaches Trakt; nothing of Trakt's comes back, nor is taken out of it.
+  **Off** keeps the connection and syncs nothing.
+- **Only what TMDB named is sent**, by its id: a film (`tmdb:movie:603`),
+  an episode (`tmdb:tv:1396/s1e3`). A title known by its name, an extra
+  and a video of YouTube's are never sent; one Trakt does not know is not
+  sent again. Plays go in posts of a thousand at most, a second apart, as
+  Trakt allows; what comes back is written 500 states to a transaction.
+- **Not yet**: Trakt's "watching now", a scrobble — one finished past 80 %
+  would count a play twice beside the history kept in step.
 
 ### The catalogue
 

@@ -207,3 +207,127 @@ func MoveExtras(app core.App, from, to string) error {
 	}
 	return nil
 }
+
+// Agreed is what Foyer and a tracker last agreed of one thing: how often the
+// tracker had it played, how often Foyer had counted, and whether Foyer had
+// it watched. A change on either side is told from it, so neither side's is
+// ever sent back.
+type Agreed struct {
+	Plays   int  `json:"plays"`
+	Foyer   int  `json:"foyer"`
+	Watched bool `json:"watched"`
+}
+
+// Tracked is a user's state for one thing, as a tracker's sync reads it.
+type Tracked struct {
+	Identity string
+	State    State
+	// Agreed is nil where Foyer and the tracker never agreed of it.
+	Agreed  *Agreed
+	Updated time.Time
+}
+
+// TrackedBy is every state a user keeps, each with what it last agreed with
+// provider, by identity.
+func TrackedBy(app core.App, user, provider string) (map[string]Tracked, error) {
+	records, err := app.FindRecordsByFilter(Collection, "user = {:user}", "", 0, 0, dbx.Params{"user": user})
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]Tracked, len(records))
+	for _, r := range records {
+		t := Tracked{Identity: r.GetString("identity"), State: read(r), Updated: r.GetDateTime("updated").Time()}
+		var remote map[string]Agreed
+		if err := r.UnmarshalJSONField("remote", &remote); err == nil {
+			if agreed, ok := remote[provider]; ok {
+				t.Agreed = &agreed
+			}
+		}
+		out[t.Identity] = t
+	}
+	return out, nil
+}
+
+// Settled is what a tracker's sync settles of one thing: Foyer's state as
+// it is to be — nil where it stays as it is — and what both sides agree now.
+type Settled struct {
+	Identity string
+	State    *State
+	Agreed   Agreed
+}
+
+// settleChunk is how many states one transaction writes: SQLite has one
+// writer, and a player's report waits behind it.
+const settleChunk = 500
+
+// Settle writes what a tracker's sync settled for a user, a chunk to a
+// transaction: each state as it is to be, made where none was kept — a
+// title watched elsewhere, before its files are here — and what it agreed
+// with provider, beside what it agreed with any other.
+func Settle(app core.App, user, provider string, settled []Settled) error {
+	for start := 0; start < len(settled); start += settleChunk {
+		chunk := settled[start:min(start+settleChunk, len(settled))]
+		err := app.RunInTransaction(func(tx core.App) error {
+			c, err := tx.FindCollectionByNameOrId(Collection)
+			if err != nil {
+				return err
+			}
+			for _, s := range chunk {
+				r, err := tx.FindFirstRecordByFilter(Collection, "user = {:user} && identity = {:identity}", dbx.Params{"user": user, "identity": s.Identity})
+				if err != nil {
+					r = core.NewRecord(c)
+					r.Set("user", user)
+					r.Set("identity", s.Identity)
+				}
+				if s.State != nil {
+					write(r, *s.State)
+				}
+				remote := map[string]Agreed{}
+				_ = r.UnmarshalJSONField("remote", &remote)
+				remote[provider] = s.Agreed
+				r.Set("remote", remote)
+				if err := tx.Save(r); err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Forget lets go of what a user's states agreed with provider: connected
+// again, the tracker's history is read as if for the first time.
+func Forget(app core.App, user, provider string) error {
+	records, err := app.FindRecordsByFilter(Collection, "user = {:user}", "", 0, 0, dbx.Params{"user": user})
+	if err != nil {
+		return err
+	}
+	for start := 0; start < len(records); start += settleChunk {
+		chunk := records[start:min(start+settleChunk, len(records))]
+		err := app.RunInTransaction(func(tx core.App) error {
+			for _, r := range chunk {
+				remote := map[string]Agreed{}
+				if err := r.UnmarshalJSONField("remote", &remote); err != nil {
+					continue
+				}
+				if _, ok := remote[provider]; !ok {
+					continue
+				}
+				delete(remote, provider)
+				r.Set("remote", remote)
+				if err := tx.Save(r); err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
