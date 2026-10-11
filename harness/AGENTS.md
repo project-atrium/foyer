@@ -9,7 +9,8 @@ It exists because Go cannot import `@loge/api`. The shared fixtures in the
 app's `adapters/api/fixtures/foyer/` keep the two sides' answers alike; this
 keeps the *adapters* in step: the Loge code that speaks Foyer — `@loge/api`'s
 protocol module now, and the Foyer adapters as they come — against the real
-binary.
+binary: `sync/foyer` pairs a device, signs users in, renews a session and
+is refused once a password changes (`test/household.test.ts`).
 
 ## How it works
 
@@ -26,7 +27,8 @@ binary.
   the sign-ins.
 - `@loge/api` and the adapters are aliased to their source in
   `../../loge/adapters` (`vitest.config.ts`, `tsconfig.json`), never
-  installed: the workspace has the app beside Foyer. The app's version is
+  installed: the workspace has the app beside Foyer. A new adapter is a new
+  alias in both. The app's version is
   read from `../../loge/package.json`; the server must answer it.
 
 ## Rules

@@ -13,6 +13,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@loge/api': source('api/src/index.ts'),
+      '@loge/sync-foyer': source('sync/foyer/src/index.ts'),
     },
   },
   test: {

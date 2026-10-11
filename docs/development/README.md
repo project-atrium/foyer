@@ -179,10 +179,12 @@ directory, with the migrations applied, through PocketBase's real router
 
 `harness/` is Node and vitest, test-only: it builds the binary once, starts
 it per test on a temporary directory and a free port with an environment of
-its own, makes users as the superuser does, and drives the Loge code that
-speaks Foyer — `@loge/api`'s protocol module now, the Foyer adapters as they
-come — aliased from the app beside it, never installed. The Go tests prove
-the server; the harness proves the pair.
+its own, makes users and pairing codes as the superuser does, and drives the
+Loge code that speaks Foyer — `@loge/api`'s protocol module and the Foyer
+adapters, `sync/foyer` first — aliased from the app beside it, never
+installed. The Go tests prove the server; the harness proves the pair: a
+device paired for two users and listed once, a third signing in, a session
+renewed and then refused once after a password change, the owner check.
 
 ```bash
 cd harness && npm install && npm run typecheck && npm test

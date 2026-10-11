@@ -18,6 +18,10 @@ export interface Server {
   makeUser(user: { readonly username: string; readonly name: string; readonly password: string; readonly pin?: string }): Promise<string>;
   /** And sets a user's password, which ends every session of it. */
   setPassword(userId: string, password: string): Promise<void>;
+  /** Pair a device: a code that signs these users in. */
+  pairingCode(userIds: readonly string[]): Promise<string>;
+  /** The devices the Household page lists, with their users' names. */
+  devices(): Promise<readonly { readonly name: string; readonly platform: string; readonly appVersion: string; readonly users: readonly string[]; readonly paired: boolean }[]>;
   /** What the server printed, for a failure's message. */
   output(): string;
   stop(): Promise<void>;
@@ -85,6 +89,20 @@ export async function startServer(): Promise<Server> {
         body: JSON.stringify({ password, passwordConfirm: password }),
       });
       if (!response.ok) throw new Error(`The password could not be set (${response.status}): ${await response.text()}`);
+    },
+    pairingCode: async (userIds) => {
+      const response = await fetch(`${url}/api/foyer/admin/pairings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: await superuserToken() },
+        body: JSON.stringify({ users: userIds }),
+      });
+      if (!response.ok) throw new Error(`No code was made (${response.status}): ${await response.text()}`);
+      return ((await response.json()) as { code: string }).code;
+    },
+    devices: async () => {
+      const response = await fetch(`${url}/api/foyer/admin/household`, { headers: { Authorization: await superuserToken() } });
+      if (!response.ok) throw new Error(`The household could not be read (${response.status}): ${await response.text()}`);
+      return ((await response.json()) as { devices: Awaited<ReturnType<Server['devices']>> }).devices;
     },
     output: () => output,
     stop,

@@ -82,9 +82,12 @@ export interface SessionBox {
 export function context(options: {
   readonly name: string;
   readonly installation: string;
+  readonly platform?: string;
   readonly http: HttpClient;
   readonly session: SessionBox;
   readonly credentials?: Readonly<Record<string, string>>;
+  /** The device's clock, for a session that has to be old. */
+  readonly now?: () => number;
 }): PluginContext {
   const { session } = options;
   return {
@@ -100,8 +103,8 @@ export function context(options: {
       },
     },
     network: { current: () => 'wifi' },
-    client: { appName: 'Loge', appVersion: inject('appVersion'), deviceName: options.name, installationId: options.installation },
-    clock: { now: () => Date.now(), sleep: async () => undefined },
+    client: { appName: 'Loge', appVersion: inject('appVersion'), deviceName: options.name, platform: options.platform ?? 'android', installationId: options.installation },
+    clock: { now: options.now ?? (() => Date.now()), sleep: async () => undefined },
     crypto: nodeHostCrypto(),
   };
 }
