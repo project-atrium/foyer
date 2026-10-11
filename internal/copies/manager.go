@@ -74,7 +74,21 @@ type Request struct {
 	Recipe Recipe
 	Title  string
 	User   string
+	// Make, where set, makes the copy instead of ffmpeg's recipe on a file
+	// of the share's — a site's own renditions fetched and put together.
+	// Recipe then only says what it comes to: its Encode, its Bytes.
+	Make Maker
 }
+
+// Maker makes a copy in dir, which is its own and emptied after, with the
+// ffmpeg the household set to put it together, saying how far it has got
+// and how fast — bytes a second — and answers the file it made and what it
+// is.
+type Maker func(ctx context.Context, dir, ffmpeg string, progress func(done, speed float64)) (file string, made media.Version, err error)
+
+// fetchesAtOnce is how many copies a Maker makes at once: they wait on the
+// network, not the processor, so never behind a film being made anew.
+const fetchesAtOnce = 2
 
 // Key is a copy's name: the file it is made from — as it is now — and what
 // it is made to.
@@ -152,6 +166,7 @@ type Manager struct {
 	mu        sync.Mutex
 	jobs      map[string]*job
 	running   int
+	fetching  int
 	wake      chan struct{}
 	abilities map[string]Abilities
 	closed    bool
@@ -223,9 +238,14 @@ func (m *Manager) Ask(r Request) Status {
 
 func (j *job) status() Status {
 	s := Status{State: j.state, Progress: j.progress, Err: j.err}
-	if j.state == Running && j.speed > 0 && j.Source.DurationMs > 0 {
-		left := float64(j.Source.DurationMs) * (1 - j.progress)
-		s.EtaMs = int64(left / j.speed)
+	switch {
+	case j.state != Running || j.speed <= 0:
+	case j.Make != nil && j.Recipe.Bytes > 0:
+		// A fetch's speed is bytes a second.
+		s.EtaMs = int64(float64(j.Recipe.Bytes) * (1 - j.progress) / j.speed * 1000)
+	case j.Make == nil && j.Source.DurationMs > 0:
+		// A recipe's is how many times faster than the film plays.
+		s.EtaMs = int64(float64(j.Source.DurationMs) * (1 - j.progress) / j.speed)
 	}
 	return s
 }
@@ -261,30 +281,36 @@ func (m *Manager) Run(ctx context.Context) {
 }
 
 // startDue starts what is queued, the longest waiting first, as many at
-// once as the household allows.
+// once as the household allows — and fetches beside them, a few at once.
 func (m *Manager) startDue(ctx context.Context) {
 	settings := m.o.Settings()
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	for m.running < max(settings.AtOnce, 1) && !m.closed {
-		var next *job
-		for _, j := range m.jobs {
-			if j.state == Queued && (next == nil || j.asked.Before(next.asked)) {
-				next = j
-			}
+	queued := []*job{}
+	for _, j := range m.jobs {
+		if j.state == Queued {
+			queued = append(queued, j)
 		}
-		if next == nil {
-			return
+	}
+	slices.SortFunc(queued, func(a, b *job) int { return a.asked.Compare(b.asked) })
+	for _, next := range queued {
+		lane := &m.running
+		limit := max(settings.AtOnce, 1)
+		if next.Make != nil {
+			lane, limit = &m.fetching, fetchesAtOnce
+		}
+		if m.closed || *lane >= limit {
+			continue
 		}
 		jobCtx, cancel := context.WithCancel(ctx)
 		next.state, next.started, next.cancel = Running, time.Now(), cancel
-		m.running++
+		*lane++
 		go func() {
 			err := m.make(jobCtx, next, settings)
 			stopped := jobCtx.Err() != nil
 			cancel()
 			m.mu.Lock()
-			m.running--
+			*lane--
 			// A copy stopped and asked for again is another job by now.
 			if m.jobs[next.Key] == next {
 				switch {
@@ -302,10 +328,13 @@ func (m *Manager) startDue(ctx context.Context) {
 	}
 }
 
-// make runs ffmpeg for one copy, and keeps what it made.
+// make runs ffmpeg for one copy, or its Maker, and keeps what it made.
 func (m *Manager) make(ctx context.Context, j *job, settings Settings) error {
 	if err := m.room(j.Recipe.Bytes, settings); err != nil {
 		return err
+	}
+	if j.Make != nil {
+		return m.fetch(ctx, j, settings)
 	}
 	input, revoke, err := m.o.Grants.Grant(j.File, 24*time.Hour)
 	if err != nil {
@@ -347,6 +376,42 @@ func (m *Manager) make(ctx context.Context, j *job, settings Settings) error {
 	}
 	now := time.Now()
 	made := &Made{Key: j.Key, File: j.File, Title: j.Title, Encode: j.Recipe.Encode, Version: j.Recipe.Made(j.Source, info.Size()),
+		Name: name, Size: info.Size(), Made: now, Asked: now, By: j.User}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.keep(made)
+}
+
+// fetch makes a copy by its Maker, in a folder of its own that goes with
+// whatever is left in it.
+func (m *Manager) fetch(ctx context.Context, j *job, settings Settings) error {
+	dir := filepath.Join(m.o.Root, fmt.Sprintf("%s-%d.part", j.Key, time.Now().UnixNano()))
+	if err := os.Mkdir(dir, 0o700); err != nil {
+		return err
+	}
+	defer os.RemoveAll(dir)
+	file, version, err := j.Make(ctx, dir, settings.Tool, func(done, speed float64) {
+		m.mu.Lock()
+		j.progress, j.speed = min(max(done, 0), 0.999), speed
+		m.mu.Unlock()
+	})
+	if err != nil {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		return err
+	}
+	info, err := os.Stat(file)
+	if err != nil {
+		return err
+	}
+	name := j.Key + filepath.Ext(file)
+	if err := os.Rename(file, filepath.Join(m.o.Root, name)); err != nil {
+		return err
+	}
+	version.Size = info.Size()
+	now := time.Now()
+	made := &Made{Key: j.Key, File: j.File, Title: j.Title, Encode: j.Recipe.Encode, Version: version,
 		Name: name, Size: info.Size(), Made: now, Asked: now, By: j.User}
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -429,8 +494,13 @@ func (m *Manager) Making() []Making {
 	out := []Making{}
 	for _, j := range m.jobs {
 		s := j.status()
+		// A fetch's speed is in bytes, not against the film: shown by its time left alone.
+		speed := j.speed
+		if j.Make != nil {
+			speed = 0
+		}
 		out = append(out, Making{Key: j.Key, File: j.File, Title: j.Title, By: j.User, Encode: j.Recipe.Encode, State: j.state,
-			Progress: j.progress, Speed: j.speed, EtaMs: s.EtaMs, Bytes: j.Recipe.Bytes, Asked: j.asked, Started: j.started, Error: j.err})
+			Progress: j.progress, Speed: speed, EtaMs: s.EtaMs, Bytes: j.Recipe.Bytes, Asked: j.asked, Started: j.started, Error: j.err})
 	}
 	slices.SortFunc(out, func(a, b Making) int { return a.Asked.Compare(b.Asked) })
 	return out
@@ -514,8 +584,9 @@ func (m *Manager) clearParts() {
 		return
 	}
 	for _, e := range entries {
+		// A fetch's part is a folder.
 		if strings.HasSuffix(e.Name(), ".part") || strings.HasSuffix(e.Name(), ".json.tmp") {
-			_ = os.Remove(filepath.Join(m.o.Root, e.Name()))
+			_ = os.RemoveAll(filepath.Join(m.o.Root, e.Name()))
 		}
 	}
 }

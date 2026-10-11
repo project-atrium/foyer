@@ -16,6 +16,7 @@ import (
 	"github.com/pocketbase/pocketbase/tools/router"
 
 	"foyer/internal/adapters"
+	"foyer/internal/copies"
 	"foyer/internal/ffmpeg"
 	"foyer/internal/sessions"
 	"foyer/internal/stream"
@@ -27,10 +28,12 @@ const Key = "youtube"
 // YouTube is the site through Foyer: what yt-dlp says of a video, its
 // streams relayed, and the site's own API for everything else.
 type YouTube struct {
-	Runner   *Runner
-	Relay    *Relay
-	Tube     *InnerTube
-	Feeds    *Feeds
+	Runner *Runner
+	Relay  *Relay
+	Tube   *InnerTube
+	Feeds  *Feeds
+	// Copies keeps the videos devices download: none, and none are kept.
+	Copies   *copies.Manager
 	playings *sessions.Registry
 	seen     seen
 	mu       sync.Mutex
@@ -97,6 +100,7 @@ type Playback struct {
 func (y *YouTube) Routes(r *router.Router[*core.RequestEvent]) {
 	y.Relay.Routes(r)
 	y.BrowseRoutes(r)
+	y.DownloadRoutes(r)
 	r.POST("/api/foyer/videos/play", y.play).Bind(apis.RequireAuth("users"))
 }
 

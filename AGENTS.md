@@ -94,10 +94,11 @@ internal/hls/        remuxing to HLS: a file's keyframe index — Matroska's Cue
                      the signed ticket in their path, and a job per playing running one ffmpeg
 internal/youtube/    YouTube through Foyer: what yt-dlp says of a video, its streams relayed — every link sealed in an
                      address of Foyer's own, playlists rewritten — the play route, the adapter; the site's own API
-                     read for searches, videos' pages, channels and playlists; channels' feeds; videos' watch status
+                     read for searches, videos' pages, channels and playlists; channels' feeds; videos' watch status;
+                     downloads, the site's own renditions fetched by yt-dlp and kept among the copies
 internal/copies/     smaller copies for downloads: a device's settings read for a file, the recipe — AV1 and Opus
                      by default — ffmpeg's command, the jobs, the copies kept in pb_data/foyer_copies, their
-                     addresses under the stream prefix
+                     addresses under the stream prefix; a copy another maker makes — YouTube's fetches — beside them
 internal/sessions/   playings: the one every address belongs to, what plays now and what played, a superuser's Stop —
                      Live Activity's routes
 internal/ffmpeg/     the tools: where, which versions, the GPU tried; the FFmpeg adapter
@@ -253,6 +254,15 @@ Go tests sit beside what they test. Everything else is PocketBase's: `serve`,
   one that does not match what it finds inside: a playlist's address ends
   `.m3u8`, a segment's in its own (`.ts`, `.m4s`), a caption's `.vtt` — a
   playlist of captions has its own route (`s`), whose segments are WebVTT.
+- **A video is kept as the site's own renditions, never made anew.** Its
+  AV1 and VP9 are small already: a download is smaller by its height, a
+  picture and a sound yt-dlp fetches and ffmpeg puts together as they are
+  (`youtube.ways`). Never a format the site upscaled (`-sr`), nor the sound
+  it made quieter and louder alike (`-drc`); the video's own language,
+  never a dub. It is kept among the copies, made by its `Maker` in a lane
+  of its own — two at once, never behind a film being made anew — and its
+  key names the video and its two formats: raise `fetchVersion` when what
+  one holds changes.
 - **A master's sounds stay in the site's order.** A player that reads a
   master's renditions as one list chooses a sound by rules of its own: VLC 3
   plays the last group listed — the site lists its richest, AAC at 128 kb/s,

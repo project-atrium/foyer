@@ -155,6 +155,7 @@ func Bind(app core.App, cfg config.Config) *Server {
 		}
 		return "US"
 	}, filepath.Join(app.DataDir(), core.LocalTempDirName, "youtube"), s.Streams, s.Playings)
+	s.YouTube.Copies = s.Copies
 	// Copies are a cache anyone can make again: never in a backup, and a
 	// restore leaves the ones here where they are.
 	for _, backups := range []*hook.Hook[*core.BackupEvent]{app.OnBackupCreate(), app.OnBackupRestore()} {

@@ -44,6 +44,8 @@ and their rules, and how they fail.
 | `GET /api/foyer/videos/playlists/{id}` | users | `?cursor` → `{ playlist, items, next? }`: a playlist — whose, how many videos — and a page of them |
 | `POST /api/foyer/videos/feed` | users | `{ channels, cursor?, limit? }` → `{ items, next?, incomplete? }`: the newest videos of the channels a user follows — five hundred at most — newest first, from each channel's own feed, kept a quarter of an hour; `incomplete` while some are still being read |
 | `GET /api/foyer/videos/resume` | users | `?limit` (20) → `{ items }`: the videos the user began past half a minute and has not finished, the latest first, drawn from what each was when it was reported |
+| `POST /api/foyer/videos/download/options` | users | `{ id, encode? }` → `{ options: [{ id, width, height, bitrate, estimatedBytes, container, videoCodec, audioCodecs, hdr?, transcoded: false }] }`: the ways a video can be kept — the site's own renditions at each height the device's settings allow, the tallest first and four at most; the same shape as a title's. `409 { message, reason }` as play's, and where making copies is off |
+| `POST /api/foyer/videos/download` | users | `{ id, option }` → `{ url, expiresAt, version }` once Foyer has kept the video, `202 { preparing: { state, progress?, etaMs? } }` while yt-dlp fetches it — ask again — `422` where it could not, and `409` where the site no longer offers that way, or will not play the video. See YouTube |
 | `GET /api/foyer/stream/yt/{ticket}/p/{token}.m3u8`, `…/s/{token}.m3u8`, `…/x/{token}.{ext}` | whoever holds the address | the site's playlists, rewritten so every link in them is Foyer's own (`p`; `s`, captions, whose segments are WebVTT), and its bytes passed on by ranges (`x`): segments, a muxed file, a caption. `403` as a stream address; `404` for a token Foyer never sealed; `502` where the site refuses |
 | `GET`, `HEAD /api/foyer/stream/copy/{key}?u&s&exp&sig` | whoever holds the address | a made copy's bytes by ranges, as a file's; `403` as a stream address; `404` once the copy is let go of — the download asks again, and it is made again |
 | `GET /api/foyer/stream/hls/{ticket}/{part}` | whoever holds the address | a remux: `main.m3u8`, `v.m3u8`, `a{k}.m3u8` and `s{k}.m3u8`; `v.mp4` and `a{k}.mp4`, each rendition's initialization; `v{n}.m4s` and `a{k}-{n}.m4s`, its segments; `s{k}-{n}.vtt`, its subtitles. The ticket — the file, the user, the playing, when it expires and the plan, signed — is in the path, so a segment's relative address resolves without a query. `403` as a stream address; `503` for a segment not made in a minute; `502` for a file ffmpeg could not remux |
@@ -229,6 +231,20 @@ and their rules, and how they fail.
 - **Served while switched on**: the household's answer lists
   `{ key: "videos", type: "videos" }`, and its devices make a connection of
   it.
+- **Downloads are the site's own renditions**, put together as they are.
+  The site's AV1 and VP9 are small already, and made anew they would only
+  lose: a video is kept smaller by its height. At each height the device's
+  settings allow, the picture in the codec they ask for where the site has
+  it — else the smallest kind there is, H.264 last unless asked for — never
+  one the site upscaled by guesswork, and HDR only where the settings keep
+  it; the richest sound in the video's own language, in the codec asked for
+  where there is one, never the copy the site made quieter and louder
+  alike (DRC). yt-dlp fetches the two — handed back what it said of the
+  video, so the site is not asked again — and ffmpeg puts them together,
+  in Matroska or MP4 as asked. It is a copy like any other (`Copies`):
+  kept by its key, let go of in the household's days, under the copies'
+  address — but made beside the copies made anew, two at a time, since it
+  waits on the network, not the processor. So it needs making copies on.
 - **Settings → Adapters → YouTube**: yt-dlp's path, the region the site is
   asked for; its Test reads a short video the site has kept since its first
   days, as play would.

@@ -63,7 +63,15 @@ func fakeYtDlp(t *testing.T, expire time.Time) string {
 	if err := os.WriteFile(filepath.Join(dir, "video.json"), bytes.ReplaceAll(answer, []byte("EXPIRE"), []byte(strconv.FormatInt(expire.Unix(), 10))), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	script := "#!/bin/sh\nfor last; do :; done\ncase \"$last\" in\n" +
+	// Handed back what it said, it fetches the two formats asked for — a
+	// moment each, saying so as the template asks — and puts them together.
+	fetch := "out=; formats=; into=; load=; prev=\nfor a; do case \"$prev\" in -o) out=$a ;; -f) formats=$a ;; --merge-output-format) into=$a ;; --load-info-json) load=$a ;; esac; prev=$a; done\n" +
+		"if [ -n \"$load\" ]; then\n" +
+		"  file=$(echo \"$out\" | sed \"s/%(ext)s/$into/\")\n" +
+		"  echo \"FOYER ${formats%%+*} downloading 1000 2000\"; sleep 1\n" +
+		"  echo \"FOYER ${formats%%+*} finished 2000 2000\"; echo \"FOYER ${formats#*+} finished 500 2000\"\n" +
+		"  printf 'the picture and the sound, put together' > \"$file\"; exit 0\nfi\n"
+	script := "#!/bin/sh\n" + fetch + "for last; do :; done\ncase \"$last\" in\n" +
 		"  *x3TJFoQWCHA) cat \"" + filepath.Join(dir, "video.json") + "\" ;;\n" +
 		"  *) echo 'ERROR: [youtube] dQw4w9WgXcR: Video unavailable. This video is no longer available' >&2; exit 1 ;;\nesac\n"
 	tool := filepath.Join(dir, "yt-dlp")
@@ -386,5 +394,94 @@ func TestTheSitesVideosAreBrowsedThroughFoyer(t *testing.T) {
 	kids := h.makeUser("kids", map[string]any{"name": "Kids"})
 	if theirs := h.call(http.MethodGet, "/api/foyer/videos/v/x3TJFoQWCHA", kids.token, nil).body["video"].(map[string]any); theirs["watch"] != nil {
 		t.Errorf("Kids see Alex's: %v", theirs["watch"])
+	}
+}
+
+// A video is kept as the site's own renditions: the ways it can be, at each
+// height the settings allow; then one, fetched and put together while the
+// device asks again; then an address of Foyer's own it downloads by ranges,
+// a download on Live Activity. A way the site no longer offers says so, and
+// a Foyer making no copies keeps no videos.
+func TestAVideoIsKeptAsTheSitesOwnRenditions(t *testing.T) {
+	h := start(t, options{})
+	admin := h.superuser()
+	tool := fakeYtDlp(t, time.Now().Add(5*time.Hour))
+	if got := h.call(http.MethodPut, "/api/foyer/admin/adapters/youtube", admin, map[string]any{"enabled": true, "values": map[string]any{"ytdlp": tool}}); got.status != http.StatusOK {
+		t.Fatalf("youtube: %d %v", got.status, got.body)
+	}
+	alex := h.makeUser("alex", map[string]any{"name": "Alex"})
+	device := deviceHeader(t, "phone-of-alex-1", "Alex’s phone")
+	encode := map[string]any{"video": "av1", "preference": "balanced", "maxHeight": 1080, "hdr": true, "audio": "opus", "container": "mkv"}
+
+	// Making copies off — the FFmpeg adapter not set up — no video is kept.
+	if off := h.callFrom(device, http.MethodPost, "/api/foyer/videos/download/options", alex.token, map[string]any{"id": "x3TJFoQWCHA", "encode": encode}); off.status != http.StatusConflict || off.body["reason"] != "failed" {
+		t.Fatalf("copies off: %d %v", off.status, off.body)
+	}
+	if got := h.call(http.MethodPut, "/api/foyer/admin/adapters/ffmpeg", admin, map[string]any{"enabled": true, "values": map[string]any{}}); got.status != http.StatusOK {
+		t.Fatalf("ffmpeg: %d %v", got.status, got.body)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	running := make(chan struct{})
+	go func() { h.server.Copies.Run(ctx); close(running) }()
+	t.Cleanup(func() { cancel(); h.server.Copies.Close(); <-running })
+
+	asked := h.callFrom(device, http.MethodPost, "/api/foyer/videos/download/options", alex.token, map[string]any{"id": "x3TJFoQWCHA", "encode": encode})
+	if asked.status != http.StatusOK {
+		t.Fatalf("options: %d %v", asked.status, asked.body)
+	}
+	fits(t, "a video's ways", asked.body, fixtureAnswer(t, "routes/video-download-options.json"))
+	ways := asked.body["options"].([]any)
+	first := ways[0].(map[string]any)
+	if len(ways) != 4 || first["id"] != "yt.699+251.mkv" || first["estimatedBytes"] != 119_700_000.0 || first["hdr"] != "hdr10" || first["transcoded"] != false {
+		t.Fatalf("ways %v", ways)
+	}
+
+	want := map[string]any{"id": "x3TJFoQWCHA", "option": "yt.699+251.mkv"}
+	preparing := h.callFrom(device, http.MethodPost, "/api/foyer/videos/download", alex.token, want)
+	if preparing.status != http.StatusAccepted {
+		t.Fatalf("first ask: %d %v", preparing.status, preparing.body)
+	}
+	fits(t, "a video being kept", preparing.body, fixtureAnswer(t, "routes/download-preparing.json"))
+	var made answer
+	for deadline := time.Now().Add(20 * time.Second); ; time.Sleep(100 * time.Millisecond) {
+		made = h.callFrom(device, http.MethodPost, "/api/foyer/videos/download", alex.token, want)
+		if made.status == http.StatusOK || time.Now().After(deadline) {
+			break
+		}
+		if made.status != http.StatusAccepted {
+			t.Fatalf("asked again: %d %v", made.status, made.body)
+		}
+	}
+	if made.status != http.StatusOK {
+		t.Fatalf("never kept: %d %v", made.status, made.body)
+	}
+	fits(t, "a video kept", made.body, fixtureAnswer(t, "routes/video-download.json"))
+	version := made.body["version"].(map[string]any)
+	if version["file"] != "youtube:x3TJFoQWCHA" || version["container"] != "mkv" || version["size"] != 39.0 ||
+		version["video"].(map[string]any)["codec"] != "av1" || version["audio"].([]any)[0].(map[string]any)["codec"] != "opus" {
+		t.Errorf("the version %v", version)
+	}
+	address := made.body["url"].(string)
+	if !strings.HasPrefix(address, "/api/foyer/stream/copy/") {
+		t.Fatalf("address %q", address)
+	}
+	if status, _, body := h.fetchRange(address, "bytes=4-10"); status != http.StatusPartialContent || body != "picture" {
+		t.Errorf("a part: %d %q", status, body)
+	}
+	sessions := h.call(http.MethodGet, "/api/foyer/admin/sessions", admin, nil).body["sessions"].([]any)
+	if len(sessions) != 1 || sessions[0].(map[string]any)["kind"] != "download" || sessions[0].(map[string]any)["item"].(map[string]any)["title"] != "The River, a Film" {
+		t.Errorf("Live Activity %v", sessions)
+	}
+
+	// Formats the site does not offer, and a way that is no way.
+	if gone := h.callFrom(device, http.MethodPost, "/api/foyer/videos/download", alex.token, map[string]any{"id": "x3TJFoQWCHA", "option": "yt.400+251.mkv"}); gone.status != http.StatusConflict || gone.body["reason"] != "failed" {
+		t.Errorf("a way gone: %d %v", gone.status, gone.body)
+	}
+	if bad := h.callFrom(device, http.MethodPost, "/api/foyer/videos/download", alex.token, map[string]any{"id": "x3TJFoQWCHA", "option": "original"}); bad.status != http.StatusBadRequest {
+		t.Errorf("no way: %d %v", bad.status, bad.body)
+	}
+	// A video the site will not play is kept no more than played.
+	if refused := h.callFrom(device, http.MethodPost, "/api/foyer/videos/download/options", alex.token, map[string]any{"id": "dQw4w9WgXcR"}); refused.status != http.StatusConflict || refused.body["reason"] != "unavailable" {
+		t.Errorf("refused: %d %v", refused.status, refused.body)
 	}
 }

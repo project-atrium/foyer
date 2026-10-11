@@ -317,3 +317,79 @@ func TestACopyStoppedLeavesNothing(t *testing.T) {
 		t.Error("a stopped copy kept")
 	}
 }
+
+// A copy its Maker makes — a site's renditions fetched and put together —
+// waits on the network, so it runs beside a film being made anew, never
+// behind it: said by its time left, kept with what the Maker says it is,
+// and nothing of its folder left. A folder an earlier run left goes at start.
+func TestAFetchedCopyNeverWaitsBehindOneMadeAnew(t *testing.T) {
+	root := t.TempDir()
+	left := filepath.Join(root, "0123456789abcdef0123456789abcdef-1.part")
+	if err := os.MkdirAll(left, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	m := New(Options{
+		Root:     root,
+		Settings: func() Settings { return Settings{Tool: "ffmpeg", AtOnce: 1, KeepDays: 14} },
+		Sign:     func(b []byte) ([]byte, error) { return bytes.Repeat([]byte{1}, 32), nil },
+	})
+	// The one place for a film made anew is taken.
+	m.running = 1
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() { m.Run(ctx); close(done) }()
+	t.Cleanup(func() { cancel(); m.Close(); <-done })
+
+	release := make(chan struct{})
+	var tool string
+	r := Request{
+		Key: "fedcba9876543210fedcba9876543210", File: "youtube:x3TJFoQWCHA", Title: "The River, a Film",
+		Source: media.Version{DurationMs: 600_000},
+		Recipe: Recipe{Encode: Encode{Video: "vp9", MaxHeight: 1080, Audio: "opus", Container: "mkv"}, Bytes: 10_000},
+		Make: func(ctx context.Context, dir, ffmpeg string, progress func(done, speed float64)) (string, media.Version, error) {
+			tool = ffmpeg
+			progress(0.5, 1000)
+			select {
+			case <-release:
+			case <-ctx.Done():
+				return "", media.Version{}, ctx.Err()
+			}
+			made := filepath.Join(dir, "video.mkv")
+			if err := os.WriteFile(made, []byte("both, put together"), 0o600); err != nil {
+				return "", media.Version{}, err
+			}
+			return made, media.Version{Container: "mkv", Video: &media.Video{Codec: "vp9", Height: 1080}}, nil
+		},
+	}
+	until(t, m, r, Running)
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		making := m.Making()
+		if len(making) == 1 && making[0].Progress == 0.5 {
+			if making[0].Speed != 0 || making[0].EtaMs != 5000 || making[0].Encode.Video != "vp9" {
+				t.Errorf("making %+v", making[0])
+			}
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("making %+v", making)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if _, err := os.Stat(left); !os.IsNotExist(err) {
+		t.Error("an earlier run's folder was kept")
+	}
+	close(release)
+	s := until(t, m, r, Done)
+	if tool != "ffmpeg" || s.Made.Name != r.Key+".mkv" || s.Made.Size != 18 || s.Made.Version.Size != 18 || s.Made.Version.Video.Codec != "vp9" || s.Made.Encode.MaxHeight != 1080 {
+		t.Errorf("made %+v with %q", s.Made, tool)
+	}
+	entries, _ := os.ReadDir(root)
+	var names []string
+	for _, e := range entries {
+		names = append(names, e.Name())
+	}
+	if strings.Join(names, " ") != r.Key+".json "+r.Key+".mkv" {
+		t.Errorf("kept %q", names)
+	}
+}

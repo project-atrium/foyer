@@ -32,6 +32,9 @@ type Info struct {
 	Subtitles   map[string][]Caption `json:"subtitles"`
 	Automatic   map[string][]Caption `json:"automatic_captions"`
 	Chapters    []Chapter            `json:"chapters"`
+	// raw is the answer as yt-dlp gave it, which a download hands back to it
+	// rather than ask the site again.
+	raw []byte
 }
 
 // Format is one stream of a video, as yt-dlp lists it.
@@ -50,6 +53,12 @@ type Format struct {
 	Size     int64   `json:"filesize"`
 	Approx   int64   `json:"filesize_approx"`
 	Language string  `json:"language"`
+	// LanguagePreference is highest for a dubbed video's own language.
+	LanguagePreference int     `json:"language_preference"`
+	DynamicRange       string  `json:"dynamic_range"`
+	Note               string  `json:"format_note"`
+	ABR                float64 `json:"abr"`
+	Channels           int     `json:"audio_channels"`
 }
 
 type Thumbnail struct {

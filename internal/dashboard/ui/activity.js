@@ -15,7 +15,7 @@ const modes = { direct: 'Direct', remux: 'Remuxed', transcode: 'Transcoded', cop
 // What a poll changes of a copy being made.
 const makingNow = ['state', 'progress', 'speed', 'etaMs', 'error', 'started'];
 
-const names = { av1: 'AV1', hevc: 'HEVC', h264: 'H.264', opus: 'Opus', aac: 'AAC', mkv: 'Matroska', mp4: 'MP4' };
+const names = { av1: 'AV1', hevc: 'HEVC', h264: 'H.264', vp9: 'VP9', opus: 'Opus', aac: 'AAC', mkv: 'Matroska', mp4: 'MP4' };
 const preferences = { size: 'smaller file', balanced: 'balanced', quality: 'better picture' };
 
 // madeAs is what a copy is made to, in a line: AV1 · 1080p · balanced · Opus · Matroska.

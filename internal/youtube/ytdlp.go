@@ -1,6 +1,7 @@
 package youtube
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -9,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -145,7 +147,73 @@ func (r *Runner) run(ctx context.Context, id string) (*Info, error) {
 	if info.ID != id {
 		return nil, errors.New("yt-dlp answered for another video")
 	}
+	info.raw = out.Bytes()
 	return &info, nil
+}
+
+// fetched is a progress line of a fetch's: the format, how it stands, the
+// bytes so far, and how fast — yt-dlp's NA where it cannot say.
+const fetched = "download:FOYER %(info.format_id)s %(progress.status)s %(progress.downloaded_bytes)s %(progress.speed)s"
+
+// fetch has yt-dlp fetch a video's formats into dir from what it said of
+// the video — the site is not asked again — and put them together with
+// ffmpeg as they are, saying how far it has got of want bytes. It answers
+// the file it made.
+func (r *Runner) fetch(ctx context.Context, info *Info, dir, ffmpegPath, formats, container string, want int64, progress func(done, speed float64)) (string, error) {
+	tool, ok := r.tool()
+	if !ok {
+		return "", ErrOff
+	}
+	if len(info.raw) == 0 {
+		return "", errors.New("what yt-dlp said of the video is not at hand")
+	}
+	answer := filepath.Join(dir, "info.json")
+	if err := os.WriteFile(answer, info.raw, 0o600); err != nil {
+		return "", err
+	}
+	cmd := ffmpeg.Command(ctx, tool, "--ignore-config", "--no-warnings", "--quiet", "--progress", "--newline", "--progress-template", fetched,
+		"--no-playlist", "--force-ipv4", "--cache-dir", filepath.Join(r.dir, "yt-dlp"), "--load-info-json", answer,
+		"-f", formats, "--merge-output-format", container, "--ffmpeg-location", ffmpegPath, "-o", filepath.Join(dir, "video.%(ext)s"))
+	cmd.Env = append(cmd.Env, "HOME="+r.dir, "DENO_DIR="+filepath.Join(r.dir, "deno"), "XDG_CACHE_HOME="+r.dir)
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return "", err
+	}
+	said := &tail{max: 8 << 10}
+	cmd.Stderr = said
+	if err := cmd.Start(); err != nil {
+		return "", err
+	}
+	// Each format comes whole before the next: what the earlier ones came to, and where the one now is.
+	var before, now int64
+	current := ""
+	lines := bufio.NewScanner(stdout)
+	for lines.Scan() {
+		fields := strings.Fields(lines.Text())
+		if len(fields) != 5 || fields[0] != "FOYER" {
+			continue
+		}
+		bytes, _ := strconv.ParseInt(fields[3], 10, 64)
+		speed, _ := strconv.ParseFloat(fields[4], 64)
+		if fields[1] != current {
+			before, current = before+now, fields[1]
+		}
+		now = bytes
+		if want > 0 {
+			progress(float64(before+now)/float64(want), speed)
+		}
+	}
+	if err := cmd.Wait(); err != nil {
+		if ctx.Err() != nil {
+			return "", ctx.Err()
+		}
+		return "", errors.New(refusalOf(said.String()).Message)
+	}
+	made := filepath.Join(dir, "video."+container)
+	if _, err := os.Stat(made); err != nil {
+		return "", errors.New("yt-dlp made no file")
+	}
+	return made, nil
 }
 
 var links = regexp.MustCompile(`https?://\S+`)
