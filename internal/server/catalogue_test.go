@@ -208,6 +208,22 @@ func TestTheCatalogueAnswersAsTheAppReadsThem(t *testing.T) {
 	}
 	one := s.get("/api/foyer/catalogue/shows/"+pack.Id+"/seasons/1", alex.token)
 	fits(t, "a season", one.body, fixtureAnswer(t, "routes/season.json"))
+	episodePage := s.get("/api/foyer/catalogue/shows_episodes/"+first.Id, alex.token)
+	fits(t, "an episode's page", episodePage.body, fixtureAnswer(t, "routes/episode.json"))
+	if ep := episodePage.body["episode"].(map[string]any); ep["watch"] == nil || ep["identity"] != "tmdb:tv:2001/s1e1" {
+		t.Errorf("the episode %v", ep)
+	}
+	if show := episodePage.body["show"].(map[string]any); show["title"] != "Big Pack" || show["watch"] == nil {
+		t.Errorf("its series %v", show)
+	}
+	for _, v := range items(episodePage, "versions") {
+		if _, ok := v["path"]; ok {
+			t.Errorf("an episode's version tells its path: %v", v)
+		}
+	}
+	if got := s.call(http.MethodGet, "/api/foyer/catalogue/shows_episodes/nothing", alex.token, nil); got.status != http.StatusNotFound {
+		t.Errorf("no such episode: %d", got.status)
+	}
 	extrasSeason := s.get("/api/foyer/catalogue/shows/"+pack.Id+"/seasons/extras", alex.token)
 	fits(t, "the extras", extrasSeason.body, fixtureAnswer(t, "routes/season-extras.json"))
 	genres := s.get("/api/foyer/catalogue/genres?kind=movies", alex.token)

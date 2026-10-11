@@ -11,6 +11,7 @@ import type { TestProject } from 'vitest/node';
 declare module 'vitest' {
   export interface ProvidedContext {
     readonly binary: string;
+    readonly fakezurg: string;
     readonly appVersion: string;
   }
 }
@@ -22,5 +23,9 @@ export default function setup(project: TestProject) {
   const binary = join(directory, 'foyer');
   execFileSync('go', ['build', '-o', binary, '.'], { cwd: repository, stdio: 'inherit' });
   project.provide('binary', binary);
+  // A pretend Zurg, for a library: never the household's own, whose records hold Real-Debrid's links.
+  const fakezurg = join(directory, 'fakezurg');
+  execFileSync('go', ['build', '-o', fakezurg, './dev/fakezurg'], { cwd: repository, stdio: 'inherit' });
+  project.provide('fakezurg', fakezurg);
   return () => rmSync(directory, { recursive: true, force: true });
 }

@@ -19,7 +19,12 @@ import (
 )
 
 func (s *Service) detail(re *core.RequestEvent) error {
-	r, kind, ok := s.titleRecord(re.Request.PathValue("collection"), re.Request.PathValue("id"))
+	collection := re.Request.PathValue("collection")
+	// A library's name never ends in _episodes: these are a series' episodes.
+	if shows, ok := strings.CutSuffix(collection, "_episodes"); ok {
+		return s.episodePage(re, shows, collection, re.Request.PathValue("id"))
+	}
+	r, kind, ok := s.titleRecord(collection, re.Request.PathValue("id"))
 	if !ok {
 		return re.NotFoundError("", nil)
 	}
@@ -45,6 +50,45 @@ func (s *Service) detail(re *core.RequestEvent) error {
 		}
 	}
 	return re.JSON(http.StatusOK, d)
+}
+
+// EpisodePage is an episode's page: the episode, its series as a page
+// lists it, and its files.
+type EpisodePage struct {
+	Episode  Episode        `json:"episode"`
+	Show     Title          `json:"show"`
+	Versions []media.Public `json:"versions"`
+}
+
+func (s *Service) episodePage(re *core.RequestEvent, shows, collection, id string) error {
+	if kind, ok := s.shelfOf(shows); !ok || kind != library.Shows {
+		return re.NotFoundError("", nil)
+	}
+	record, err := s.app.FindRecordById(collection, id)
+	if err != nil {
+		return re.NotFoundError("", nil)
+	}
+	show, _, ok := s.titleRecord(shows, record.GetString("show"))
+	if !ok {
+		return re.NotFoundError("", nil)
+	}
+	page := EpisodePage{Episode: episodeOf(record, show.Id)}
+	states, err := s.states(re.Auth.Id, []string{page.Episode.Identity})
+	if err != nil {
+		return re.InternalServerError("", err)
+	}
+	if state, ok := states[page.Episode.Identity]; ok && page.Episode.Identity != "" {
+		page.Episode.Watch = watchOf(state)
+	}
+	titles := []Title{titleOf(show, library.Shows)}
+	if err := s.annotate(re.Auth.Id, titles); err != nil {
+		return re.InternalServerError("", err)
+	}
+	page.Show = titles[0]
+	if page.Versions, err = s.versionsOf(record); err != nil {
+		return re.InternalServerError("", err)
+	}
+	return re.JSON(http.StatusOK, page)
 }
 
 func (s *Service) seasons(re *core.RequestEvent) error {

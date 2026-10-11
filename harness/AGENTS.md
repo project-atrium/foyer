@@ -10,12 +10,18 @@ app's `adapters/api/fixtures/foyer/` keep the two sides' answers alike; this
 keeps the *adapters* in step: the Loge code that speaks Foyer — `@loge/api`'s
 protocol module now, and the Foyer adapters as they come — against the real
 binary: `sync/foyer` pairs a device, signs users in, renews a session and
-is refused once a password changes (`test/household.test.ts`).
+is refused once a password changes (`test/household.test.ts`); and
+`sources/foyer`, lent a signed-in user's session, browses a library scanned
+from a pretend Zurg in the app's own order, plays a film's bytes by range,
+reports, resumes, marks it watched and downloads it (`test/library.test.ts`).
 
 ## How it works
 
 - `test/support/build.ts` builds the binary once per run (`go build`), in a
-  temporary directory.
+  temporary directory — and `dev/fakezurg` beside it.
+- `test/support/zurg.ts` starts fakezurg over `.zurgtorrent` records written
+  for the test, every file the same known bytes — never the household's own
+  records, which hold Real-Debrid's links.
 - `test/support/server.ts` starts it for each test on a temporary data
   directory and a free port, with an environment of its own — nothing from
   your shell's `FOYER_*` — so every test starts with no users and a fresh

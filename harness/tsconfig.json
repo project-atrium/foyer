@@ -16,7 +16,8 @@
     "skipLibCheck": true,
     "paths": {
       "@loge/api": ["../../loge/adapters/api/src/index.ts"],
-      "@loge/sync-foyer": ["../../loge/adapters/sync/foyer/src/index.ts"]
+      "@loge/sync-foyer": ["../../loge/adapters/sync/foyer/src/index.ts"],
+      "@loge/source-foyer": ["../../loge/adapters/sources/foyer/src/index.ts"]
     }
   },
   "include": ["test/**/*.ts", "vitest.config.ts"]

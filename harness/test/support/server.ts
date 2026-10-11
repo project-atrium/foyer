@@ -22,6 +22,12 @@ export interface Server {
   pairingCode(userIds: readonly string[]): Promise<string>;
   /** The devices the Household page lists, with their users' names. */
   devices(): Promise<readonly { readonly name: string; readonly platform: string; readonly appVersion: string; readonly users: readonly string[]; readonly paired: boolean }[]>;
+  /** A WebDAV share set up on the Adapters page, and its connection's id. */
+  share(address: string): Promise<string>;
+  /** One of its folders made a library, and the library's id. */
+  addLibrary(connection: string, folder: string, name: string, kind: 'movies' | 'shows'): Promise<string>;
+  /** Scan now, and wait until the library holds this many titles. */
+  scan(library: string, titles: number): Promise<void>;
   /** What the server printed, for a failure's message. */
   output(): string;
   stop(): Promise<void>;
@@ -104,12 +110,45 @@ export async function startServer(): Promise<Server> {
       if (!response.ok) throw new Error(`The household could not be read (${response.status}): ${await response.text()}`);
       return ((await response.json()) as { devices: Awaited<ReturnType<Server['devices']>> }).devices;
     },
+    share: async (address) => {
+      const response = await fetch(`${url}/api/foyer/admin/connections`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: await superuserToken() },
+        body: JSON.stringify({ adapter: 'webdav', name: 'Zurg', enabled: true, values: { url: address } }),
+      });
+      if (!response.ok) throw new Error(`The share could not be set up (${response.status}): ${await response.text()}`);
+      return ((await response.json()) as { id: string }).id;
+    },
+    addLibrary: async (connection, folder, name, kind) => {
+      const response = await fetch(`${url}/api/foyer/admin/libraries`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: await superuserToken() },
+        body: JSON.stringify({ connection, folder, name, kind, enabled: true }),
+      });
+      if (!response.ok) throw new Error(`The library could not be made (${response.status}): ${await response.text()}`);
+      return ((await response.json()) as { id: string }).id;
+    },
+    scan: async (library, titles) => {
+      const token = await superuserToken();
+      const asked = await fetch(`${url}/api/foyer/admin/scan`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: token },
+        body: JSON.stringify({ library, full: true }),
+      });
+      if (!asked.ok) throw new Error(`No scan (${asked.status}): ${await asked.text()}`);
+      await until(async () => {
+        const response = await fetch(`${url}/api/foyer/admin/library?library=${library}`, { headers: { Authorization: token } });
+        return response.ok && ((await response.json()) as { totalItems: number }).totalItems >= titles;
+      }, 20_000).catch((error: unknown) => {
+        throw new Error(`The scan found too little:\n${output}`, { cause: error });
+      });
+    },
     output: () => output,
     stop,
   };
 }
 
-function freePort(): Promise<number> {
+export function freePort(): Promise<number> {
   return new Promise((resolve, reject) => {
     const probe = createServer();
     probe.on('error', reject);
@@ -120,7 +159,7 @@ function freePort(): Promise<number> {
   });
 }
 
-async function until(ready: () => Promise<boolean>, timeoutMs: number): Promise<void> {
+export async function until(ready: () => Promise<boolean>, timeoutMs: number): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   for (;;) {
     try {

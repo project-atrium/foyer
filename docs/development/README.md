@@ -184,7 +184,11 @@ Loge code that speaks Foyer — `@loge/api`'s protocol module and the Foyer
 adapters, `sync/foyer` first — aliased from the app beside it, never
 installed. The Go tests prove the server; the harness proves the pair: a
 device paired for two users and listed once, a third signing in, a session
-renewed and then refused once after a password change, the owner check.
+renewed and then refused once after a password change, the owner check —
+and `sources/foyer` on a user's lent session, over a library scanned from
+`dev/fakezurg` (built beside the server, fed records written for the test):
+every page in the app's own order, a film's bytes by range, its progress
+resumed, marked watched, and downloaded afresh.
 
 ```bash
 cd harness && npm install && npm run typecheck && npm test

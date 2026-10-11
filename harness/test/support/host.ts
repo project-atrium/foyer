@@ -3,7 +3,7 @@
 // the network through fetch, every exchange recorded.
 import { createCipheriv, createDecipheriv, createHash, hkdfSync, randomBytes } from 'node:crypto';
 
-import { TransportError, type HttpClient, type PluginContext, type PluginCrypto } from '@loge/api';
+import { TransportError, type HttpClient, type LentAccount, type PluginContext, type PluginCrypto } from '@loge/api';
 import { inject } from 'vitest';
 
 const NONCE = 12;
@@ -88,6 +88,8 @@ export function context(options: {
   readonly credentials?: Readonly<Record<string, string>>;
   /** The device's clock, for a session that has to be old. */
   readonly now?: () => number;
+  /** A household user's session, lent to an adapter its server serves. */
+  readonly account?: LentAccount;
 }): PluginContext {
   const { session } = options;
   return {
@@ -106,5 +108,6 @@ export function context(options: {
     client: { appName: 'Loge', appVersion: inject('appVersion'), deviceName: options.name, platform: options.platform ?? 'android', installationId: options.installation },
     clock: { now: options.now ?? (() => Date.now()), sleep: async () => undefined },
     crypto: nodeHostCrypto(),
+    ...(options.account ? { account: options.account } : {}),
   };
 }
