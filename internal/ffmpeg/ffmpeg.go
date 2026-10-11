@@ -234,6 +234,8 @@ func Adapter() adapters.Adapter {
 				Help: "The GPU, for transcoding to come. In Docker, pass it in with the compose override."},
 			{Key: "concurrency", Label: "Files read at once", Type: adapters.Number, Default: 2, Min: 1, Max: 8,
 				Help: "Each read asks the share — and Real-Debrid, behind Zurg — for a few megabytes."},
+			{Key: "convert", Label: "Convert for players that cannot open a file", Type: adapters.Bool, Default: false,
+				Help: "Remuxes a file to HLS for a player that plays its picture but not the file itself — an iPhone's own player and Matroska, a browser. Off, such a player is told to turn this on or to play the file with another: mpv and VLC open it as it is."},
 		},
 		Test: func(ctx context.Context, s adapters.Settings) adapters.Result {
 			d := Detect(ctx, FromSettings(s))

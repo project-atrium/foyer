@@ -52,6 +52,9 @@ type AudioPlan struct {
 type Decision struct {
 	Mode string
 	Plan Plan
+	// Convertible is the file as it is where a remux could play and
+	// converting is switched off: the player is told it could be on.
+	Convertible bool
 }
 
 // Remuxable picture codecs: those a playlist can name from the stream's own

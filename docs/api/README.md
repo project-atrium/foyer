@@ -135,6 +135,11 @@ and their rules, and how they fail.
 
 ### Remux
 
+- **Plan z, off until the household turns it on**: Settings → Adapters →
+  FFmpeg → Convert for players that cannot open a file. Off, `play` answers
+  the file as it is with `convertible: true` where a remux would play, and
+  Loge says converting could be turned on, or another player used — mpv and
+  VLC open the file as it is.
 - **The file as it is wherever the player opens it.** Asked with the
   player's profile, `play` judges the file as the app's `canPlay` does — its
   protocol, container, picture, one of its sounds, its height — and only

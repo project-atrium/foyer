@@ -66,11 +66,13 @@ type Manager struct {
 	// sign signs a ticket, with a key drawn from the users' file-token secret.
 	sign func(payload []byte) ([]byte, error)
 	// tool is ffmpeg's path, while the FFmpeg adapter is switched on.
-	tool     func() (string, bool)
-	grants   Grants
-	index    func(ctx context.Context, file string) (Index, error)
-	version  func(file string) (media.Version, error)
-	playings Playings
+	tool func() (string, bool)
+	// converting says whether the household lets Foyer convert for a player.
+	converting func() bool
+	grants     Grants
+	index      func(ctx context.Context, file string) (Index, error)
+	version    func(file string) (media.Version, error)
+	playings   Playings
 
 	mu   sync.Mutex
 	jobs map[string]*job
@@ -84,6 +86,9 @@ type Options struct {
 	Root string
 	Sign func([]byte) ([]byte, error)
 	Tool func() (string, bool)
+	// Converting is the household's word: converting for players is plan z,
+	// and off until it says otherwise.
+	Converting func() bool
 	// Grants open a file to ffmpeg, by its id.
 	Grants Grants
 	// Index is where a file's keyframes lie, Version what it is.
@@ -99,14 +104,19 @@ func NewManager(o Options) *Manager {
 	if log == nil {
 		log = func(string, ...any) {}
 	}
-	return &Manager{log: log, root: o.Root, sign: o.Sign, tool: o.Tool, grants: o.Grants, index: o.Index,
+	converting := o.Converting
+	if converting == nil {
+		converting = func() bool { return true }
+	}
+	return &Manager{log: log, root: o.Root, sign: o.Sign, tool: o.Tool, converting: converting, grants: o.Grants, index: o.Index,
 		version: o.Version, playings: o.Playings, jobs: map[string]*job{}}
 }
 
-// Available says whether a remux can run now: ffmpeg is set up.
+// Available says whether a remux can run now: ffmpeg is set up, and the
+// household lets Foyer convert for players.
 func (m *Manager) Available() bool {
 	_, ok := m.tool()
-	return ok
+	return ok && m.converting()
 }
 
 // End ends a playing's remux: its run stopped, its segments gone.

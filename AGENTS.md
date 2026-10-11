@@ -228,6 +228,11 @@ Go tests sit beside what they test. Everything else is PocketBase's: `serve`,
   lives under `/api/foyer/stream/`, so `stream.Quiet` keeps it from the log.
   The plan is in the ticket, so any Foyer — this one after a restart —
   makes the same remux of it.
+- **Converting for players is plan z, off until the household turns it on**
+  (the FFmpeg adapter's `convert`). mpv and VLC, first on every device, open
+  a file as it is; off, `play` answers the file with `convertible`, and the
+  app says converting could be turned on. Never turn it on by default, and
+  never spend on it what downloads and YouTube need first.
 - **A remux carries every sound the file holds, so only a file ffprobe has
   read is remuxed** — `play` reads one it has not, at once — and only one
   whose keyframes are known. Never remux by the name's guess: a silent film

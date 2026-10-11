@@ -91,8 +91,18 @@ func TestAPlayerThatCannotOpenTheFileGetsItRemuxed(t *testing.T) {
 	}
 
 	device := deviceHeader(t, "iphone-of-alex-1", "Alex’s iPhone")
+	// Converting is plan z, off until the household turns it on: the file as
+	// it is, and that a remux would play.
+	off := h.callFrom(device, http.MethodPost, "/api/foyer/play", alex.token, map[string]any{"collection": "movies", "id": film.Id, "profile": avPlayer})
+	if off.status != http.StatusOK || off.body["mode"] != nil || off.body["convertible"] != true || strings.HasPrefix(off.body["url"].(string), hls.Prefix) {
+		t.Fatalf("play with converting off: %d %v", off.status, off.body)
+	}
+	fits(t, "playback", off.body, fixtureAnswer(t, "routes/play-convertible.json"))
+	if got := h.call(http.MethodPut, "/api/foyer/admin/adapters/ffmpeg", admin, map[string]any{"enabled": true, "values": map[string]any{"convert": true}}); got.status != http.StatusOK {
+		t.Fatalf("converting on: %d %v", got.status, got.body)
+	}
 	got := h.callFrom(device, http.MethodPost, "/api/foyer/play", alex.token, map[string]any{"collection": "movies", "id": film.Id, "profile": avPlayer, "startMs": 12_500})
-	if got.status != http.StatusOK || got.body["mode"] != "remux" {
+	if got.status != http.StatusOK || got.body["mode"] != "remux" || got.body["convertible"] != nil {
 		t.Fatalf("play: %d %v", got.status, got.body)
 	}
 	fits(t, "playback", got.body, fixtureAnswer(t, "routes/play-remux.json"))

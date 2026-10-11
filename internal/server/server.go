@@ -91,6 +91,10 @@ func Bind(app core.App, cfg config.Config) *Server {
 			tool := ffmpeg.FromSettings(settings).FFmpeg
 			return tool, tool != ""
 		},
+		Converting: func() bool {
+			settings, err := registry.Settings(ffmpeg.Key)
+			return err == nil && settings.Enabled && settings.Bool("convert")
+		},
 		Grants: s.Streams,
 		Index: func(ctx context.Context, id string) (hls.Index, error) {
 			file, err := fileOf(id)

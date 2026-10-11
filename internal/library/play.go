@@ -44,15 +44,18 @@ func (e *Engine) OpenFile(ctx context.Context, file *core.Record, header http.He
 // its chapters. For a player that plays the picture and not the file, the
 // address is a remux to HLS, and the file's own is beside it.
 type Playback struct {
-	URL       string          `json:"url"`
-	ExpiresAt time.Time       `json:"expiresAt"`
-	Session   string          `json:"session"`
-	Mode      string          `json:"mode,omitempty"`
-	File      string          `json:"file,omitempty"`
-	Remux     *Remux          `json:"remux,omitzero"`
-	Version   media.Public    `json:"version"`
-	Versions  []media.Public  `json:"versions"`
-	Chapters  []media.Chapter `json:"chapters"`
+	URL       string    `json:"url"`
+	ExpiresAt time.Time `json:"expiresAt"`
+	Session   string    `json:"session"`
+	// Convertible is a file a remux would play for this player, and the
+	// household has converting switched off.
+	Convertible bool            `json:"convertible,omitzero"`
+	Mode        string          `json:"mode,omitempty"`
+	File        string          `json:"file,omitempty"`
+	Remux       *Remux          `json:"remux,omitzero"`
+	Version     media.Public    `json:"version"`
+	Versions    []media.Public  `json:"versions"`
+	Chapters    []media.Chapter `json:"chapters"`
 }
 
 // Remux is what a remux carries: each audio rendition's codec, in the
@@ -97,7 +100,8 @@ func (e *Engine) PlayRoutes(r *router.Router[*core.RequestEvent], streams *strea
 		if err != nil {
 			return re.InternalServerError("", err)
 		}
-		playback := Playback{URL: address, ExpiresAt: expires, Session: session, Version: p.version.Public(), Versions: media.PublicAll(p.versions), Chapters: []media.Chapter{}}
+		playback := Playback{URL: address, ExpiresAt: expires, Session: session, Convertible: decision.Convertible,
+			Version: p.version.Public(), Versions: media.PublicAll(p.versions), Chapters: []media.Chapter{}}
 		if decision.Mode == hls.Remux {
 			plan := decision.Plan
 			plan.StartMs = p.startMs
@@ -135,12 +139,17 @@ func (e *Engine) PlayRoutes(r *router.Router[*core.RequestEvent], streams *strea
 }
 
 // decide is how a playing is served: the file as it is, unless the player
-// said what it plays and a remux plays where the file does not. The index of
-// the file's keyframes is read for that alone, the first time.
+// said what it plays and a remux plays where the file does not. Converting
+// for players is plan z, off until the household turns it on: off, the
+// player is told only that it could be. The index of the file's keyframes
+// is read for a remux alone, the first time.
 func (e *Engine) decide(ctx context.Context, p *playable, remux *hls.Manager) hls.Decision {
 	direct := hls.Decision{Mode: hls.Direct}
-	if p.profile == nil || remux == nil || !p.profile.MayRemux(p.version) || !remux.Available() {
+	if p.profile == nil || remux == nil || !p.profile.MayRemux(p.version) {
 		return direct
+	}
+	if !remux.Available() {
+		return hls.Decision{Mode: hls.Direct, Convertible: true}
 	}
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()

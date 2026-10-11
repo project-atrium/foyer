@@ -28,8 +28,8 @@ export interface Server {
   addLibrary(connection: string, folder: string, name: string, kind: 'movies' | 'shows'): Promise<string>;
   /** Scan now, and wait until the library holds this many titles. */
   scan(library: string, titles: number): Promise<void>;
-  /** The FFmpeg adapter, switched on or off on the Adapters page: its tools by their names on the PATH. */
-  ffmpeg(enabled: boolean): Promise<void>;
+  /** The FFmpeg adapter, switched on or off on the Adapters page: its tools by their names on the PATH, converting for players as said. */
+  ffmpeg(enabled: boolean, convert?: boolean): Promise<void>;
   /** What Live Activity shows playing now. */
   playings(): Promise<readonly Playing[]>;
   /** Live Activity's Stop. */
@@ -161,11 +161,11 @@ export async function startServer(): Promise<Server> {
         throw new Error(`The scan found too little:\n${output}`, { cause: error });
       });
     },
-    ffmpeg: async (enabled) => {
+    ffmpeg: async (enabled, convert = false) => {
       const response = await fetch(`${url}/api/foyer/admin/adapters/ffmpeg`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', Authorization: await superuserToken() },
-        body: JSON.stringify({ enabled, values: {} }),
+        body: JSON.stringify({ enabled, values: { convert } }),
       });
       if (!response.ok) throw new Error(`FFmpeg could not be set up (${response.status}): ${await response.text()}`);
     },

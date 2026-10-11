@@ -192,6 +192,11 @@ it.skipIf(!ffmpegHere())('remuxes a Matroska film to HLS for AVPlayer: its playl
   if (!some) throw new Error('no film');
   const avPlayer = PROFILES.ios;
   if (!avPlayer) throw new Error('no profile');
+  // Converting is plan z, off until the household turns it on: the file, and that it could be.
+  const off = await source.getPlaybackDescriptor!({ key: some.key, profile: avPlayer });
+  expect(off.convertible).toBe(true);
+  expect(off.sources.map((each) => each.protocol)).toEqual(['progressive']);
+  await server!.ffmpeg(true, true);
   const descriptor = await source.getPlaybackDescriptor!({ key: some.key, profile: avPlayer, startMs: 12_000 });
   const [hls, file] = descriptor.sources;
   // The remux first; the file after it, for a player that opens it.
