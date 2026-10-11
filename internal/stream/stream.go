@@ -42,13 +42,28 @@ var (
 // HEAD asked for as one.
 type Opener func(ctx context.Context, file *core.Record, header http.Header, head bool) (*http.Response, error)
 
+// Playings are what every address belongs to: a playing, which a superuser
+// may stop.
+type Playings interface {
+	// Open is a request for a playing's bytes begun: its context ends when
+	// the playing is stopped, and done is called as it ends. False for a
+	// playing stopped, or one the address does not belong to.
+	Open(r *http.Request, session, user, file string, expires time.Time) (context.Context, func(), bool)
+	// Sent is bytes of a playing on their way.
+	Sent(session string, n int)
+}
+
 // Streamer signs addresses and serves them.
 type Streamer struct {
 	app        core.App
 	collection string
 	open       Opener
+	playings   Playings
 	twin       *twin
 }
+
+// SetPlayings says what each address's playing is allowed.
+func (s *Streamer) SetPlayings(p Playings) { s.playings = p }
 
 // New serves files of a collection — `media_files` — opened by open.
 func New(app core.App, collection string, open Opener) *Streamer {
@@ -66,49 +81,64 @@ func (s *Streamer) key() ([]byte, error) {
 	return hkdf.Key(sha256.New, []byte(users.FileToken.Secret), nil, "foyer stream address v1", 32)
 }
 
-func (s *Streamer) sign(file, user string, expires int64) (string, error) {
+// sign is an address's signature: over its file, its user, the playing it
+// belongs to and when it expires.
+func (s *Streamer) sign(file, user, session string, expires int64) (string, error) {
 	key, err := s.key()
 	if err != nil {
 		return "", err
 	}
 	mac := hmac.New(sha256.New, key)
-	mac.Write([]byte("v1|" + file + "|" + user + "|" + strconv.FormatInt(expires, 10)))
+	mac.Write([]byte("v2|" + file + "|" + user + "|" + session + "|" + strconv.FormatInt(expires, 10)))
 	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil)[:16]), nil
 }
 
 // Address is a file's address for a user, good until expires: a path on this
 // server, so a proxy's own base path keeps working.
-func (s *Streamer) Address(file, user string, expires time.Time) (string, error) {
-	sig, err := s.sign(file, user, expires.Unix())
+func (s *Streamer) Address(file, user, session string, expires time.Time) (string, error) {
+	sig, err := s.sign(file, user, session, expires.Unix())
 	if err != nil {
 		return "", err
 	}
-	q := url.Values{"u": {user}, "exp": {strconv.FormatInt(expires.Unix(), 10)}, "sig": {sig}}
+	q := url.Values{"u": {user}, "s": {session}, "exp": {strconv.FormatInt(expires.Unix(), 10)}, "sig": {sig}}
 	return Prefix + url.PathEscape(file) + "?" + q.Encode(), nil
 }
 
-func (s *Streamer) valid(file string, q url.Values, now time.Time) bool {
+// valid reads an address's signature: when it expires, if it is one.
+func (s *Streamer) valid(file string, q url.Values, now time.Time) (time.Time, bool) {
 	expires, err := strconv.ParseInt(q.Get("exp"), 10, 64)
-	if err != nil || now.Unix() > expires {
-		return false
+	if err != nil || now.Unix() > expires || q.Get("s") == "" {
+		return time.Time{}, false
 	}
-	want, err := s.sign(file, q.Get("u"), expires)
-	return err == nil && hmac.Equal([]byte(want), []byte(q.Get("sig")))
+	want, err := s.sign(file, q.Get("u"), q.Get("s"), expires)
+	return time.Unix(expires, 0), err == nil && hmac.Equal([]byte(want), []byte(q.Get("sig")))
 }
 
 // Routes mounts the stream addresses: GET and HEAD. The signature is all the
 // authority they need.
 func (s *Streamer) Routes(r *router.Router[*core.RequestEvent]) {
 	r.GET(Prefix+"{file}", func(e *core.RequestEvent) error {
-		file := e.Request.PathValue("file")
-		if !s.valid(file, e.Request.URL.Query(), time.Now()) {
+		file, q := e.Request.PathValue("file"), e.Request.URL.Query()
+		expires, ok := s.valid(file, q, time.Now())
+		if !ok {
 			return e.ForbiddenError("This address has expired, or never was one.", nil)
 		}
 		record, err := s.app.FindRecordById(s.collection, file)
 		if err != nil {
 			return e.NotFoundError("", nil)
 		}
-		return Proxy(e.Response, e.Request, record.GetString("name"), func(ctx context.Context, header http.Header, head bool) (*http.Response, error) {
+		w, req := http.ResponseWriter(e.Response), e.Request
+		if s.playings != nil {
+			session := q.Get("s")
+			ctx, done, allowed := s.playings.Open(req, session, q.Get("u"), file, expires)
+			if !allowed {
+				return e.ForbiddenError("This playing was stopped.", nil)
+			}
+			defer done()
+			req = req.WithContext(ctx)
+			w = &counting{ResponseWriter: w, sent: func(n int) { s.playings.Sent(session, n) }}
+		}
+		return Proxy(w, req, record.GetString("name"), func(ctx context.Context, header http.Header, head bool) (*http.Response, error) {
 			return s.open(ctx, record, header, head)
 		})
 	})
@@ -139,15 +169,41 @@ func Quiet() *hook.Handler[*core.RequestEvent] {
 	}
 }
 
-// Proxy answers a request with what open answers: the headers that describe
-// the bytes, then the bytes, for as long as the player reads. PocketBase's
-// server reads and writes with five-minute deadlines, which would end a film
-// five minutes in: both are lifted here, and a write that stalls half an
-// hour ends it instead.
-func Proxy(w http.ResponseWriter, r *http.Request, name string, open func(ctx context.Context, header http.Header, head bool) (*http.Response, error)) error {
+// counting is a response that says how much of it went.
+type counting struct {
+	http.ResponseWriter
+	sent func(n int)
+}
+
+func (c *counting) Write(b []byte) (int, error) {
+	n, err := c.ResponseWriter.Write(b)
+	if n > 0 {
+		c.sent(n)
+	}
+	return n, err
+}
+
+// Unwrap lets a ResponseController reach the connection's deadlines.
+func (c *counting) Unwrap() http.ResponseWriter { return c.ResponseWriter }
+
+// Lift lifts the five-minute deadlines PocketBase's server reads and writes
+// with, which would end a film five minutes in: whoever streams keeps the
+// write's moving instead (StallAfter).
+func Lift(w http.ResponseWriter) *http.ResponseController {
 	rc := http.NewResponseController(w)
 	_ = rc.SetReadDeadline(time.Time{})
 	_ = rc.SetWriteDeadline(time.Time{})
+	return rc
+}
+
+// StallAfter is how long a write may stall before a stream ends.
+const StallAfter = 30 * time.Minute
+
+// Proxy answers a request with what open answers: the headers that describe
+// the bytes, then the bytes, for as long as the player reads — the
+// deadlines lifted, and a write that stalls half an hour ending it.
+func Proxy(w http.ResponseWriter, r *http.Request, name string, open func(ctx context.Context, header http.Header, head bool) (*http.Response, error)) error {
+	rc := Lift(w)
 
 	head := r.Method == http.MethodHead
 	response, err := open(r.Context(), r.Header, head)
@@ -212,11 +268,14 @@ func Proxy(w http.ResponseWriter, r *http.Request, name string, open func(ctx co
 	for {
 		n, readErr := response.Body.Read(buf)
 		if n > 0 {
-			_ = rc.SetWriteDeadline(time.Now().Add(30 * time.Minute))
+			_ = rc.SetWriteDeadline(time.Now().Add(StallAfter))
 			if _, err := w.Write(buf[:n]); err != nil {
 				// The player went: a seek, or the end of watching.
 				return nil
 			}
+			// What a slow source sent goes on at once, not when the
+			// server's buffer fills: a live stream trickles.
+			_ = rc.Flush()
 		}
 		if readErr != nil {
 			// The end, or the source broke off: there is nothing more to say

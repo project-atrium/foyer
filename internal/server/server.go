@@ -23,6 +23,7 @@ import (
 	"foyer/internal/library"
 	"foyer/internal/probe"
 	"foyer/internal/routes"
+	"foyer/internal/sessions"
 	"foyer/internal/stream"
 	"foyer/internal/userstate"
 	"foyer/internal/watch"
@@ -39,6 +40,7 @@ type Server struct {
 	Probes    *probe.Queue
 	Household *household.Service
 	Catalogue *catalogue.Service
+	Playings  *sessions.Registry
 }
 
 // collections are Foyer's own static collections: written by its code alone.
@@ -49,6 +51,7 @@ var collections = []string{
 	household.Collection, household.DevicesCollection,
 	userstate.Collections[userstate.KindPreference], userstate.Collections[userstate.KindSubscription],
 	userstate.Collections[userstate.KindPlaylist], userstate.Collections[userstate.KindFavoriteChannel],
+	sessions.Collection,
 }
 
 // Bind binds Foyer's guard, routes and dashboard pages, and starts nothing:
@@ -67,6 +70,8 @@ func Bind(app core.App, cfg config.Config) *Server {
 		Library:  lib,
 		Streams:  stream.New(app, library.FilesCollection, lib.OpenFile),
 	}
+	s.Playings = sessions.New(app, library.FilesCollection)
+	s.Streams.SetPlayings(s.Playings)
 	s.Probes = probe.New(app, registry, s.Streams, lib, library.FilesCollection)
 	s.Household = household.New(app)
 	s.Household.Bind()
@@ -92,13 +97,18 @@ func Bind(app core.App, cfg config.Config) *Server {
 		routes.Register(se)
 		se.Router.Bind(stream.Quiet())
 		s.Streams.Routes(se.Router)
-		s.Library.PlayRoutes(se.Router, s.Streams)
-		watch.Routes(se.Router, library.Managed)
+		// A playing stopped before a restart stays stopped.
+		if err := s.Playings.Load(); err != nil {
+			return err
+		}
+		s.Library.PlayRoutes(se.Router, s.Streams, s.Playings)
+		watch.Routes(se.Router, library.Managed, s.Playings.Heard)
 		s.Catalogue.Routes(se.Router)
 		userstate.Routes(se.Router)
 		admin := se.Router.Group("/api/foyer/admin")
 		admin.Bind(apis.RequireSuperuserAuth())
 		s.Adapters.Routes(admin)
+		s.Playings.Routes(admin)
 		s.Library.Routes(admin)
 		s.Household.Routes(se.Router, admin)
 		s.Library.HookRoutes(se.Router)
@@ -135,6 +145,7 @@ func (s *Server) Background() *Server {
 		})
 		wg.Go(func() { s.Probes.Run(ctx) })
 		wg.Go(func() { s.pruneTombstones(ctx) })
+		wg.Go(func() { s.sweepPlayings(ctx) })
 		return se.Next()
 	})
 	s.App.OnTerminate().BindFunc(func(e *core.TerminateEvent) error {
@@ -187,6 +198,19 @@ func (s *Server) pruneTombstones(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-time.After(24 * time.Hour):
+		}
+	}
+}
+
+// sweepPlayings ends what is over, every half minute: a playing whose
+// addresses expired, a download whose bytes stopped.
+func (s *Server) sweepPlayings(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(30 * time.Second):
+			s.Playings.Sweep()
 		}
 	}
 }

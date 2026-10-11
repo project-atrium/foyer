@@ -124,8 +124,9 @@ func (d Device) clean() Device {
 // in: base64url of its JSON, so a name in any script survives a header.
 const DeviceHeader = "X-Foyer-Device"
 
-// deviceOf reads the device a request says it came from.
-func deviceOf(r *http.Request) (Device, bool) {
+// DeviceOf reads the device a request says it came from — on the calls that
+// sign in, and on every call a served adapter makes.
+func DeviceOf(r *http.Request) (Device, bool) {
 	raw := r.Header.Get(DeviceHeader)
 	if raw == "" || len(raw) > 2048 {
 		return Device{}, false

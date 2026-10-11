@@ -28,9 +28,24 @@ export interface Server {
   addLibrary(connection: string, folder: string, name: string, kind: 'movies' | 'shows'): Promise<string>;
   /** Scan now, and wait until the library holds this many titles. */
   scan(library: string, titles: number): Promise<void>;
+  /** What Live Activity shows playing now. */
+  playings(): Promise<readonly Playing[]>;
+  /** Live Activity's Stop. */
+  stopPlaying(id: string): Promise<void>;
   /** What the server printed, for a failure's message. */
   output(): string;
   stop(): Promise<void>;
+}
+
+/** A playing as Live Activity shows it. */
+export interface Playing {
+  readonly id: string;
+  readonly user: { readonly id: string; readonly name: string };
+  readonly device: { readonly name: string; readonly platform: string };
+  readonly kind: string;
+  readonly item: { readonly title: string };
+  readonly positionMs: number;
+  readonly bytes: number;
 }
 
 const SUPERUSER = { email: 'owner@example.com', password: 'the dashboard password' };
@@ -142,6 +157,15 @@ export async function startServer(): Promise<Server> {
       }, 20_000).catch((error: unknown) => {
         throw new Error(`The scan found too little:\n${output}`, { cause: error });
       });
+    },
+    playings: async () => {
+      const response = await fetch(`${url}/api/foyer/admin/sessions`, { headers: { Authorization: await superuserToken() } });
+      if (!response.ok) throw new Error(`Live Activity could not be read (${response.status}): ${await response.text()}`);
+      return ((await response.json()) as { sessions: readonly Playing[] }).sessions;
+    },
+    stopPlaying: async (id) => {
+      const response = await fetch(`${url}/api/foyer/admin/sessions/${id}/stop`, { method: 'POST', headers: { Authorization: await superuserToken() } });
+      if (!response.ok) throw new Error(`The playing could not be stopped (${response.status}): ${await response.text()}`);
     },
     output: () => output,
     stop,

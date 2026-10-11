@@ -89,6 +89,8 @@ internal/library/    libraries: their collections from one template, the scan �
                      sweep, artwork — corrections, the dashboard's library routes, and play and download
 internal/media/      what a file is: Loge's MediaVersion, from a release's name or ffprobe
 internal/stream/     signed stream addresses, the Range proxy, the quiet log, the loopback for tools
+internal/sessions/   playings: the one every address belongs to, what plays now and what played, a superuser's Stop —
+                     Live Activity's routes
 internal/ffmpeg/     the tools: where, which versions, the GPU tried; the FFmpeg adapter
 internal/probe/      ffprobe's answers as versions, and the queue of files waiting for it
 internal/watch/      each user's watch status: Loge's rules, the routes, an identity's history moved, extras with it
@@ -105,7 +107,7 @@ migrations/          0001 users are profiles; 0002 the name, the rate limits, th
                      0004 libraries, media_entries, media_files, identities; 0005 streams' rate limit;
                      0006 watch_states; 0007 adapters become connections, a library a folder of one;
                      0008 the household's record, devices, pairing's rate limit; 0009 pictures' rate limit;
-                     0010 each user's preferences, subscriptions, playlists, ★, and the seq
+                     0010 each user's preferences, subscriptions, playlists, ★, and the seq; 0011 the history of playings
 dev/fakezurg/        a pretend Zurg for running Foyer here, from Zurg's .zurgtorrent records; never in the image
 harness/             Node and vitest, test-only: the app's code that speaks Foyer against the real binary
 Dockerfile           two stages: a Go build, then Debian with Jellyfin's ffmpeg and the binary
@@ -172,7 +174,20 @@ Go tests sit beside what they test. Everything else is PocketBase's: `serve`,
 - **A stream address is a key, and never logged.** It opens its file to
   whoever holds it for six hours. `stream.Quiet` runs inside PocketBase's
   activity logger and answers every stream request itself — a refusal, a
-  429, a panic — so the logger has nothing to keep. A test reads the log.
+  429, a panic — so the logger has nothing to keep. A test reads the log for
+  anything under `/api/foyer/stream/`, where every signed address lives.
+- **Every address belongs to a playing, and only a superuser's Stop refuses
+  one.** `/play` and `/download` make a playing and sign its id into the
+  address (`s`); the stream route opens each request under the playing, so a
+  Stop cancels what streams. A playing lives while its bytes flow or its
+  player reports — a phone asleep under AirPlay or picture in picture
+  reports nothing and still pulls bytes — so quiet is only shown, and a
+  playing quiet with nothing open is let go, never refused: its next request
+  brings it back as it was. A player's stop ends a playing only once no
+  stream of it is open, since a stop under its id while one runs may be an
+  older playing's, sent late. Playings are in memory; `play_history` keeps
+  which were stopped, and `Load` reads them at start, so a restart refuses
+  them still.
 - **A tool reads files through the loopback**, never from the share: a grant
   on 127.0.0.1 opens one file for minutes, so ffprobe's arguments and output
   never hold the share's address or password.

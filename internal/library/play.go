@@ -13,6 +13,7 @@ import (
 
 	"foyer/internal/adapters/webdav"
 	"foyer/internal/media"
+	"foyer/internal/sessions"
 	"foyer/internal/stream"
 )
 
@@ -38,10 +39,12 @@ func (e *Engine) OpenFile(ctx context.Context, file *core.Record, header http.He
 }
 
 // Playback is what a player is handed: an address good for hours, the
-// version it plays, and its chapters.
+// playing it belongs to — what its reports name — the version it plays, and
+// its chapters.
 type Playback struct {
 	URL       string          `json:"url"`
 	ExpiresAt time.Time       `json:"expiresAt"`
+	Session   string          `json:"session"`
 	Version   media.Public    `json:"version"`
 	Versions  []media.Public  `json:"versions"`
 	Chapters  []media.Chapter `json:"chapters"`
@@ -56,27 +59,29 @@ type Download struct {
 }
 
 // playable is what a user asked for by a title and, maybe, a file: the
-// version and its file, and every version of the title.
+// version and its file, every version of the title, and what a playing of
+// it shows on Live Activity.
 type playable struct {
 	version  media.Version
 	versions []media.Version
 	file     *core.Record
+	item     sessions.Item
 }
 
 // PlayRoutes mounts what a user's player asks for a title's stream by, and
 // what a download asks for its file by. A title the user may not see — a
 // guess not yet confirmed — has neither.
-func (e *Engine) PlayRoutes(r *router.Router[*core.RequestEvent], streams *stream.Streamer) {
+func (e *Engine) PlayRoutes(r *router.Router[*core.RequestEvent], streams *stream.Streamer, playings *sessions.Registry) {
 	r.POST("/api/foyer/play", func(re *core.RequestEvent) error {
 		p, err := e.asked(re)
 		if err != nil {
 			return err
 		}
-		address, expires, err := e.address(streams, p.file, re.Auth.Id)
+		address, expires, session, err := e.address(re, streams, playings, p, sessions.KindPlay)
 		if err != nil {
 			return re.InternalServerError("", err)
 		}
-		playback := Playback{URL: address, ExpiresAt: expires, Version: p.version.Public(), Versions: media.PublicAll(p.versions), Chapters: []media.Chapter{}}
+		playback := Playback{URL: address, ExpiresAt: expires, Session: session, Version: p.version.Public(), Versions: media.PublicAll(p.versions), Chapters: []media.Chapter{}}
 		if p.file.GetString("probe_state") == "done" {
 			var probed media.Version
 			if err := p.file.UnmarshalJSONField("probe", &probed); err == nil && probed.Chapters != nil {
@@ -91,7 +96,7 @@ func (e *Engine) PlayRoutes(r *router.Router[*core.RequestEvent], streams *strea
 		if err != nil {
 			return err
 		}
-		address, expires, err := e.address(streams, p.file, re.Auth.Id)
+		address, expires, _, err := e.address(re, streams, playings, p, sessions.KindDownload)
 		if err != nil {
 			return re.InternalServerError("", err)
 		}
@@ -99,11 +104,20 @@ func (e *Engine) PlayRoutes(r *router.Router[*core.RequestEvent], streams *strea
 	}).Bind(apis.RequireAuth("users"))
 }
 
-// address is a file's signed address for a user, good for hours from now.
-func (e *Engine) address(streams *stream.Streamer, file *core.Record, user string) (string, time.Time, error) {
+// address is a new playing of a file, and its signed address, good for hours
+// from now: Live Activity shows the playing, with the device that asked.
+func (e *Engine) address(re *core.RequestEvent, streams *stream.Streamer, playings *sessions.Registry, p playable, kind string) (string, time.Time, string, error) {
 	expires := time.Now().Add(stream.Lifetime).UTC().Truncate(time.Second)
-	address, err := streams.Address(file.Id, user, expires)
-	return address, expires, err
+	id := sessions.NewID()
+	address, err := streams.Address(p.file.Id, re.Auth.Id, id, expires)
+	if err != nil {
+		return "", time.Time{}, "", err
+	}
+	playings.Start(sessions.Session{
+		ID: id, User: re.Auth.Id, UserName: re.Auth.GetString("name"), Device: sessions.DeviceOf(re.Request), Kind: kind, Item: p.item, File: p.file.Id,
+		Expires: expires, DurationMs: p.version.DurationMs,
+	})
+	return address, expires, id, nil
 }
 
 // asked reads which title, and which of its files, a request is for: the
@@ -132,7 +146,7 @@ func (e *Engine) asked(re *core.RequestEvent) (playable, error) {
 	if ok, _ := re.App.CanAccessRecord(item, info, item.Collection().ViewRule); !ok {
 		return playable{}, re.NotFoundError("", nil)
 	}
-	var p playable
+	p := playable{item: sessions.ItemOf(e.app, body.Collection, item.Id)}
 	_ = item.UnmarshalJSONField("versions", &p.versions)
 	switch {
 	case body.File != "":
@@ -149,6 +163,8 @@ func (e *Engine) asked(re *core.RequestEvent) (playable, error) {
 			if !found && x.File == body.File {
 				if f, err := e.app.FindRecordById(FilesCollection, x.File); err == nil {
 					p.version, found = versionOf(f), true
+					// An extra, by its own name, and the title it came with.
+					p.item.Subtitle, p.item.Title = p.item.Title, x.Title
 				}
 			}
 		}

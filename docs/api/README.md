@@ -21,9 +21,9 @@ and their rules, and how they fail.
 | `PATCH /api/foyer/admin/household` | superusers | `{ name }` → the household |
 | `POST /api/foyer/admin/pairings` | superusers | `{ users: [ids] }`, one to ten → `{ code, expiresAt }`: eight characters, `XXXX-XXXX`, good once for ten minutes |
 | `DELETE /api/foyer/admin/devices/{id}` | superusers | `204`: off the list — its sessions end only when its users' passwords change |
-| `POST /api/foyer/play` | users | `{ collection, id, file? }` → `{ url, expiresAt, version, versions, chapters }`: a signed address for the title's best version, or the file asked for — one of its versions, or of a series' `extras`; versions never say where on the share a file lies; `404` for a title the user may not see |
-| `POST /api/foyer/download` | users | `{ collection, id, file? }` → `{ url, expiresAt, version }`: the file as it is, at a signed address asked for afresh each time — a copy that stopped asks again and carries on from the bytes it has, with a `Range` |
-| `POST /api/foyer/watch/progress` | users | `{ collection, id, file?, kind: started \| progress \| stopped \| end, positionMs, durationMs, paused?, session? }` → `204`; `file` names one of the title's extras, which keeps its own |
+| `POST /api/foyer/play` | users | `{ collection, id, file? }` → `{ url, expiresAt, session, version, versions, chapters }`: a new playing — `session`, what its reports name — and its signed address, for the title's best version or the file asked for — one of its versions, or of a series' `extras`; versions never say where on the share a file lies; `404` for a title the user may not see. The device the call says it came from (`X-Foyer-Device`) is where Live Activity shows it |
+| `POST /api/foyer/download` | users | `{ collection, id, file? }` → `{ url, expiresAt, version }`: the file as it is, at a signed address asked for afresh each time — a copy that stopped asks again and carries on from the bytes it has, with a `Range`; each ask is a download playing |
+| `POST /api/foyer/watch/progress` | users | `{ collection, id, file?, kind: started \| progress \| stopped \| end, positionMs, durationMs, paused?, session? }` → `204`; `file` names one of the title's extras, which keeps its own; `session` is the playing `/play` made — its reports keep it on Live Activity, and its stop ends it |
 | `POST /api/foyer/watch/played` | users | `{ collection, id, file?, played }` → `204`; a series marks each of its episodes, `file` one of its extras |
 | `POST /api/foyer/me/push` | users | `{ records }`, at most a thousand of the user's own — `profile` and `pin` onto their own record, `preference`, `subscription`, `playlist` and `favoriteChannel` onto their rows, tombstones among them — each judged as the app's `isAccountRecord` judges it → `{ seq }`, all stored, each write with the next seq; or `422 { message, refused: { index, reason } }`, nothing stored |
 | `GET /api/foyer/me/changes` | users | `?after=<seq>&from=<seq>` → `{ records, seq, more?, reset? }`: the user's own records stored since `after`, in that order, tombstones too, 500 to a page — `more` while another follows, from `seq`, with the same `from`; `after=0` is everything kept; `reset` where deletes since the read began (`from`, the first page's `after`) were let go of (after 90 days), or where `after` is past what this Foyer has — gone back to an older copy of itself: read again from 0. A later page's cursor never resets: a read of everything pages by old rows' seqs |
@@ -34,7 +34,7 @@ and their rules, and how they fail.
 | `GET /api/foyer/catalogue/{collection}_episodes/{id}` | users | `{ episode, show, versions }`: an episode's page — the episode with this user's watch status, its series as a page lists it, and its files still on the share |
 | `GET /api/foyer/catalogue/{collection}/{id}/seasons` | users | `{ seasons: [{ key, number?, name, airDate?, episodeCount, posterPath?, unwatched? }] }`: what the series holds, specials as season 0, named as TMDB names them, and its extras last as `extras` |
 | `GET /api/foyer/catalogue/{collection}/{id}/seasons/{season}` | users | `{ episodes }`: a season's in order, each with this user's watch status — or, for `extras`, the extras played as episodes: `id` `extra:<file>`, by the series' record and the file |
-| `GET`, `HEAD /api/foyer/stream/{file}?u&exp&sig` | whoever holds the address | the file's bytes, a `Range` passed on: `206` with `Content-Range`; `403` when the signature is wrong or six hours old |
+| `GET`, `HEAD /api/foyer/stream/{file}?u&s&exp&sig` | whoever holds the address | the file's bytes, a `Range` passed on: `206` with `Content-Range`; `403` when the signature is wrong or six hours old, or its playing (`s`) was stopped |
 | `GET /api/foyer/admin/adapters` | superusers | every adapter, by category: `[{ key, category, name, description, notice?, single, planned, fields, defaults, connections: [{ id, adapter, name, enabled, values, status? }] }]`, each secret as `"******"` when set and `""` when not |
 | `PUT /api/foyer/admin/adapters/{key}` | superusers | a single adapter's settings — TMDB's, FFmpeg's: `{ enabled, values }` → its one connection, made by the first save; `400` names each field that will not do, as `values.<key>`, and refuses an adapter set up as connections |
 | `POST /api/foyer/admin/adapters/{key}/test` | superusers | `{ values? }`, values not yet saved, over the adapter's defaults — or a single adapter's saved ones → `{ ok, message, details? }` |
@@ -54,6 +54,9 @@ and their rules, and how they fail.
 | `GET /api/foyer/admin/connections/{id}/hook` | superusers | `{ token, command }`: the line for that share's `on_library_update` — Zurg's — or any script |
 | `POST /api/foyer/webdav/updated` | a share — Zurg's `on_library_update` — with `Authorization: Bearer <token>` | the folders that changed, one per line → `202`: that share's libraries for those folders, all of them for none; the token says which share called; `403` without one |
 | `DELETE /api/foyer/admin/libraries/{id}` | superusers | `204`: its collections, artwork, torrents, files and identities gone; watch status stays. `409` when a collection of your own still points at it |
+| `GET /api/foyer/admin/sessions` | superusers | `{ sessions: [{ id, user: { id, name }, device: { name, platform, appVersion? }, kind: play \| download, mode, client?, item: { collection, id, title, subtitle?, poster? }, started, lastSeen, quiet, positionMs, durationMs, paused, bytes, bitrate, streams }] }`: what plays now, the newest first — Live Activity, polled every two seconds and never in the request log |
+| `POST /api/foyer/admin/sessions/{id}/stop` | superusers | `204`: the playing ends, its streams with it, and its addresses are refused until they would have expired; `404` for one not playing |
+| `GET /api/foyer/admin/sessions/history` | superusers | `?page&perPage` (30, 100 at most) → `{ page, perPage, items: [{ id, session, user, device, kind, mode, client, item, started, ended, positionMs, durationMs, bytes, revoked }] }`: playings that ended, the latest first |
 
 ### Watch status
 
@@ -99,11 +102,35 @@ and their rules, and how they fail.
   the server. A `Range`, `If-Range` or HEAD is passed on; Zurg's `200` with
   a `Content-Range` is a `206`; a player that leaves stops Zurg's answer.
 - **No stream address is ever logged**, a refused one neither: it opens the
-  file to whoever holds it.
+  file to whoever holds it. Nothing under `/api/foyer/stream/` is.
 - Streams have a rate limit of their own: 600 requests in 10 seconds per
   address, before the catch-all. So do the pictures PocketBase's file route
   serves — posters, backdrops, stills — so a TV scrolling its rows never
   starves its own reports.
+
+### Playings
+
+- **Every address belongs to a playing** — a film or an episode watched, a
+  copy downloaded — made by `/play` or `/download` and signed into the
+  address (`s`), with whose it is, the device that asked, and what it plays.
+  The dashboard's **Live Activity** shows each: who, where, what, how far,
+  the bytes and their rate, and the player's engine, by its User-Agent.
+- **A playing lives while its bytes flow or its player reports.** A phone
+  asleep under AirPlay or picture in picture sends nothing and still pulls
+  bytes, so a playing that goes quiet is only shown as quiet, after two
+  minutes; with no stream open for half an hour it is let go — never
+  refused: its next request brings it back, as it was. A download, which
+  has no player to report, ends two minutes after its bytes stop.
+- **A player's stop ends its playing** once no stream of it is open — never
+  its addresses, so a player that carries on is let on, and a stop sent
+  under a playing's id while its stream runs waits for the stream to end:
+  an older playing's sent late never ends a newer one.
+- **Only a superuser's Stop refuses**: the playing's streams end at once,
+  and its addresses answer `403` until they would have expired — across a
+  restart too, since `play_history` holds which were stopped.
+- **Playings are kept in memory**, and an address of one Foyer forgot — it
+  restarted — is taken up again on its first request, from its history where
+  it has one.
 
 ### The Adapters page's routes
 
@@ -198,6 +225,14 @@ Foyer's routes write them.
 | `playlists` | `playlist`, a list | `title`, `description`, `items`, `source`, `created_at`, `updated_at` |
 | `favorite_channels` | `favoriteChannel`, a ★ | `connection`, `external_id`, `name`, `number`, `logo`, `added_at` |
 
+**`play_history`** — migration 0011, one row per playing that ended:
+`session`, `user`, the device (`device_name`, `device_platform`,
+`app_version`), `kind`, the item (`item_collection`, `item_id`, `title`,
+`subtitle`), `file`, `mode`, `client`, `started`, `ended`, `expires` — the
+last address's — `position_ms`, `duration_ms`, `bytes`, and `revoked`, for a
+superuser's Stop: the rows still to expire are what keeps a stopped
+playing's addresses refused after a restart.
+
 **`_foyer_seq`** — a table of Foyer's own, outside PocketBase's collections:
 `state`, the last seq a write took, and `pruned`, the newest a tombstone let
 go of had. Never on a record: a record anything else saves would write back
@@ -243,6 +278,7 @@ would otherwise stop at the library and keep the server from starting.
 | `libraries` | users | Foyer | Foyer | Foyer |
 | `media_entries`, `media_files`, `identities` | superusers | Foyer | Foyer | Foyer |
 | `watch_states` | its own user's | Foyer | Foyer | Foyer |
+| `play_history` | superusers | Foyer | Foyer | Foyer |
 | a library's collections | users, but not an `uncertain` title or its episodes | Foyer | Foyer | Foyer |
 
 ### The guard
@@ -261,7 +297,7 @@ accidents, not malice.
 | --- | --- |
 | `400` | a refused sign-in; a value the rules or fields refuse, such as a PIN that is not four digits |
 | `401` | no valid session where one is needed: it expired, or the password changed |
-| `403` | creating or removing a user without being a superuser |
+| `403` | creating or removing a user without being a superuser; a stream address that is wrong, expired, or of a playing stopped |
 | `404` | a record that is not the caller's |
 | `429` | throttled |
 

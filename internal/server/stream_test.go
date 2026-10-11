@@ -142,15 +142,20 @@ func TestAStreamAddressIsItsSignature(t *testing.T) {
 	u, _ := url.Parse(address)
 	q := u.Query()
 
-	tampered := url.Values{"u": {q.Get("u")}, "exp": {q.Get("exp")}, "sig": {"AAAAAAAAAAAAAAAAAAAAAA"}}
+	tampered := url.Values{"u": {q.Get("u")}, "s": {q.Get("s")}, "exp": {q.Get("exp")}, "sig": {"AAAAAAAAAAAAAAAAAAAAAA"}}
 	if status, _, _ := s.fetchRange(u.Path+"?"+tampered.Encode(), ""); status != http.StatusForbidden {
 		t.Errorf("a forged signature: %d", status)
 	}
-	later := url.Values{"u": {q.Get("u")}, "exp": {"9999999999"}, "sig": {q.Get("sig")}}
+	later := url.Values{"u": {q.Get("u")}, "s": {q.Get("s")}, "exp": {"9999999999"}, "sig": {q.Get("sig")}}
 	if status, _, _ := s.fetchRange(u.Path+"?"+later.Encode(), ""); status != http.StatusForbidden {
 		t.Errorf("a longer life: %d", status)
 	}
-	stale, err := s.server.Streams.Address(strings.TrimPrefix(u.Path, "/api/foyer/stream/"), q.Get("u"), time.Now().Add(-time.Minute))
+	// The signature holds the playing too: another's id is no address.
+	other := url.Values{"u": {q.Get("u")}, "s": {"someotherplay00"}, "exp": {q.Get("exp")}, "sig": {q.Get("sig")}}
+	if status, _, _ := s.fetchRange(u.Path+"?"+other.Encode(), ""); status != http.StatusForbidden {
+		t.Errorf("another playing's id: %d", status)
+	}
+	stale, err := s.server.Streams.Address(strings.TrimPrefix(u.Path, "/api/foyer/stream/"), q.Get("u"), q.Get("s"), time.Now().Add(-time.Minute))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -184,16 +189,25 @@ func TestNothingPlaysThatAUserMayNotSee(t *testing.T) {
 }
 
 // A stream address opens the file to whoever holds it: none may land in
-// PocketBase's request log, refused ones included.
+// PocketBase's request log — nothing under the prefix, refused ones and a
+// stopped playing's included.
 func TestNoStreamAddressReachesTheLog(t *testing.T) {
 	s := scanLibrary(t)
 	// A test app logs nothing; this one logs as a server does.
 	s.app.Settings().Logs.MaxDays = 7
 	alex := s.makeUser("alex", nil)
 	film := s.title("movies", "Some Film")
-	address := s.call(http.MethodPost, "/api/foyer/play", alex.token, map[string]any{"collection": "movies", "id": film.Id}).body["url"].(string)
+	play := s.call(http.MethodPost, "/api/foyer/play", alex.token, map[string]any{"collection": "movies", "id": film.Id})
+	address := play.body["url"].(string)
 	s.fetchRange(address, "bytes=0-1")
 	s.fetchRange(address+"x", "")
+	s.call(http.MethodGet, "/api/foyer/admin/sessions", s.admin, nil)
+	s.call(http.MethodPost, "/api/foyer/admin/sessions/"+play.body["session"].(string)+"/stop", s.admin, nil)
+	if status, _, _ := s.fetchRange(address, ""); status != http.StatusForbidden {
+		t.Fatalf("a stopped playing's address: %d", status)
+	}
+	download := s.call(http.MethodPost, "/api/foyer/download", alex.token, map[string]any{"collection": "movies", "id": film.Id}).body["url"].(string)
+	s.fetchRange(download, "")
 	s.call(http.MethodGet, "/api/foyer/info?control=1", "", nil)
 	deadline := time.Now().Add(8 * time.Second)
 	for {
@@ -205,7 +219,7 @@ func TestNoStreamAddressReachesTheLog(t *testing.T) {
 		}
 		control := false
 		for _, r := range rows {
-			if strings.Contains(r.Data, "sig=") {
+			if strings.Contains(r.Data, "/api/foyer/stream/") || strings.Contains(r.Data, "sig=") {
 				t.Fatalf("a stream address in the log: %s", r.Data)
 			}
 			control = control || strings.Contains(r.Data, "control=1")

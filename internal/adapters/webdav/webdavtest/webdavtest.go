@@ -41,10 +41,38 @@ type Fake struct {
 	mu        sync.Mutex
 	root      *node
 	propfinds map[string]int
+	endless   map[string]bool
 }
 
 func New() *Fake {
-	return &Fake{root: &node{dir: true, children: map[string]*node{}}, propfinds: map[string]int{}}
+	return &Fake{root: &node{dir: true, children: map[string]*node{}}, propfinds: map[string]int{}, endless: map[string]bool{}}
+}
+
+// Endless makes a file's GET never end by itself: its content again and
+// again, until whoever reads it leaves — a film longer than any test.
+func (f *Fake) Endless(path string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.endless[strings.Join(segments(path), "/")] = true
+}
+
+// streamEndlessly sends content until the reader leaves.
+func streamEndlessly(w http.ResponseWriter, r *http.Request, content []byte) {
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.WriteHeader(http.StatusOK)
+	for {
+		if _, err := w.Write(content); err != nil {
+			return
+		}
+		if flusher, ok := w.(http.Flusher); ok {
+			flusher.Flush()
+		}
+		select {
+		case <-r.Context().Done():
+			return
+		case <-time.After(5 * time.Millisecond):
+		}
+	}
 }
 
 func segments(path string) []string {
@@ -136,6 +164,13 @@ func (f *Fake) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet, http.MethodHead:
 		if n.dir {
 			http.Error(w, "a folder", http.StatusMethodNotAllowed)
+			return
+		}
+		f.mu.Lock()
+		endless := f.endless[path]
+		f.mu.Unlock()
+		if endless && r.Method == http.MethodGet {
+			streamEndlessly(w, r, n.content)
 			return
 		}
 		if f.IgnoreRange {

@@ -13,9 +13,13 @@ import (
 	"foyer/internal/identity"
 )
 
+// Heard is told of each report a player sent of a playing: where it got
+// to, and its stop — and the request, which says what device sent it.
+type Heard func(r *http.Request, session, user, kind string, positionMs, durationMs int64, paused bool)
+
 // Routes mounts what a user's player reports to, and reads from. isTitle
-// says whether a collection is a library's.
-func Routes(r *router.Router[*core.RequestEvent], isTitle func(core.App, string) bool) {
+// says whether a collection is a library's; heard hears each report.
+func Routes(r *router.Router[*core.RequestEvent], isTitle func(core.App, string) bool, heard Heard) {
 	resolve := func(re *core.RequestEvent, collection, id string) (*core.Record, error) {
 		if !isTitle(re.App, collection) {
 			return nil, re.NotFoundError("", nil)
@@ -64,6 +68,9 @@ func Routes(r *router.Router[*core.RequestEvent], isTitle func(core.App, string)
 		now := time.Now().UTC()
 		if err := update(re.App, re.Auth.Id, watched, func(s State) State { return Apply(s, body.Report, now) }); err != nil {
 			return re.Error(http.StatusConflict, err.Error(), nil)
+		}
+		if heard != nil && body.Session != "" {
+			heard(re.Request, body.Session, re.Auth.Id, body.Kind, body.PositionMs, body.DurationMs, body.Paused)
 		}
 		return re.NoContent(http.StatusNoContent)
 	}).Bind(apis.RequireAuth("users"))

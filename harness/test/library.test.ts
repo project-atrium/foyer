@@ -124,3 +124,29 @@ it('plays a film by range, reports, resumes, is marked watched, and downloads it
   // Nothing of a stream's address in what the server printed.
   expect(server!.output()).not.toContain('/api/foyer/stream/');
 });
+
+it('shows a playing on Live Activity, with whose and where, and refuses its address once stopped', async () => {
+  const { source } = await household();
+  const [some] = (await source.listItems!({ kind: 'movies', sort: { by: 'title', order: 'asc' }, limit: 10, term: 'some film' })).items;
+  if (!some) throw new Error('no film');
+  const key = some.key;
+  const descriptor = await source.getPlaybackDescriptor!({ key, profile: { protocols: ['progressive'], containers: ['mkv'], videoCodecs: [], audioCodecs: [], subtitleFormats: [] } });
+  const address = descriptor.sources[0]!.uri;
+  expect((await fetch(address, { headers: { Range: 'bytes=0-99' } })).status).toBe(206);
+  await source.reportPlayback!({ kind: 'started', key, positionMs: 0, durationMs: 120_000 });
+  await source.reportPlayback!({ kind: 'progress', key, positionMs: 30_000, paused: false, durationMs: 120_000 });
+
+  const [playing, ...more] = await server!.playings();
+  expect(more).toEqual([]);
+  expect(playing).toMatchObject({ user: { name: 'Alex' }, device: { name: 'Phone' }, kind: 'play', item: { title: 'Some Film' }, positionMs: 30_000, bytes: 100 });
+
+  await server!.stopPlaying(playing!.id);
+  expect(await server!.playings()).toEqual([]);
+  const refused = await fetch(address, { headers: { Range: 'bytes=0-99' } });
+  expect(refused.status).toBe(403);
+  expect(((await refused.json()) as { message: string }).message).toContain('stopped');
+  // A new playing of it plays.
+  const again = await source.getPlaybackDescriptor!({ key, profile: { protocols: ['progressive'], containers: ['mkv'], videoCodecs: [], audioCodecs: [], subtitleFormats: [] } });
+  expect((await fetch(again.sources[0]!.uri, { headers: { Range: 'bytes=0-99' } })).status).toBe(206);
+  expect(server!.output()).not.toContain('/api/foyer/stream/');
+});

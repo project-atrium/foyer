@@ -32,7 +32,7 @@ func (s *Service) Bind() {
 		if err := e.Next(); err != nil {
 			return err
 		}
-		if d, ok := deviceOf(e.Request); ok && e.Record != nil {
+		if d, ok := DeviceOf(e.Request); ok && e.Record != nil {
 			if err := remember(e.App, d, e.Record.Id, false, s.Codes.now()); err != nil {
 				e.App.Logger().Warn("A device could not be remembered", "error", err.Error())
 			}
