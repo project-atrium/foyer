@@ -164,8 +164,8 @@
 .foyer-planned {
   display: flex;
   align-items: flex-start;
-  gap: var(--fieldsGap);
-  padding: var(--fieldsGap) var(--smSpacing);
+  gap: 10px;
+  padding: 10px 16px;
   border: 1px dashed var(--surfaceAlt3Color);
   border-radius: var(--borderRadius);
   opacity: 0.8;

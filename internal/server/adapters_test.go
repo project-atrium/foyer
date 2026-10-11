@@ -52,8 +52,40 @@ func TestAnAdapterStartsWithNoConnectionAndItsDefaults(t *testing.T) {
 			categories = append(categories, category)
 		}
 	}
-	if strings.Join(categories, ",") != "sources,metadata,tools" {
+	if strings.Join(categories, ",") != "sources,iptv,metadata,tracking,tools" {
 		t.Fatalf("categories %v", categories)
+	}
+}
+
+// What Foyer will reach is listed, planned, with the fields it will ask for
+// — and cannot be set up yet.
+func TestAPlannedAdapterIsListedAndCannotBeSetUp(t *testing.T) {
+	h := start(t, options{})
+	admin := h.superuser()
+	got := h.call(http.MethodGet, "/api/foyer/admin/adapters", admin, nil)
+	for key, category := range map[string]string{"jellyfin": "sources", "stalker": "iptv", "trakt": "tracking", "youtube": "sources"} {
+		view := typeView(t, got.list, key)
+		if view["planned"] != true || view["category"] != category || len(view["fields"].([]any)) == 0 {
+			t.Errorf("%s: %v", key, view)
+		}
+	}
+	// A portal's MAC address is a secret shown as typed.
+	for _, raw := range typeView(t, got.list, "stalker")["fields"].([]any) {
+		if f := raw.(map[string]any); f["key"] == "mac" && (f["type"] != "password" || f["visible"] != true) {
+			t.Errorf("mac %v", f)
+		}
+	}
+	if made := h.call(http.MethodPost, "/api/foyer/admin/connections", admin, map[string]any{"adapter": "jellyfin", "enabled": true, "values": map[string]any{"serverUrl": "http://jf:8096", "username": "a"}}); made.status != http.StatusBadRequest {
+		t.Fatalf("setting a planned adapter up: %d %v", made.status, made.body)
+	}
+	if got := h.call(http.MethodPut, "/api/foyer/admin/adapters/trakt", admin, map[string]any{"enabled": true, "values": map[string]any{"clientId": "x", "clientSecret": "y"}}); got.status != http.StatusBadRequest {
+		t.Fatalf("saving a planned single adapter: %d %v", got.status, got.body)
+	}
+	if tested := h.call(http.MethodPost, "/api/foyer/admin/adapters/plex/test", admin, map[string]any{}); tested.status != http.StatusOK || tested.body["ok"] != false {
+		t.Fatalf("testing a planned adapter: %d %v", tested.status, tested.body)
+	}
+	if n, _ := h.app.CountRecords("connections"); n != 0 {
+		t.Fatalf("%d connections made", n)
 	}
 }
 

@@ -47,7 +47,10 @@ var collections = []string{
 // a test that binds it runs no background work. main asks for that with
 // Background.
 func Bind(app core.App, cfg config.Config) *Server {
-	registry := adapters.NewRegistry(app, webdav.Adapter(), tmdb.Adapter(), ffmpeg.Adapter())
+	// What is built first: an adapter that is built takes its planned
+	// stand-in's place.
+	built := []adapters.Adapter{webdav.Adapter(), tmdb.Adapter(), ffmpeg.Adapter()}
+	registry := adapters.NewRegistry(app, append(built, adapters.Planned()...)...)
 	lib := library.New(app, registry)
 	s := &Server{
 		App:      app,
