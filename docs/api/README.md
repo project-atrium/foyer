@@ -254,7 +254,7 @@ would otherwise stop at the library and keep the server from starting.
 | --- | --- |
 | `libraries` | library: `name`, `kind`, its share (`connection`) and `folder` — unique together — `enabled`, its last scans and their error |
 | `media_entries` | entry the share lists in a library's folder — a torrent on Zurg, a folder or a file elsewhere — and whether it is a file lying there loose |
-| `media_files` | file of an entry (`entry`): its `path` under the folder, what its name says (`parsed`), which title took it (`item_collection`, `item_id`) and as what (`role`), what ffprobe found (`probe`) |
+| `media_files` | file of an entry (`entry`): its `path` under the folder, what its name says (`parsed`), which title took it (`item_collection`, `item_id`) and as what (`role`), what ffprobe found (`probe`), and where its keyframes lie (`keyframes`, read from its own index the first time a remux needs it; `keyframes_state` `done`, or `none` for a file that keeps no index) |
 | `identities` | title a library read: what TMDB was asked (`key`), its answer (`tmdb_id`), and how sure (`state`: sure, uncertain, none, manual) |
 | `<movies library>` | film: TMDB's names, dates, ids, rating and artwork; `versions`, one per file; `quality`, `encoding`, `container`, `hdr`, `audio_tracks`, `subtitles` and the languages, over its versions; `added` and `last_added`; `match_state` |
 | `<shows library>` | series: the same, its seasons as TMDB counts them, its lists over its episodes, and `extras` — `{ file, path, kind, title, size }`: the films in its pack, and specials and OVAs TMDB has no episode for |

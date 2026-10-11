@@ -352,6 +352,9 @@ func (e *Engine) record(lib, existing *core.Record, w walked, datesPlausible boo
 			} else if r.GetInt64("size") != f.Size {
 				r.Set("probe_state", "pending")
 				r.Set("probe_attempts", 0)
+				// Another file under the name: its keyframes are read again.
+				r.Set("keyframes", nil)
+				r.Set("keyframes_state", "")
 			}
 			r.Set("size", f.Size)
 			if !f.Modified.IsZero() {

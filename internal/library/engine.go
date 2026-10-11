@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"golang.org/x/sync/singleflight"
 	"net/http"
 	"slices"
 	"strings"
@@ -47,6 +48,8 @@ type Engine struct {
 	scanned func()
 	// moved gives watch status from one identity to another.
 	moved func(from, to string) error
+	// indexes reads each file's keyframe index once, however many ask.
+	indexes singleflight.Group
 }
 
 // OnIdentityMoved calls fn where a title's identity changed — TMDB named it

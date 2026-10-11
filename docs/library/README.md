@@ -143,6 +143,20 @@ hours, then left; Zurg itself failing costs it nothing, and pauses the reading
 a while. The GPU is tried on the Adapters page: transcoding comes later, and
 that is where the household learns beforehand that it is reachable.
 
+## Where each file's keyframes lie
+
+A player that cannot open a file as it is — AVPlayer and Matroska, a
+browser — is handed it remuxed to HLS, and a playlist names every segment
+before one exists. So the first time a file is remuxed, Foyer reads where its
+keyframes lie from the file's own index — Matroska's Cues, an MP4's sync
+samples — with a few ranged reads, its header and its index: a few hundred
+kilobytes, never the file. The answer is kept on the file, with what the
+playlist says of its picture (its codec's RFC 6381 name, its size and frame
+rate). A file that keeps no index — a Matroska written to a pipe, which could
+not go back for its Cues — is kept as having none, and plays as it is, in a
+player that opens it; nothing reads it through to find out. A file that
+changes under its name is read again.
+
 ## Telling Foyer when the share changes
 
 Settings → Adapters shows a line for Zurg's config, with a token of its own

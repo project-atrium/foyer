@@ -89,6 +89,8 @@ internal/library/    libraries: their collections from one template, the scan �
                      sweep, artwork — corrections, the dashboard's library routes, and play and download
 internal/media/      what a file is: Loge's MediaVersion, from a release's name or ffprobe
 internal/stream/     signed stream addresses, the Range proxy, the quiet log, the loopback for tools
+internal/hls/        remuxing to HLS: a file's keyframe index — Matroska's Cues, an MP4's sync samples, read by
+                     ranges — and its codec's RFC 6381 name
 internal/sessions/   playings: the one every address belongs to, what plays now and what played, a superuser's Stop —
                      Live Activity's routes
 internal/ffmpeg/     the tools: where, which versions, the GPU tried; the FFmpeg adapter
@@ -107,7 +109,8 @@ migrations/          0001 users are profiles; 0002 the name, the rate limits, th
                      0004 libraries, media_entries, media_files, identities; 0005 streams' rate limit;
                      0006 watch_states; 0007 adapters become connections, a library a folder of one;
                      0008 the household's record, devices, pairing's rate limit; 0009 pictures' rate limit;
-                     0010 each user's preferences, subscriptions, playlists, ★, and the seq; 0011 the history of playings
+                     0010 each user's preferences, subscriptions, playlists, ★, and the seq; 0011 the history of playings;
+                     0012 each file's keyframes
 dev/fakezurg/        a pretend Zurg for running Foyer here, from Zurg's .zurgtorrent records; never in the image
 harness/             Node and vitest, test-only: the app's code that speaks Foyer against the real binary
 Dockerfile           two stages: a Go build, then Debian with Jellyfin's ffmpeg and the binary
@@ -188,6 +191,14 @@ Go tests sit beside what they test. Everything else is PocketBase's: `serve`,
   older playing's, sent late. Playings are in memory; `play_history` keeps
   which were stopped, and `Load` reads them at start, so a restart refuses
   them still.
+- **A file's keyframes are read from its own index, never by reading it
+  through.** Matroska's Cues, found through its SeekHead — usually at the
+  end — and an MP4's sync samples, decode times, composition offsets and
+  edit list, by ranged reads (`hls.ReadIndex`); behind Zurg every byte is
+  Real-Debrid's. A file without one is kept as `none` and plays as it is:
+  never ffprobe over the whole file to make one. Kept on the file
+  (`Engine.Keyframes`, once however many ask), and read again when the file
+  changes under its name. Raise `hls.IndexVersion` when what is kept changes.
 - **A tool reads files through the loopback**, never from the share: a grant
   on 127.0.0.1 opens one file for minutes, so ffprobe's arguments and output
   never hold the share's address or password.
