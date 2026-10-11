@@ -11,12 +11,14 @@ import (
 
 	"github.com/pocketbase/pocketbase/apis"
 	"github.com/pocketbase/pocketbase/core"
+	"github.com/pocketbase/pocketbase/tools/hook"
 
 	"foyer/internal/adapters"
 	"foyer/internal/adapters/tmdb"
 	"foyer/internal/adapters/webdav"
 	"foyer/internal/catalogue"
 	"foyer/internal/config"
+	"foyer/internal/copies"
 	"foyer/internal/dashboard"
 	"foyer/internal/ffmpeg"
 	"foyer/internal/guard"
@@ -45,6 +47,7 @@ type Server struct {
 	Catalogue *catalogue.Service
 	Playings  *sessions.Registry
 	Remux     *hls.Manager
+	Copies    *copies.Manager
 }
 
 // collections are Foyer's own static collections: written by its code alone.
@@ -114,6 +117,32 @@ func Bind(app core.App, cfg config.Config) *Server {
 	})
 	// A remux stops with its playing, whyever it ends.
 	s.Playings.OnEnd(s.Remux.End)
+	s.Copies = copies.New(copies.Options{
+		Root: filepath.Join(app.DataDir(), copies.DirName),
+		Settings: func() copies.Settings {
+			settings, err := registry.Settings(ffmpeg.Key)
+			if err != nil {
+				return copies.Settings{}
+			}
+			c := copies.Settings{Effort: settings.String("copy_effort"), AtOnce: settings.Int("copies_at_once"),
+				KeepDays: settings.Int("copies_kept_days"), RoomBytes: int64(settings.Int("copies_room_gb")) << 30}
+			if settings.Enabled && settings.Bool("copies") {
+				c.Tool = ffmpeg.FromSettings(settings).FFmpeg
+			}
+			return c
+		},
+		Grants: s.Streams,
+		Sign:   func(payload []byte) ([]byte, error) { return s.Streams.Sign(copies.SignLabel, payload) },
+		Log:    func(msg string, args ...any) { app.Logger().Warn(msg, args...) },
+	})
+	// Copies are a cache anyone can make again: never in a backup, and a
+	// restore leaves the ones here where they are.
+	for _, backups := range []*hook.Hook[*core.BackupEvent]{app.OnBackupCreate(), app.OnBackupRestore()} {
+		backups.BindFunc(func(e *core.BackupEvent) error {
+			e.Exclude = append(e.Exclude, copies.DirName)
+			return e.Next()
+		})
+	}
 	s.Probes = probe.New(app, registry, s.Streams, lib, library.FilesCollection)
 	s.Household = household.New(app)
 	s.Household.Bind()
@@ -144,7 +173,7 @@ func Bind(app core.App, cfg config.Config) *Server {
 		if err := s.Playings.Load(); err != nil {
 			return err
 		}
-		s.Library.PlayRoutes(se.Router, s.Streams, s.Playings, s.Remux)
+		s.Library.PlayRoutes(se.Router, s.Streams, s.Playings, s.Remux, s.Copies)
 		s.Remux.Routes(se.Router)
 		watch.Routes(se.Router, library.Managed, s.Playings.Heard)
 		s.Catalogue.Routes(se.Router)
@@ -153,6 +182,7 @@ func Bind(app core.App, cfg config.Config) *Server {
 		admin.Bind(apis.RequireSuperuserAuth())
 		s.Adapters.Routes(admin)
 		s.Playings.Routes(admin)
+		s.Copies.Routes(se.Router, admin, s.Playings)
 		s.Library.Routes(admin)
 		s.Household.Routes(se.Router, admin)
 		s.Library.HookRoutes(se.Router)
@@ -188,6 +218,7 @@ func (s *Server) Background() *Server {
 			s.Library.Run(ctx)
 		})
 		wg.Go(func() { s.Probes.Run(ctx) })
+		wg.Go(func() { s.Copies.Run(ctx) })
 		wg.Go(func() { s.pruneTombstones(ctx) })
 		wg.Go(func() { s.sweepPlayings(ctx) })
 		return se.Next()
@@ -195,6 +226,7 @@ func (s *Server) Background() *Server {
 	s.App.OnTerminate().BindFunc(func(e *core.TerminateEvent) error {
 		cancel()
 		s.Remux.Close()
+		s.Copies.Close()
 		stop, release := context.WithTimeout(context.Background(), 5*time.Second)
 		_ = s.Streams.StopTwin(stop)
 		release()

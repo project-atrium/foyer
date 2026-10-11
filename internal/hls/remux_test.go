@@ -276,11 +276,17 @@ func TestAFileIsRemuxedToHLSAtItsOwnKeyframes(t *testing.T) {
 	if vtt := get(t, m, ticket, "s0-"+itoa(SegmentAt(segments, 80_000))+".vtt").Body.String(); !strings.Contains(vtt, "Near the end") {
 		t.Errorf("the subtitles near the end:\n%s", vtt)
 	}
-	x.plays.mu.Lock()
-	if x.plays.speed <= 0 {
+	// ffmpeg says its speed every half second, and a reader of its own
+	// passes it on: a busy machine may take a moment.
+	told := false
+	for wait := time.Now().Add(5 * time.Second); !told && time.Now().Before(wait); time.Sleep(20 * time.Millisecond) {
+		x.plays.mu.Lock()
+		told = x.plays.speed > 0
+		x.plays.mu.Unlock()
+	}
+	if !told {
 		t.Error("ffmpeg's speed was never told")
 	}
-	x.plays.mu.Unlock()
 
 	// Its playing ends: the run stops, the segments go, the loopback closes.
 	m.End("s1")

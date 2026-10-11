@@ -226,7 +226,7 @@ func Adapter() adapters.Adapter {
 		Category:    adapters.Tools,
 		Single:      true,
 		Name:        "FFmpeg",
-		Description: "ffprobe reads what each file is — its picture, its audio and subtitle tracks, its chapters — through Foyer, a few at a time. ffmpeg will transcode on the GPU.",
+		Description: "ffprobe reads what each file is — its picture, its audio and subtitle tracks, its chapters — through Foyer, a few at a time. ffmpeg makes smaller copies for downloads, and will transcode on the GPU.",
 		Fields: []adapters.Field{
 			{Key: "ffprobe", Label: "ffprobe", Type: adapters.Text, Default: "ffprobe", Help: "Its path, or its name on the PATH."},
 			{Key: "ffmpeg", Label: "ffmpeg", Type: adapters.Text, Default: "ffmpeg", Help: "Its path, or its name on the PATH."},
@@ -236,6 +236,17 @@ func Adapter() adapters.Adapter {
 				Help: "Each read asks the share — and Real-Debrid, behind Zurg — for a few megabytes."},
 			{Key: "convert", Label: "Convert for players that cannot open a file", Type: adapters.Bool, Default: false,
 				Help: "Remuxes a file to HLS for a player that plays its picture but not the file itself — an iPhone's own player and Matroska, a browser. Off, such a player is told to turn this on or to play the file with another: mpv and VLC open it as it is."},
+			{Key: "copies", Label: "Make smaller copies for downloads", Type: adapters.Bool, Default: true,
+				Help: "A device keeping a film asks for a copy made to its download settings — AV1 and Opus by default, a few GB where the file is tens — made here on the processor, about as long as the film runs or longer, then kept for whoever asks for the same. The copy reads the whole file from the share: behind Zurg, from Real-Debrid."},
+			{Key: "copy_effort", Label: "Effort for copies", Type: adapters.Select, Default: "balanced",
+				Options: []adapters.Option{{Value: "fast", Label: "Fast — a little bigger"}, {Value: "balanced", Label: "Balanced"}, {Value: "smallest", Label: "Smallest — slowest"}},
+				Help:    "How long the processor spends on each copy."},
+			{Key: "copies_at_once", Label: "Copies made at once", Type: adapters.Number, Default: 1, Min: 1, Max: 4,
+				Help: "Each takes every core it can, below whatever a player needs."},
+			{Key: "copies_kept_days", Label: "Keep copies for (days)", Type: adapters.Number, Default: 14, Min: 1, Max: 365,
+				Help: "After a copy was last asked for. A device that has one keeps it however long this is."},
+			{Key: "copies_room_gb", Label: "Room for copies (GB)", Type: adapters.Number, Default: 100, Min: 0, Max: 100000,
+				Help: "The copies asked for least lately go first. 0 for no limit but the disk's, of which 10 GB are always left free."},
 		},
 		Test: func(ctx context.Context, s adapters.Settings) adapters.Result {
 			d := Detect(ctx, FromSettings(s))

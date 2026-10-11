@@ -1,13 +1,25 @@
 // sources/foyer, the library adapter the app ships, against the real binary
 // over a pretend Zurg: a user signed in through sync/foyer lends it their
 // session, and it browses Foyer's catalogue in the app's order, plays a
-// film's bytes by range, reports, resumes, marks it watched, and downloads.
+// film's bytes by range, reports, resumes, marks it watched, and downloads —
+// the file, or a smaller copy Foyer makes.
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { compareItems, connectionId, type ConnectedHousehold, type ConnectedMediaProvider, type ItemQuery, type LentAccount, type MediaItem } from '@loge/api';
+import {
+  compareItems,
+  connectionId,
+  isPreparing,
+  type ConnectedHousehold,
+  type ConnectedMediaProvider,
+  type DownloadDescriptor,
+  type DownloadPreparing,
+  type ItemQuery,
+  type LentAccount,
+  type MediaItem,
+} from '@loge/api';
 import { plugin as library } from '@loge/source-foyer';
 import { plugin as foyer } from '@loge/sync-foyer';
 import { afterEach, expect, it } from 'vitest';
@@ -123,8 +135,8 @@ it('plays a film by range, reports, resumes, is marked watched, and downloads it
   expect(watched?.watch?.played).toBe(true);
 
   // A download asks for its address afresh, and carries on from the bytes it has.
-  const first = await source.getDownloadDescriptor!({ key });
-  const again = await source.getDownloadDescriptor!({ key });
+  const first = fetched(await source.getDownloadDescriptor!({ key }));
+  const again = fetched(await source.getDownloadDescriptor!({ key }));
   expect([first.container, first.expectedBytes, again.uri.startsWith(`${server!.url}/api/foyer/stream/`)]).toEqual(['mkv', 4096, true]);
   const rest = await fetch(again.uri, { headers: { Range: 'bytes=4000-' } });
   expect(rest.status).toBe(206);
@@ -159,6 +171,12 @@ it('shows a playing on Live Activity, with whose and where, and refuses its addr
   expect((await fetch(again.sources[0]!.uri, { headers: { Range: 'bytes=0-99' } })).status).toBe(206);
   expect(server!.output()).not.toContain('/api/foyer/stream/');
 }, 60_000);
+
+/** A copy to fetch: the file as it is never waits to be made. */
+function fetched(answer: DownloadDescriptor | DownloadPreparing): DownloadDescriptor {
+  if (isPreparing(answer)) throw new Error('Foyer is still making a copy of the file as it is');
+  return answer;
+}
 
 /** ffmpeg on this machine, or nothing: the remux is tested where it can run. */
 function ffmpegHere(): boolean {
@@ -224,3 +242,32 @@ it.skipIf(!ffmpegHere())('remuxes a Matroska film to HLS for AVPlayer: its playl
   expect(playing).toMatchObject({ user: { name: 'Alex' }, device: { name: 'Phone' }, mode: 'remux' });
   expect(server!.output()).not.toContain('/api/foyer/stream/');
 }, 60_000);
+
+it.skipIf(!ffmpegHere())('makes a smaller copy to the device’s download settings, says how far along it is, then hands it over', async () => {
+  const { source } = await household({ video: matroska() });
+  await server!.ffmpeg(true);
+  const [some] = (await source.listItems!({ kind: 'movies', sort: { by: 'title', order: 'asc' }, limit: 10, term: 'some film' })).items;
+  if (!some) throw new Error('no film');
+  const options = await source.listDownloadOptions!(some.key, undefined, { maxHeight: 240, hdr: false, videoCodec: 'av1', preference: 'size', audioCodec: 'opus', container: 'mkv' });
+  expect(options.map((option) => [option.id, option.transcoded, option.width, option.height])).toEqual([
+    ['copy.av1.size.240.0.sdr.opus.mkv', true, 426, 240],
+    ['original', false, 640, 360],
+  ]);
+  const chosen = options[0]!;
+  let answer = await source.getDownloadDescriptor!({ key: some.key, optionId: chosen.id });
+  expect(answer).toMatchObject({ kind: 'preparing' });
+  for (const until = Date.now() + 120_000; isPreparing(answer); ) {
+    if (Date.now() > until) throw new Error('the copy was never made');
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    answer = await source.getDownloadDescriptor!({ key: some.key, optionId: chosen.id });
+  }
+  expect(answer).toMatchObject({ container: 'mkv', videoCodec: 'av1', audioCodecs: ['opus'], height: 240, transcoded: true });
+  expect(answer.expectedBytes).toBeLessThan(options[1]!.estimatedBytes!);
+  // Fetched as any download is: by ranges, from where it stopped.
+  const start = await fetch(answer.uri, { headers: { Range: 'bytes=0-3' } });
+  expect(start.status).toBe(206);
+  expect([...new Uint8Array(await start.arrayBuffer())]).toEqual([0x1a, 0x45, 0xdf, 0xa3]);
+  const rest = await fetch(answer.uri, { headers: { Range: 'bytes=4-' } });
+  expect((await rest.arrayBuffer()).byteLength).toBe(answer.expectedBytes! - 4);
+  expect(server!.output()).not.toContain('/api/foyer/stream/');
+}, 180_000);

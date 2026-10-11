@@ -94,6 +94,13 @@ Then make the dashboard's superuser, and a user for each person.
   file's own keyframes, every sound and text subtitle a rendition, made as it
   watches: off until you turn it on under FFmpeg, since mpv and VLC open the
   file as it is.
+- **Downloads made smaller**: a device keeping a film asks for a copy made
+  to its own download settings — AV1 and Opus in Matroska by default, 1080p,
+  a few GB where the file is tens — and Foyer makes it on the processor,
+  once for whoever asks the same, tells the device how far along it is, then
+  hands it over by ranges like any download. Copies are kept a couple of
+  weeks after they were last asked for, within the room you give them, and
+  never in a backup.
 - **What each file is**, read by ffprobe through Foyer: its picture, codec,
   HDR, audio and subtitle tracks with their languages, chapters. The GPU is
   tried for the transcoding to come.

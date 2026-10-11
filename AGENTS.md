@@ -92,6 +92,9 @@ internal/stream/     signed stream addresses, the Range proxy, the quiet log, th
 internal/hls/        remuxing to HLS: a file's keyframe index — Matroska's Cues, an MP4's sync samples, read by
                      ranges — its codec's RFC 6381 name, what play decides for a player's profile, the playlists,
                      the signed ticket in their path, and a job per playing running one ffmpeg
+internal/copies/     smaller copies for downloads: a device's settings read for a file, the recipe — AV1 and Opus
+                     by default — ffmpeg's command, the jobs, the copies kept in pb_data/foyer_copies, their
+                     addresses under the stream prefix
 internal/sessions/   playings: the one every address belongs to, what plays now and what played, a superuser's Stop —
                      Live Activity's routes
 internal/ffmpeg/     the tools: where, which versions, the GPU tried; the FFmpeg adapter
@@ -228,6 +231,21 @@ Go tests sit beside what they test. Everything else is PocketBase's: `serve`,
   lives under `/api/foyer/stream/`, so `stream.Quiet` keeps it from the log.
   The plan is in the ticket, so any Foyer — this one after a restart —
   makes the same remux of it.
+- **Downloads made smaller come first.** A copy is made to a device's
+  settings, once for whoever asks the same (`copies.Key`: the file as it is
+  now and the settings as they matter for it), from the file read whole
+  through the loopback — behind Zurg every byte is Real-Debrid's, so it is
+  made only when asked for, never ahead. Its options are offered only where
+  the copy comes out a fifth smaller at least. Copies live in
+  `pb_data/foyer_copies`, left out of every backup by `OnBackupCreate`'s and
+  `OnBackupRestore`'s `Exclude`; never put them anywhere a backup reads.
+  Raise `copies.RecipeVersion` when what ffmpeg is told changes what comes
+  out: copies made before are made again.
+- **A copy keeps what is worth keeping, and nothing twice**: one sound per
+  language and no commentary, text subtitles over pictures of the same
+  kind, the chapters and a styled subtitle's fonts — and never mkvmerge's
+  statistics, which would be wrong. Dolby Vision alone gets no copy: made
+  anew without its own processing it shows in the wrong colours.
 - **Converting for players is plan z, off until the household turns it on**
   (the FFmpeg adapter's `convert`). mpv and VLC, first on every device, open
   a file as it is; off, `play` answers the file with `convertible`, and the

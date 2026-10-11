@@ -22,7 +22,8 @@ and their rules, and how they fail.
 | `POST /api/foyer/admin/pairings` | superusers | `{ users: [ids] }`, one to ten → `{ code, expiresAt }`: eight characters, `XXXX-XXXX`, good once for ten minutes |
 | `DELETE /api/foyer/admin/devices/{id}` | superusers | `204`: off the list — its sessions end only when its users' passwords change |
 | `POST /api/foyer/play` | users | `{ collection, id, file?, profile?, startMs? }` → `{ url, expiresAt, session, mode?, file?, remux?, version, versions, chapters }`: a new playing — `session`, what its reports name — and its signed address, for the title's best version or the file asked for — one of its versions, or of a series' `extras`; versions never say where on the share a file lies; `404` for a title the user may not see. The device the call says it came from (`X-Foyer-Device`) is where Live Activity shows it. With the player's `profile` (Loge's `PlayerProfile`), where the player plays the picture and not the file, `url` is the file remuxed to HLS (`mode: "remux"`), starting at `startMs`, with what it carries (`remux: { audio, subtitles }`) and the file's own address beside it (`file`) — see Remux |
-| `POST /api/foyer/download` | users | `{ collection, id, file? }` → `{ url, expiresAt, version }`: the file as it is, at a signed address asked for afresh each time — a copy that stopped asks again and carries on from the bytes it has, with a `Range`; each ask is a download playing |
+| `POST /api/foyer/download/options` | users | `{ collection, id, file?, encode? }` → `{ options: [{ id, width?, height?, bitrate?, estimatedBytes?, container, videoCodec?, audioCodecs?, hdr?, transcoded }] }`: the ways to keep it — first a smaller copy made to the device's download settings (`encode`: `{ video: av1 \| hevc \| h264, preference: size \| balanced \| quality, maxHeight?, maxBitrate?, hdr, audio: opus \| aac, container: mkv \| mp4 }`), where this Foyer makes copies and one would be a fifth smaller at least — its size once made, an estimate till then — then the file as it is, `original`. The file is read by ffprobe first where it was not; `400` for settings no copy is made to. See Copies |
+| `POST /api/foyer/download` | users | `{ collection, id, file?, option? }` → `{ url, expiresAt, version }`: the file as it is — or, for a copy's `option`, the copy once made, `version` what it is — at a signed address asked for afresh each time: a download that stopped asks again and carries on from the bytes it has, with a `Range`; each ask is a download playing. A copy not yet made answers `202 { preparing: { state: queued \| running, progress?, etaMs? } }`; one that could not be made `422`, until asked again a minute later; `409` where Foyer makes no copy of the file now; `400` for an option it never offers |
 | `POST /api/foyer/watch/progress` | users | `{ collection, id, file?, kind: started \| progress \| stopped \| end, positionMs, durationMs, paused?, session? }` → `204`; `file` names one of the title's extras, which keeps its own; `session` is the playing `/play` made — its reports keep it on Live Activity, and its stop ends it |
 | `POST /api/foyer/watch/played` | users | `{ collection, id, file?, played }` → `204`; a series marks each of its episodes, `file` one of its extras |
 | `POST /api/foyer/me/push` | users | `{ records }`, at most a thousand of the user's own — `profile` and `pin` onto their own record, `preference`, `subscription`, `playlist` and `favoriteChannel` onto their rows, tombstones among them — each judged as the app's `isAccountRecord` judges it → `{ seq }`, all stored, each write with the next seq; or `422 { message, refused: { index, reason } }`, nothing stored |
@@ -35,6 +36,7 @@ and their rules, and how they fail.
 | `GET /api/foyer/catalogue/{collection}/{id}/seasons` | users | `{ seasons: [{ key, number?, name, airDate?, episodeCount, posterPath?, unwatched? }] }`: what the series holds, specials as season 0, named as TMDB names them, and its extras last as `extras` |
 | `GET /api/foyer/catalogue/{collection}/{id}/seasons/{season}` | users | `{ episodes }`: a season's in order, each with this user's watch status — or, for `extras`, the extras played as episodes: `id` `extra:<file>`, by the series' record and the file |
 | `GET`, `HEAD /api/foyer/stream/{file}?u&s&exp&sig` | whoever holds the address | the file's bytes, a `Range` passed on: `206` with `Content-Range`; `403` when the signature is wrong or six hours old, or its playing (`s`) was stopped |
+| `GET`, `HEAD /api/foyer/stream/copy/{key}?u&s&exp&sig` | whoever holds the address | a made copy's bytes by ranges, as a file's; `403` as a stream address; `404` once the copy is let go of — the download asks again, and it is made again |
 | `GET /api/foyer/stream/hls/{ticket}/{part}` | whoever holds the address | a remux: `main.m3u8`, `v.m3u8`, `a{k}.m3u8` and `s{k}.m3u8`; `v.mp4` and `a{k}.mp4`, each rendition's initialization; `v{n}.m4s` and `a{k}-{n}.m4s`, its segments; `s{k}-{n}.vtt`, its subtitles. The ticket — the file, the user, the playing, when it expires and the plan, signed — is in the path, so a segment's relative address resolves without a query. `403` as a stream address; `503` for a segment not made in a minute; `502` for a file ffmpeg could not remux |
 | `GET /api/foyer/admin/adapters` | superusers | every adapter, by category: `[{ key, category, name, description, notice?, single, planned, fields, defaults, connections: [{ id, adapter, name, enabled, values, status? }] }]`, each secret as `"******"` when set and `""` when not |
 | `PUT /api/foyer/admin/adapters/{key}` | superusers | a single adapter's settings — TMDB's, FFmpeg's: `{ enabled, values }` → its one connection, made by the first save; `400` names each field that will not do, as `values.<key>`, and refuses an adapter set up as connections |
@@ -57,6 +59,9 @@ and their rules, and how they fail.
 | `DELETE /api/foyer/admin/libraries/{id}` | superusers | `204`: its collections, artwork, torrents, files and identities gone; watch status stays. `409` when a collection of your own still points at it |
 | `GET /api/foyer/admin/sessions` | superusers | `{ sessions: [{ id, user: { id, name }, device: { name, platform, appVersion? }, kind: play \| download, mode, client?, item: { collection, id, title, subtitle?, poster? }, started, lastSeen, quiet, positionMs, durationMs, paused, bytes, bitrate, streams }] }`: what plays now, the newest first — Live Activity, polled every two seconds and never in the request log |
 | `POST /api/foyer/admin/sessions/{id}/stop` | superusers | `204`: the playing ends, its streams with it, and its addresses are refused until they would have expired; `404` for one not playing |
+| `GET /api/foyer/admin/copies` | superusers | `{ making: [{ key, file, title, by?, encode, state, progress, speed?, etaMs?, estimatedBytes?, asked, started?, error? }], kept: [{ key, file, title, by?, encode, version, name, size, made, asked }] }`: the copies being made, the longest waiting first, and those kept, the latest asked for first — never in the request log |
+| `POST /api/foyer/admin/copies/{key}/stop` | superusers | `204`: a copy being made, or waiting, stops; nothing of it is kept |
+| `DELETE /api/foyer/admin/copies/{key}` | superusers | `204`: a kept copy goes; asked for again, it is made again |
 | `GET /api/foyer/admin/sessions/history` | superusers | `?page&perPage` (30, 100 at most) → `{ page, perPage, items: [{ id, session, user, device, kind, mode, client, item, started, ended, positionMs, durationMs, bytes, revoked }] }`: playings that ended, the latest first |
 
 ### Watch status
@@ -174,6 +179,42 @@ and their rules, and how they fail.
   sound anew, a slow share holds that sound back until ffmpeg reaches the
   file's end — ffmpeg keeps its encoders in step with the subtitles — so a
   player waits for it.
+
+### Copies
+
+- **Downloads made smaller are what the household feels most**: a phone's
+  room, a film over the air. A device asks with its download settings, and
+  Foyer makes a copy to them — by default AV1 (SVT-AV1, ten-bit, a constant
+  quality by the preference and the picture's class, under the device's
+  ceiling) and Opus in Matroska, 1080p and SDR — a few GB where the file is
+  tens — and mpv and VLC, first on every device, play it. HEVC (x265)
+  and H.264 (x264), AAC and MP4 where a device asks.
+- **What it keeps**: one sound for each language — the file's first of it,
+  no commentary — made 7.1 at most, a sound already that small copied;
+  subtitles for each language, forced or not, for the hearing-impaired or
+  not — text where the file has it, pictures where it has none, and in an
+  MP4 text alone, as `mov_text`; the fonts a styled subtitle draws with; the
+  chapters; none of mkvmerge's statistics, which would be wrong.
+- **HDR is tone-mapped to SDR** where the device asks for SDR and this
+  ffmpeg can — jellyfin-ffmpeg's `tonemapx`, or `zscale` with `tonemap` —
+  else kept, ten-bit, with its colours and mastering metadata. Dolby Vision
+  over HDR10 is made from its HDR10; Dolby Vision alone (profile 5) gets no
+  copy.
+- **Made once, by key**: the file as it is now — its id, size and date —
+  and the settings as they matter for it (a ceiling it fits under is none),
+  so whoever asks for the same is handed the same copy. One at a time by
+  default, the longest waiting first, below whatever a player needs, read
+  through the loopback as ffprobe reads a file — behind Zurg, the whole file
+  from Real-Debrid.
+- **Kept in `pb_data/foyer_copies`**, each beside a record of what it is —
+  never in a backup, and a restore leaves them where they are — for the
+  household's days after it was last asked for; past the room it allows the
+  least lately asked go first, and the disk always keeps 10 GB free. Nothing
+  asked for within the hour is let go of: it may be coming down. A copy half
+  made when Foyer stops is let go of, and made again when asked.
+- **Settings → Adapters → FFmpeg**: Make smaller copies for downloads (on),
+  Effort for copies (SVT-AV1's preset 8, 6 or 4; x265's and x264's alike),
+  Copies made at once, Keep copies for, Room for copies.
 
 ### The Adapters page's routes
 

@@ -12,6 +12,7 @@ import (
 	"github.com/pocketbase/pocketbase/tools/router"
 
 	"foyer/internal/adapters/webdav"
+	"foyer/internal/copies"
 	"foyer/internal/hls"
 	"foyer/internal/media"
 	"foyer/internal/sessions"
@@ -65,12 +66,37 @@ type Remux struct {
 	Subtitles []int    `json:"subtitles"`
 }
 
-// Download is a file as it is, at an address asked for afresh each time: a
-// copy that stopped asks again and carries on from the bytes it has.
+// Download is a file as it is — or a smaller copy Foyer made of it — at an
+// address asked for afresh each time: a download that stopped asks again and
+// carries on from the bytes it has.
 type Download struct {
 	URL       string       `json:"url"`
 	ExpiresAt time.Time    `json:"expiresAt"`
 	Version   media.Public `json:"version"`
+}
+
+// Preparing is a copy Foyer is still making: how far along it is.
+type Preparing struct {
+	Preparing struct {
+		State    string  `json:"state"`
+		Progress float64 `json:"progress,omitzero"`
+		EtaMs    int64   `json:"etaMs,omitzero"`
+	} `json:"preparing"`
+}
+
+// DownloadOption is one way to keep an item: the file as it is, or a copy
+// made to the device's settings.
+type DownloadOption struct {
+	ID             string   `json:"id"`
+	Width          int      `json:"width,omitzero"`
+	Height         int      `json:"height,omitzero"`
+	Bitrate        int64    `json:"bitrate,omitzero"`
+	EstimatedBytes int64    `json:"estimatedBytes,omitzero"`
+	Container      string   `json:"container"`
+	VideoCodec     string   `json:"videoCodec,omitempty"`
+	AudioCodecs    []string `json:"audioCodecs,omitempty"`
+	HDR            string   `json:"hdr,omitempty"`
+	Transcoded     bool     `json:"transcoded"`
 }
 
 // playable is what a user asked for by a title and, maybe, a file: the
@@ -84,12 +110,16 @@ type playable struct {
 	// profile is what the player plays, where it said; startMs where it starts.
 	profile *hls.Profile
 	startMs int64
+	// encode is what a download would have a copy made to; option, the way
+	// to keep it that was chosen.
+	encode *copies.Encode
+	option string
 }
 
 // PlayRoutes mounts what a user's player asks for a title's stream by, and
 // what a download asks for its file by. A title the user may not see — a
 // guess not yet confirmed — has neither.
-func (e *Engine) PlayRoutes(r *router.Router[*core.RequestEvent], streams *stream.Streamer, playings *sessions.Registry, remux *hls.Manager) {
+func (e *Engine) PlayRoutes(r *router.Router[*core.RequestEvent], streams *stream.Streamer, playings *sessions.Registry, remux *hls.Manager, made *copies.Manager) {
 	r.POST("/api/foyer/play", func(re *core.RequestEvent) error {
 		p, err := e.asked(re)
 		if err != nil {
@@ -125,10 +155,30 @@ func (e *Engine) PlayRoutes(r *router.Router[*core.RequestEvent], streams *strea
 		return re.JSON(http.StatusOK, playback)
 	}).Bind(apis.RequireAuth("users"))
 
+	r.POST("/api/foyer/download/options", func(re *core.RequestEvent) error {
+		p, err := e.asked(re)
+		if err != nil {
+			return err
+		}
+		options := []DownloadOption{}
+		if p.encode != nil && made != nil {
+			if !p.encode.Valid() {
+				return re.BadRequestError("Those are no settings a copy is made to.", nil)
+			}
+			if option, ok := e.copyOption(re.Request.Context(), &p, *p.encode, made); ok {
+				options = append(options, option)
+			}
+		}
+		return re.JSON(http.StatusOK, map[string]any{"options": append(options, originalOption(p.version))})
+	}).Bind(apis.RequireAuth("users"))
+
 	r.POST("/api/foyer/download", func(re *core.RequestEvent) error {
 		p, err := e.asked(re)
 		if err != nil {
 			return err
+		}
+		if p.option != "" && p.option != copies.Original {
+			return e.downloadCopy(re, streams, playings, made, p)
 		}
 		address, expires, _, err := e.address(re, streams, playings, p, sessions.KindDownload, hls.Direct)
 		if err != nil {
@@ -199,11 +249,13 @@ func (e *Engine) address(re *core.RequestEvent, streams *stream.Streamer, playin
 // version.
 func (e *Engine) asked(re *core.RequestEvent) (playable, error) {
 	var body struct {
-		Collection string       `json:"collection"`
-		ID         string       `json:"id"`
-		File       string       `json:"file"`
-		Profile    *hls.Profile `json:"profile"`
-		StartMs    int64        `json:"startMs"`
+		Collection string         `json:"collection"`
+		ID         string         `json:"id"`
+		File       string         `json:"file"`
+		Profile    *hls.Profile   `json:"profile"`
+		StartMs    int64          `json:"startMs"`
+		Encode     *copies.Encode `json:"encode"`
+		Option     string         `json:"option"`
 	}
 	if err := re.BindBody(&body); err != nil {
 		return playable{}, re.BadRequestError("The request could not be read.", err)
@@ -222,7 +274,8 @@ func (e *Engine) asked(re *core.RequestEvent) (playable, error) {
 	if ok, _ := re.App.CanAccessRecord(item, info, item.Collection().ViewRule); !ok {
 		return playable{}, re.NotFoundError("", nil)
 	}
-	p := playable{item: sessions.ItemOf(e.app, body.Collection, item.Id), profile: body.Profile, startMs: max(0, body.StartMs)}
+	p := playable{item: sessions.ItemOf(e.app, body.Collection, item.Id), profile: body.Profile, startMs: max(0, body.StartMs),
+		encode: body.Encode, option: body.Option}
 	_ = item.UnmarshalJSONField("versions", &p.versions)
 	switch {
 	case body.File != "":
