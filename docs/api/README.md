@@ -14,7 +14,7 @@ and their rules, and how they fail.
 
 | Route | Who | Answer |
 | --- | --- | --- |
-| `GET /api/foyer/info` | anyone | `{ serverVersion }` |
+| `GET /api/foyer/info` | anyone | `{ serverVersion, protocol }`: the version, always the app's, and the protocol Loge's Foyer adapters speak (1) |
 | `POST /api/foyer/play` | users | `{ collection, id, file? }` → `{ url, expiresAt, version, versions, chapters }`: a signed address for the title's best version, or the file asked for — one of its versions, or of a series' `extras`; `404` for a title the user may not see |
 | `POST /api/foyer/watch/progress` | users | `{ collection, id, kind: started \| progress \| stopped \| end, positionMs, durationMs, paused?, session? }` → `204` |
 | `POST /api/foyer/watch/played` | users | `{ collection, id, played }` → `204`; a series marks each of its episodes |

@@ -5,3 +5,8 @@ package version
 
 // Version is YEAR.MONTH.BUILD. BUILD counts every release and never goes down.
 const Version = "2026.10.1"
+
+// Protocol is the protocol Loge's Foyer adapters speak, as `@loge/api`'s
+// FOYER_PROTOCOL states it. It rises when a change would leave an adapter
+// that speaks the one before unable to read an answer.
+const Protocol = 1

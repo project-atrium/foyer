@@ -87,11 +87,13 @@ internal/watch/      each user's watch status: Loge's rules, the routes, an iden
 internal/identity/   Loge's watchIdentity and identityHash, ported
 internal/dashboard/  the dashboard's icon and pages — Library, Settings → Adapters: a PocketBase UI extension,
                      plain JavaScript, embedded
-internal/version/    the version, always the app's: its `npm run release` moves both
+internal/version/    the version, always the app's: its `npm run release` moves both; the protocol Loge's adapters speak
+internal/fixtures/   reads what both sides must answer alike from the app beside Foyer; tests only, skipping without it
 migrations/          0001 users are profiles; 0002 the name, the rate limits, the first superuser; 0003 adapters;
                      0004 libraries, media_entries, media_files, identities; 0005 streams' rate limit;
                      0006 watch_states; 0007 adapters become connections, a library a folder of one
 dev/fakezurg/        a pretend Zurg for running Foyer here, from Zurg's .zurgtorrent records; never in the image
+harness/             Node and vitest, test-only: the app's code that speaks Foyer against the real binary
 Dockerfile           two stages: a Go build, then Debian with Jellyfin's ffmpeg and the binary
 docker-compose.yml   the server, and pb_data in a volume
 compose.gpu.yaml     /dev/dri passed in, and the host's render group
@@ -272,7 +274,9 @@ Go framework: `users` as profiles with their PINs; a WebDAV share's folders
 addresses; each user's watch status; the dashboard's Library and Adapters
 pages — adapters set up as connections, several shares among them, Settings
 opening on Foyer's own. `go test ./...` proves it, and the dashboard was driven headless in
-Chrome against a pretend Zurg and the real TMDB. The account-sync protocol,
-its harness and the shared fixtures are gone — git has them. The image —
+Chrome against a pretend Zurg and the real TMDB. The account-sync protocol is
+gone — git has it; its successor's fixtures and harness are back: the app's
+`adapters/api/fixtures/foyer/` read by the Go tests, and `harness/` driving
+the app's code against the binary. The image —
 Debian with Jellyfin's ffmpeg — was built and run on arm64 under Colima,
 against the household's real Zurg; the GPU's override is untried on a GPU.

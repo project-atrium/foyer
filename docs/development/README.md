@@ -162,6 +162,11 @@ directory, with the migrations applied, through PocketBase's real router
   are escaped or relative, a name listed twice, a refused sign-in kept,
   ranges — and Zurg's `200` with a `Content-Range` read as `206`.
 - **Titles:** Loge's own cases for `titleKey` and `bareTitle`.
+- **What both sides must answer alike**, read from the app beside Foyer —
+  its `adapters/api/fixtures/foyer/`, the files its own tests read:
+  `titles.json`, `identity.json`, and each route's shape (`routes/info.json`
+  against `info`). `internal/fixtures` finds them through the workspace; a
+  checkout of Foyer alone has no app beside it, and those tests skip.
 - **Release names**, a table of some fifty: scene names, dotted and dashed;
   numeric titles and years inside titles; season packs and ranges; anime
   numbered from the start, with versions, ranges and recaps; specials, OVAs
@@ -169,6 +174,19 @@ directory, with the migrations applied, through PocketBase's real router
   audio, edition. And a file read where it lies: its season folder, a
   specials or extras folder, its torrent's name, Zurg's ` (id)`. `FuzzName`
   never panics.
+
+## The harness: the app's code against the real server
+
+`harness/` is Node and vitest, test-only: it builds the binary once, starts
+it per test on a temporary directory and a free port with an environment of
+its own, makes users as the superuser does, and drives the Loge code that
+speaks Foyer — `@loge/api`'s protocol module now, the Foyer adapters as they
+come — aliased from the app beside it, never installed. The Go tests prove
+the server; the harness proves the pair.
+
+```bash
+cd harness && npm install && npm run typecheck && npm test
+```
 
 **Live TMDB**, opt-in and local only — the key from the workspace's
 `tmdb.env`, never committed and never printed:

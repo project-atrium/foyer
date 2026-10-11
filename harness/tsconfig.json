@@ -1,0 +1,22 @@
+{
+  // The harness runs on Node, so it has Node's types. `@loge/api` and the
+  // Foyer adapters are their source in ../../loge/adapters, aliased, never
+  // installed: what is under test is what the app ships.
+  "compilerOptions": {
+    "strict": true,
+    "exactOptionalPropertyTypes": true,
+    "noUncheckedIndexedAccess": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "target": "esnext",
+    "lib": ["esnext"],
+    "types": ["node"],
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "paths": {
+      "@loge/api": ["../../loge/adapters/api/src/index.ts"]
+    }
+  },
+  "include": ["test/**/*.ts", "vitest.config.ts"]
+}

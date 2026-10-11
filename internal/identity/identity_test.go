@@ -1,6 +1,10 @@
 package identity
 
-import "testing"
+import (
+	"testing"
+
+	"foyer/internal/fixtures"
+)
 
 // The vectors are Loge's: an identity hashed in the app and here must match.
 func TestHashIsLoges(t *testing.T) {
@@ -31,5 +35,53 @@ func TestIdentitiesAreLoges(t *testing.T) {
 		if got != want {
 			t.Errorf("got %q, want %q", got, want)
 		}
+	}
+}
+
+// The app's own vectors, read from the file its tests read.
+func TestTheAppsIdentities(t *testing.T) {
+	var shared struct {
+		Hashes []struct {
+			Identity string `json:"identity"`
+			Hash     string `json:"hash"`
+		}
+		Identities []struct {
+			Kind     string `json:"kind"`
+			TMDB     int    `json:"tmdb"`
+			Title    string `json:"title"`
+			Year     int    `json:"year"`
+			Season   int    `json:"season"`
+			Episode  int    `json:"episode"`
+			Identity string `json:"identity"`
+		}
+	}
+	fixtures.Load(t, "identity.json", &shared)
+	for _, v := range shared.Hashes {
+		if got := Hash(v.Identity); got != v.Hash {
+			t.Errorf("Hash(%q) = %s; the app says %s", v.Identity, got, v.Hash)
+		}
+	}
+	for _, v := range shared.Identities {
+		var got string
+		switch {
+		case v.TMDB != 0 && v.Kind == "movie":
+			got = Movie(v.TMDB)
+		case v.TMDB != 0 && v.Kind == "show":
+			got = Show(v.TMDB)
+		case v.TMDB != 0:
+			got = Episode(Show(v.TMDB), v.Season, v.Episode)
+		case v.Kind == "episode":
+			if show := ByTitle("show", v.Title, v.Year); show != "" {
+				got = Episode(show, v.Season, v.Episode)
+			}
+		default:
+			got = ByTitle(v.Kind, v.Title, v.Year)
+		}
+		if got != v.Identity {
+			t.Errorf("%+v: %q; the app says %q", v, got, v.Identity)
+		}
+	}
+	if len(shared.Hashes) == 0 || len(shared.Identities) == 0 {
+		t.Fatal("the app's identities were not read")
 	}
 }

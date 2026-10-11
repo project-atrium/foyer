@@ -3,6 +3,7 @@ package server_test
 import (
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"slices"
 	"strings"
@@ -14,6 +15,7 @@ import (
 	"github.com/pocketbase/pocketbase/tests"
 
 	"foyer/internal/config"
+	"foyer/internal/fixtures"
 	"foyer/internal/server"
 	"foyer/internal/version"
 )
@@ -61,9 +63,32 @@ func TestTheServerIsFoyer(t *testing.T) {
 func TestInfoNeedsNoSession(t *testing.T) {
 	h := start(t, options{})
 	got := h.call(http.MethodGet, "/api/foyer/info", "", nil)
-	if got.status != http.StatusOK || got.body["serverVersion"] != version.Version || len(got.body) != 1 {
+	if got.status != http.StatusOK || got.body["serverVersion"] != version.Version || got.body["protocol"] != float64(version.Protocol) {
 		t.Fatalf("info: %d %v", got.status, got.body)
 	}
+	// It answers as the app's fixture says, key for key.
+	var fixture struct {
+		Answer map[string]any `json:"answer"`
+	}
+	fixtures.Load(t, "routes/info.json", &fixture)
+	if !sameKeys(got.body, fixture.Answer) || fixture.Answer["protocol"] != float64(version.Protocol) {
+		t.Fatalf("info %v, the app's fixture %v", got.body, fixture.Answer)
+	}
+}
+
+// sameKeys says whether two answers carry the same keys, each of the same
+// JSON kind: what an adapter reading one would find in the other.
+func sameKeys(a, b map[string]any) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for k, v := range a {
+		w, ok := b[k]
+		if !ok || fmt.Sprintf("%T", v) != fmt.Sprintf("%T", w) {
+			return false
+		}
+	}
+	return true
 }
 
 // --- A user is a profile ------------------------------------------------------

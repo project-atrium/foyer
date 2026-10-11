@@ -1,6 +1,10 @@
 package titles
 
-import "testing"
+import (
+	"testing"
+
+	"foyer/internal/fixtures"
+)
 
 // The cases are Loge's own (adapters/test/identity.test.ts): Foyer and the
 // app must key a title alike, or one film's history splits in two.
@@ -62,5 +66,40 @@ func TestKeyIsWhatSpellingsShare(t *testing.T) {
 		if got := Key(name); got != want {
 			t.Errorf("Key(%q) = %q, want %q", name, got, want)
 		}
+	}
+}
+
+// The app's own vectors, read from the file its tests read: one answer on
+// both sides, or one film's history splits in two.
+func TestTheAppsTitles(t *testing.T) {
+	var shared struct {
+		Plain, Bare []struct {
+			Name  string `json:"name"`
+			Title string `json:"title"`
+			Year  int    `json:"year"`
+		}
+		Key []struct {
+			Name string `json:"name"`
+			Key  string `json:"key"`
+		}
+	}
+	fixtures.Load(t, "titles.json", &shared)
+	for _, c := range shared.Plain {
+		if title, year := Plain(c.Name); title != c.Title || year != c.Year {
+			t.Errorf("Plain(%q) = %q, %d; the app says %q, %d", c.Name, title, year, c.Title, c.Year)
+		}
+	}
+	for _, c := range shared.Bare {
+		if title, year := Bare(c.Name); title != c.Title || year != c.Year {
+			t.Errorf("Bare(%q) = %q, %d; the app says %q, %d", c.Name, title, year, c.Title, c.Year)
+		}
+	}
+	for _, c := range shared.Key {
+		if got := Key(c.Name); got != c.Key {
+			t.Errorf("Key(%q) = %q; the app says %q", c.Name, got, c.Key)
+		}
+	}
+	if len(shared.Plain) == 0 || len(shared.Bare) == 0 || len(shared.Key) == 0 {
+		t.Fatal("the app's titles were not read")
 	}
 }
