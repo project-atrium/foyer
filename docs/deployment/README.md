@@ -83,6 +83,9 @@ Leave them as they are.
   | --- | --- |
   | signing in | 5 a minute |
   | refreshing a session | 60 a minute |
+  | pairing a device with a code | 5 a minute |
+  | a stream's bytes | 600 in 10 seconds |
+  | a share's webhook | 30 a minute |
   | anything else | 300 in 10 seconds |
 
 `FOYER_TRUST_PROXY` is not a setting the migrations write: the server applies it

@@ -14,7 +14,13 @@ and their rules, and how they fail.
 
 | Route | Who | Answer |
 | --- | --- | --- |
-| `GET /api/foyer/info` | anyone | `{ serverVersion, protocol }`: the version, always the app's, and the protocol Loge's Foyer adapters speak (1) |
+| `GET /api/foyer/info` | anyone | `{ serverVersion, protocol, household: { id, name } }`: the version, always the app's, the protocol Loge's Foyer adapters speak (1), and the household — its id is what a device keys this Foyer by |
+| `GET /api/foyer/household` | users | `{ household, members: [{ id, username, name, avatar?, hasPin }], served: [] }`: who else is in the household — names and pictures, never a PIN or an email — and what this Foyer serves |
+| `POST /api/foyer/pair` | anyone with a code — five tries a minute per address | `{ code, device: { installation, name, platform, appVersion } }` → `{ household, users: [{ member, pin, token }] }`: the sessions of the users the code names, each with its own PIN; the code is spent; any code that will not do is the same `400` |
+| `GET /api/foyer/admin/household` | superusers | `{ household, members, devices: [{ id, name, platform, appVersion, users, paired, lastSeen }] }` |
+| `PATCH /api/foyer/admin/household` | superusers | `{ name }` → the household |
+| `POST /api/foyer/admin/pairings` | superusers | `{ users: [ids] }`, one to ten → `{ code, expiresAt }`: eight characters, `XXXX-XXXX`, good once for ten minutes |
+| `DELETE /api/foyer/admin/devices/{id}` | superusers | `204`: off the list — its sessions end only when its users' passwords change |
 | `POST /api/foyer/play` | users | `{ collection, id, file? }` → `{ url, expiresAt, version, versions, chapters }`: a signed address for the title's best version, or the file asked for — one of its versions, or of a series' `extras`; `404` for a title the user may not see |
 | `POST /api/foyer/watch/progress` | users | `{ collection, id, kind: started \| progress \| stopped \| end, positionMs, durationMs, paused?, session? }` → `204` |
 | `POST /api/foyer/watch/played` | users | `{ collection, id, played }` → `204`; a series marks each of its episodes |
@@ -136,6 +142,16 @@ typed — a webhook's token among them), `status` (the last test) and
 `position`. Written only through the Adapters page. Until 2026.10 it was
 `adapters`, one record per adapter; migration 0007 renamed it in place.
 
+**`household`** — one record, made by migration 0008: its id is the
+household's, and its `name` is what Loge calls this Foyer.
+
+**`devices`** — each device a user paired or signed in on: `installation`
+(the device's id for Foyer — a hash of its own key, the same for every user
+and adapter on it), `name`, `platform`, `app_version`, `users`, `paired`,
+`last_seen`. A device says which it is in an `X-Foyer-Device` header — base64url
+of `{ installation, name, platform, appVersion }` — when it signs a user in or
+refreshes a session.
+
 **`watch_states`** — what a user watched: `user`, `identity`, the title it
 was last played as (`item_collection`, `item_id`), `external_ids`, `watched`,
 `position_ms`, `duration_ms`, `play_count`, `last_played_at`.
@@ -175,6 +191,7 @@ would otherwise stop at the library and keep the server from starting.
 | --- | --- | --- | --- | --- |
 | `users` | its own record | superusers | its own record | superusers |
 | `connections` | superusers | Foyer | Foyer | Foyer |
+| `household`, `devices` | superusers | Foyer | Foyer | Foyer |
 | `libraries` | users | Foyer | Foyer | Foyer |
 | `media_entries`, `media_files`, `identities` | superusers | Foyer | Foyer | Foyer |
 | `watch_states` | its own user's | Foyer | Foyer | Foyer |

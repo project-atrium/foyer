@@ -65,6 +65,10 @@ Then make the dashboard's superuser, and a user for each person.
 - **A user is a profile**: a username, a name, an avatar and an optional
   four-digit PIN, made by the superuser in the dashboard. Each signs in with
   their own password; sessions last 30 days.
+- **The household**: its name, its members as the others see them — a name,
+  a picture, never a PIN — and the devices they are signed in on; a pairing
+  code, made on the dashboard's Household page, signs chosen users in on a
+  device at once, once, within ten minutes.
 - **The account that held up to ten profiles is gone**, with the protocol
   Loge's `sync/custom-server` adapter spoke. Loge signs in to Foyer anew in
   Step 2 — a device with two profiles signs in as two users.

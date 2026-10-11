@@ -109,3 +109,28 @@ func TestAServerWithNoShareUpgrades(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// A library that took a name a later migration makes stops that migration
+// with the name in its error — before PocketBase refuses it less helpfully.
+func TestAMigrationSaysWhichCollectionIsInItsWay(t *testing.T) {
+	app := upTo(t, "0007_connections.go")
+	if err := app.Save(core.NewBaseCollection("devices")); err != nil {
+		t.Fatal(err)
+	}
+	err := app.RunAppMigrations()
+	if err == nil || !strings.Contains(err.Error(), `"devices"`) {
+		t.Fatalf("the migration ran on, or said nothing useful: %v", err)
+	}
+}
+
+// The household is made with its one record.
+func TestTheHouseholdIsMadeWithItsRecord(t *testing.T) {
+	app := upTo(t, "0007_connections.go")
+	if err := app.RunAppMigrations(); err != nil {
+		t.Fatal(err)
+	}
+	records, err := app.FindAllRecords("household")
+	if err != nil || len(records) != 1 || records[0].GetString("name") != "Foyer" {
+		t.Fatalf("household: %v %v", records, err)
+	}
+}

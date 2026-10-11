@@ -18,6 +18,7 @@ import (
 	"foyer/internal/dashboard"
 	"foyer/internal/ffmpeg"
 	"foyer/internal/guard"
+	"foyer/internal/household"
 	"foyer/internal/library"
 	"foyer/internal/probe"
 	"foyer/internal/routes"
@@ -28,12 +29,13 @@ import (
 // Server is Foyer on one PocketBase app: what Bind made, for main and the
 // tests to reach.
 type Server struct {
-	App      core.App
-	Config   config.Config
-	Adapters *adapters.Registry
-	Library  *library.Engine
-	Streams  *stream.Streamer
-	Probes   *probe.Queue
+	App       core.App
+	Config    config.Config
+	Adapters  *adapters.Registry
+	Library   *library.Engine
+	Streams   *stream.Streamer
+	Probes    *probe.Queue
+	Household *household.Service
 }
 
 // collections are Foyer's own static collections: written by its code alone.
@@ -41,6 +43,7 @@ var collections = []string{
 	adapters.Collection,
 	library.LibrariesCollection, library.EntriesCollection, library.FilesCollection, library.IdentitiesCollection,
 	watch.Collection,
+	household.Collection, household.DevicesCollection,
 }
 
 // Bind binds Foyer's guard, routes and dashboard pages, and starts nothing:
@@ -60,6 +63,8 @@ func Bind(app core.App, cfg config.Config) *Server {
 		Streams:  stream.New(app, library.FilesCollection, lib.OpenFile),
 	}
 	s.Probes = probe.New(app, registry, s.Streams, lib, library.FilesCollection)
+	s.Household = household.New(app)
+	s.Household.Bind()
 	lib.OnScanned(s.Probes.Poke)
 	lib.OnIdentityMoved(func(from, to string) error { return watch.Move(app, from, to) })
 	guard.Bind(app, s.managed)
@@ -81,6 +86,7 @@ func Bind(app core.App, cfg config.Config) *Server {
 		admin.Bind(apis.RequireSuperuserAuth())
 		s.Adapters.Routes(admin)
 		s.Library.Routes(admin)
+		s.Household.Routes(se.Router, admin)
 		s.Library.HookRoutes(se.Router)
 		// Read by PocketBase's own handler for UI extensions, which runs last.
 		se.Router.BindFunc(dashboard.Fresh)

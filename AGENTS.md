@@ -43,7 +43,9 @@ per user, and streams for Loge.
 1. **A user reads and changes only itself.** `users`' rules are
    `id = @request.auth.id`; only a superuser makes or removes one.
 2. **A PIN is its own user's.** Four digits or none, readable by that user so
-   a device signed in as several users can ask for it, and by nobody else.
+   a device signed in as several users can ask for it, and by nobody else —
+   another member sees a name, a picture and whether a PIN is set
+   (`GET /api/foyer/household`), never the record.
 3. **Sessions last 30 days**, and a password change ends every one.
 4. **Signing in is throttled per address** — never per username: anyone who
    knows one could keep its owner out.
@@ -58,6 +60,9 @@ per user, and streams for Loge.
   itself, so the test that holds this arms it again first.
 - **Lock a user out from everywhere.** PocketBase's limiter counts per
   address, in memory. Never add a count per username.
+- **Tell which pairing codes exist.** Unknown, spent and expired codes are
+  refused alike; a code is kept as its hash, in memory, for ten minutes, and
+  spent the moment it is used.
 
 ---
 
@@ -67,7 +72,8 @@ per user, and streams for Loge.
 main.go              .env, then pocketbase.New(); migratecmd, automigrate off; server.Bind
 go.mod               PocketBase pinned to v0.40.4, which needs Go 1.27
 internal/config/     FOYER_ADMIN_*, FOYER_TRUST_PROXY, and the .env reader; the old SC_* names refused, MAX_PROFILES and SIGNUP named as doing nothing
-internal/routes/     GET /api/foyer/info
+internal/routes/     GET /api/foyer/info — the version, the protocol, the household
+internal/household/  the household: its record, members as others see them, devices, pairing codes (memory)
 internal/server/     Bind: the guard, the routes, the trusted proxy, no installer, the UI extension — and the HTTP tests
 internal/guard/      Foyer's collections refuse every write request, a superuser's too; users' rules stay
 internal/adapters/   what Foyer connects to: adapters by category, the connections set up of each, fields, masked
@@ -91,7 +97,8 @@ internal/version/    the version, always the app's: its `npm run release` moves 
 internal/fixtures/   reads what both sides must answer alike from the app beside Foyer; tests only, skipping without it
 migrations/          0001 users are profiles; 0002 the name, the rate limits, the first superuser; 0003 adapters;
                      0004 libraries, media_entries, media_files, identities; 0005 streams' rate limit;
-                     0006 watch_states; 0007 adapters become connections, a library a folder of one
+                     0006 watch_states; 0007 adapters become connections, a library a folder of one;
+                     0008 the household's record, devices, pairing's rate limit
 dev/fakezurg/        a pretend Zurg for running Foyer here, from Zurg's .zurgtorrent records; never in the image
 harness/             Node and vitest, test-only: the app's code that speaks Foyer against the real binary
 Dockerfile           two stages: a Go build, then Debian with Jellyfin's ffmpeg and the binary
