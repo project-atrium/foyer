@@ -1,6 +1,8 @@
 package youtube
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -56,5 +58,25 @@ func TestAVideoIsKeptAsTheSitesOwnAtTheHeightsAllowed(t *testing.T) {
 	}
 	if k := keyOf(info.ID, kept[0]); len(k) != 32 || k == keyOf(info.ID, kept[1]) || k != keyOf(info.ID, kept[0]) {
 		t.Errorf("keys %s %s", k, keyOf(info.ID, kept[1]))
+	}
+}
+
+// yt-dlp looks for no ffmpeg on the PATH: a name alone, it would keep the
+// picture and the sound apart, warn, and succeed.
+func TestFFmpegIsHandedToYtDlpWhereItIs(t *testing.T) {
+	dir := t.TempDir()
+	tool := filepath.Join(dir, "ffmpeg-of-the-household")
+	if err := os.WriteFile(tool, []byte("#!/bin/sh\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir)
+	if got := located("ffmpeg-of-the-household"); got != tool {
+		t.Errorf("a name: %q", got)
+	}
+	if got := located("/usr/lib/jellyfin-ffmpeg/ffmpeg"); got != "/usr/lib/jellyfin-ffmpeg/ffmpeg" {
+		t.Errorf("a path: %q", got)
+	}
+	if got := located("nowhere-to-be-found"); got != "nowhere-to-be-found" {
+		t.Errorf("none: %q", got)
 	}
 }

@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -173,7 +174,7 @@ func (r *Runner) fetch(ctx context.Context, info *Info, dir, ffmpegPath, formats
 	}
 	cmd := ffmpeg.Command(ctx, tool, "--ignore-config", "--no-warnings", "--quiet", "--progress", "--newline", "--progress-template", fetched,
 		"--no-playlist", "--force-ipv4", "--cache-dir", filepath.Join(r.dir, "yt-dlp"), "--load-info-json", answer,
-		"-f", formats, "--merge-output-format", container, "--ffmpeg-location", ffmpegPath, "-o", filepath.Join(dir, "video.%(ext)s"))
+		"-f", formats, "--merge-output-format", container, "--ffmpeg-location", located(ffmpegPath), "-o", filepath.Join(dir, "video.%(ext)s"))
 	cmd.Env = append(cmd.Env, "HOME="+r.dir, "DENO_DIR="+filepath.Join(r.dir, "deno"), "XDG_CACHE_HOME="+r.dir)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -211,9 +212,26 @@ func (r *Runner) fetch(ctx context.Context, info *Info, dir, ffmpegPath, formats
 	}
 	made := filepath.Join(dir, "video."+container)
 	if _, err := os.Stat(made); err != nil {
+		// Without the ffmpeg it was named, yt-dlp keeps the two apart, says so in a warning, and succeeds.
+		if apart, _ := filepath.Glob(filepath.Join(dir, "video.f*")); len(apart) > 0 {
+			return "", errors.New("ffmpeg did not put the picture and the sound together: see where the FFmpeg adapter says it is")
+		}
 		return "", errors.New("yt-dlp made no file")
 	}
 	return made, nil
+}
+
+// located is a tool's path as yt-dlp's --ffmpeg-location needs it: a name
+// alone is looked for on the PATH, as running it would, which yt-dlp does
+// not do.
+func located(tool string) string {
+	if strings.ContainsRune(tool, os.PathSeparator) {
+		return tool
+	}
+	if path, err := exec.LookPath(tool); err == nil {
+		return path
+	}
+	return tool
 }
 
 var links = regexp.MustCompile(`https?://\S+`)
