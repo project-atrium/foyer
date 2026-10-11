@@ -15,6 +15,7 @@ import (
 	"github.com/pocketbase/pocketbase/tools/router"
 
 	"foyer/internal/adapters/tmdb"
+	"foyer/internal/identity"
 )
 
 // GridItem is one poster on the dashboard's Library page.
@@ -89,6 +90,20 @@ func (e *Engine) gridRoutes(admin *router.RouterGroup[*core.RequestEvent]) {
 			return re.BadRequestError("A TMDB id is a whole number.", validation.Errors{"tmdbId": validation.NewError("validation_required", "A TMDB id is a whole number.")})
 		}
 		err := e.Correct(re.Request.Context(), re.Request.PathValue("collection"), re.Request.PathValue("id"), body.TMDBID)
+		return answerCorrection(re, err)
+	})
+
+	// A superuser's word on one file of a series: the episode it is, an
+	// extra, or as its name reads.
+	admin.POST("/library/files/{file}/correct", func(re *core.RequestEvent) error {
+		var body FileCorrection
+		if err := re.BindBody(&body); err != nil {
+			return re.BadRequestError("The request could not be read.", err)
+		}
+		err := e.CorrectFile(re.Request.Context(), re.Request.PathValue("file"), body)
+		if errors.Is(err, errNoFile) {
+			return re.NotFoundError("", nil)
+		}
 		return answerCorrection(re, err)
 	})
 
@@ -253,12 +268,17 @@ func (e *Engine) Detail(collection, id string) (map[string]any, error) {
 		return nil, err
 	}
 	var fileViews []map[string]any
+	fixes := corrections(e.app, lib.Id)
 	add := func(f *core.Record, episode string) {
-		fileViews = append(fileViews, map[string]any{
+		view := map[string]any{
 			"id": f.Id, "path": f.GetString("path"), "size": f.GetInt64("size"), "role": f.GetString("role"),
 			"label": f.GetString("label"), "probeState": f.GetString("probe_state"), "missing": f.GetString("missing_since") != "",
 			"added": f.GetString("added"), "episode": episode,
-		})
+		}
+		if fix, ok := fixes[f.GetString("path")]; ok {
+			view["corrected"] = fix
+		}
+		fileViews = append(fileViews, view)
 	}
 	for _, f := range files {
 		add(f, "")
@@ -325,6 +345,15 @@ func (e *Engine) Correct(ctx context.Context, collection, id string, tmdbID int)
 		return err
 	}
 
+	d := decision{id: tmdbID, state: manual, reason: "a superuser"}
+	return e.replace(ctx, collection, id, lib, &d)
+}
+
+// replace places a title's files again — its own and its episodes' — under
+// d where one is given, which is kept for the keys they were read by; else
+// as a scan identifies them, from what was kept. What that leaves with
+// nothing goes, and watch status follows each file to where it is now.
+func (e *Engine) replace(ctx context.Context, collection, id string, lib *core.Record, d *decision) error {
 	// Every file the title holds — its own, and a series' episodes'.
 	files, err := filesOf(e.app, collection, id)
 	if err != nil {
@@ -343,14 +372,11 @@ func (e *Engine) Correct(ctx context.Context, collection, id string, tmdbID int)
 			files = append(files, epFiles...)
 		}
 	}
-	d := decision{id: tmdbID, state: manual, reason: "a superuser"}
 	// What each file was watched as, so its watch status can follow it to
 	// wherever the correction places it.
 	was := map[string]string{}
 	for _, f := range files {
-		if r, err := e.app.FindRecordById(f.GetString("item_collection"), f.GetString("item_id")); err == nil {
-			was[f.Id] = r.GetString("identity")
-		}
+		was[f.Id] = e.watchedAs(f)
 	}
 	entries := map[string]string{}
 	var waiting []*placedFile
@@ -367,9 +393,11 @@ func (e *Engine) Correct(ctx context.Context, collection, id string, tmdbID int)
 		waiting = append(waiting, pf)
 	}
 	candidates := plan(lib.GetString("kind"), waiting)
-	for _, c := range candidates {
-		if err := e.remember(lib, c, d, nil); err != nil {
-			return err
+	if d != nil {
+		for _, c := range candidates {
+			if err := e.remember(lib, c, *d, nil); err != nil {
+				return err
+			}
 		}
 	}
 	// Its files placed again under the decision: into the title that holds
@@ -391,7 +419,7 @@ func (e *Engine) Correct(ctx context.Context, collection, id string, tmdbID int)
 		return err
 	}
 	r := e.status.begin(lib.Id, lib.GetString("name"), false)
-	err = e.placeAll(ctx, lib, candidates, r, &d)
+	err = e.placeAll(ctx, lib, candidates, r, d)
 	r.finish(err)
 	if err != nil {
 		return err
@@ -402,8 +430,8 @@ func (e *Engine) Correct(ctx context.Context, collection, id string, tmdbID int)
 		if err != nil {
 			continue
 		}
-		if now, err := e.app.FindRecordById(fresh.GetString("item_collection"), fresh.GetString("item_id")); err == nil && was[f.Id] != "" {
-			moved[was[f.Id]] = now.GetString("identity")
+		if now := e.watchedAs(fresh); was[f.Id] != "" && now != "" && now != was[f.Id] {
+			moved[was[f.Id]] = now
 		}
 	}
 	// What the correction left with nothing goes.
@@ -426,6 +454,26 @@ func (e *Engine) Correct(ctx context.Context, collection, id string, tmdbID int)
 	e.moveIdentities(moved)
 	e.fetchArtwork(ctx, lib, r)
 	return nil
+}
+
+// watchedAs is the identity a file's watch status is kept under: its
+// title's or its episode's — or, for one of a title's extras, the extra's
+// own, by what it is. Nothing where its title has none.
+func (e *Engine) watchedAs(f *core.Record) string {
+	item, err := e.app.FindRecordById(f.GetString("item_collection"), f.GetString("item_id"))
+	if err != nil {
+		return ""
+	}
+	if role := f.GetString("role"); role == "extra" || role == "unmapped" {
+		var extras []extra
+		_ = item.UnmarshalJSONField("extras", &extras)
+		for _, x := range extras {
+			if x.File == f.Id {
+				return identity.Extra(item.GetString("identity"), x.Kind, x.Title, x.Path)
+			}
+		}
+	}
+	return item.GetString("identity")
 }
 
 func jsonUnmarshal(raw string, out any) error {

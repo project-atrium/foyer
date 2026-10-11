@@ -123,7 +123,8 @@ migrations/          0001 users are profiles; 0002 the name, the rate limits, th
                      0008 the household's record, devices, pairing's rate limit; 0009 pictures' rate limit;
                      0010 each user's preferences, subscriptions, playlists, ★, and the seq; 0011 the history of playings;
                      0012 each file's keyframes; 0013 what a video of the site's is, on its watch states;
-                     0014 each user's integrations, and what each state agreed with a tracker
+                     0014 each user's integrations, and what each state agreed with a tracker; 0015 a superuser's word on
+                     single files of a series
 dev/fakezurg/        a pretend Zurg for running Foyer here, from Zurg's .zurgtorrent records; never in the image
 harness/             Node and vitest, test-only: the app's code that speaks Foyer against the real binary
 Dockerfile           two stages: a Go build, then Debian with Jellyfin's ffmpeg and the binary
@@ -177,6 +178,14 @@ Go tests sit beside what they test. Everything else is PocketBase's: `serve`,
   (`uncertain`) waits for one, and "nothing" is asked again after a week.
   TMDB off, or its key refused, is no answer: the title is its name's until
   TMDB can be asked.
+- **A superuser's word on a file outlives the file's record.** A series' file
+  said to be an episode or an extra is kept in `file_corrections` by its
+  library and path — never on `media_files`, which go three days after the
+  share stops listing them — and every placing reads it before the file's
+  name (`placeShow`, `mapped_by: manual`). Correcting one places the series
+  again (`replace`, as a title's TMDB correction does), its watch status
+  following each file by what it is watched as — an extra's own identity
+  included.
 - **One torrent never stops a scan.** One that will not be kept is told in
   the scan's notes and left for the next scan, and the rest of the library
   is placed.

@@ -57,7 +57,7 @@ type Server struct {
 // collections are Foyer's own static collections: written by its code alone.
 var collections = []string{
 	adapters.Collection,
-	library.LibrariesCollection, library.EntriesCollection, library.FilesCollection, library.IdentitiesCollection,
+	library.LibrariesCollection, library.EntriesCollection, library.FilesCollection, library.IdentitiesCollection, library.CorrectionsCollection,
 	watch.Collection,
 	household.Collection, household.DevicesCollection,
 	userstate.Collections[userstate.KindPreference], userstate.Collections[userstate.KindSubscription],

@@ -344,15 +344,20 @@ func (e *Engine) placeShow(ctx context.Context, lib *core.Record, c *candidate, 
 
 		touched := map[[2]int]*core.Record{}
 		var order [][2]int
+		// A superuser's word on a file comes before what its name reads.
+		fixes := corrections(tx, lib.Id)
 		for _, f := range c.files {
 			f.record.Set("match_key", c.key)
 			role := f.role(Shows)
 			p, ok := placement{}, false
-			if role == "version" {
+			if fix, found := fixes[f.record.GetString("path")]; found {
+				role, p = corrected(fix)
+				ok = role == "version"
+			} else if role == "version" {
 				p, ok = place(cat, f.placed.Release)
-				if !ok {
-					role = "unmapped"
-				}
+			}
+			if role == "version" && !ok {
+				role = "unmapped"
 			}
 			if role != "version" {
 				f.record.Set("role", role)

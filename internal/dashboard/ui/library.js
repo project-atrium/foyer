@@ -309,6 +309,79 @@ function openTitle(item, changed) {
   // Each candidate's poster, fetched with the superuser's token: a page's own <img> sends none.
   const posters = store({});
   const made = [];
+  // One file of a series being said what it is.
+  const edit = store({ file: null, kind: 'episode', season: '', episode: '', busy: false });
+
+  function editFile(f) {
+    const [, season, episode] = /^S(\d+)E(\d+)$/.exec(f.episode || '') || [];
+    edit.kind = f.corrected?.kind || 'episode';
+    edit.season = String(f.corrected?.season ?? (season ? parseInt(season, 10) : ''));
+    edit.episode = String(f.corrected?.episode ?? (episode ? parseInt(episode, 10) : ''));
+    edit.file = f;
+    // Below a long pack's files: brought to where it can be seen.
+    setTimeout(() => document.getElementById(`${uniqueId}_file`)?.scrollIntoView({ block: 'center', behavior: 'smooth' }), 0);
+  }
+
+  async function saveFile(e) {
+    e.preventDefault();
+    edit.busy = true;
+    try {
+      const body = edit.kind === 'episode' ? { kind: 'episode', season: parseInt(edit.season, 10), episode: parseInt(edit.episode, 10) } : { kind: edit.kind };
+      await send(`/api/foyer/admin/library/files/${edit.file.id}/correct`, { method: 'POST', body });
+      app.toasts.success('Placed again.');
+      edit.file = null;
+      loadDetail();
+      changed();
+    } catch (err) {
+      failed(err);
+    }
+    edit.busy = false;
+  }
+
+  // fileSection says what the chosen file is: an episode, an extra, or as
+  // its name reads — kept by its path through every scan.
+  function fileSection() {
+    return () => {
+      const f = edit.file;
+      if (!f) {
+        return null;
+      }
+      return t.div(
+        { id: `${uniqueId}_file`, className: 'foyer-section m-t-base' },
+        t.header(null, t.h5(null, 'What this file is')),
+        t.p({ className: 'txt-sm path' }, f.path.split('/').pop()),
+        t.form(
+          { className: 'flex gap-5', onsubmit: saveFile },
+          t.div(
+            { className: 'field m-0' },
+            t.select(
+              { name: 'kind', onchange: (e) => (edit.kind = e.target.value) },
+              t.option({ value: 'episode', selected: () => edit.kind == 'episode' }, 'An episode'),
+              t.option({ value: 'extra', selected: () => edit.kind == 'extra' }, 'An extra'),
+              t.option({ value: 'auto', selected: () => edit.kind == 'auto' }, 'As its name reads'),
+            ),
+          ),
+          () =>
+            edit.kind == 'episode'
+              ? t.div(
+                  { className: 'flex gap-5' },
+                  t.div(
+                    { className: 'field m-0', style: 'width: 90px' },
+                    t.input({ name: 'season', type: 'number', min: 0, required: true, placeholder: 'Season', value: () => edit.season, oninput: (e) => (edit.season = e.target.value) }),
+                  ),
+                  t.div(
+                    { className: 'field m-0', style: 'width: 90px' },
+                    t.input({ name: 'episode', type: 'number', min: 1, required: true, placeholder: 'Episode', value: () => edit.episode, oninput: (e) => (edit.episode = e.target.value) }),
+                  ),
+                )
+              : null,
+          t.button({ type: 'submit', className: () => `btn ${edit.busy ? 'loading' : ''}`, disabled: () => edit.busy }, t.span({ className: 'txt' }, 'Save')),
+          t.button({ type: 'button', className: 'btn transparent', onclick: () => (edit.file = null) }, t.span({ className: 'txt' }, 'Cancel')),
+        ),
+        t.p({ className: 'txt-hint txt-sm m-t-5' }, 'Season 0 is the specials. Kept by the file’s path: it holds through every scan, and when the file comes back.'),
+      );
+    };
+  }
 
   async function loadDetail() {
     try {
@@ -469,7 +542,7 @@ function openTitle(item, changed) {
             : null,
           t.table(
             { className: 'foyer-table' },
-            t.thead(null, t.tr(null, t.th(null, 'File'), t.th(null, 'Episode'), t.th(null, 'What'), t.th(null, 'Size'), t.th(null, 'ffprobe'))),
+            t.thead(null, t.tr(null, t.th(null, 'File'), t.th(null, 'Episode'), t.th(null, 'What'), t.th(null, 'Size'), t.th(null, 'ffprobe'), d.library.kind == 'shows' ? t.th(null, '') : null)),
             t.tbody(
               null,
               (d.files || []).map((f) =>
@@ -480,16 +553,24 @@ function openTitle(item, changed) {
                     f.path.split('/').pop(),
                     f.missing ? t.span({ className: 'label sm danger m-l-5' }, 'missing') : null,
                   ),
-                  t.td(null, f.episode || (f.role != 'version' ? f.role : '')),
+                  t.td(
+                    null,
+                    f.episode || (f.role != 'version' ? f.role : ''),
+                    f.corrected ? t.span({ className: 'label sm m-l-5', title: 'Said so by hand' }, 'by hand') : null,
+                  ),
                   t.td(null, f.label || ''),
                   t.td(null, size(f.size)),
                   t.td(null, f.probeState || ''),
+                  d.library.kind == 'shows'
+                    ? t.td({ className: 'txt-right' }, t.button({ type: 'button', className: 'btn sm transparent', onclick: () => editFile(f) }, t.span({ className: 'txt' }, 'Correct')))
+                    : null,
                 ),
               ),
             ),
           ),
         );
       },
+      fileSection(),
       searchSection(item.kind == 'shows' ? 'tv' : 'movie'),
     ),
     t.footer(
