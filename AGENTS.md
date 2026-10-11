@@ -82,7 +82,8 @@ internal/adapters/   what Foyer connects to: adapters by category, the connectio
   tmdb/              TMDB: Loge's matcher ported (Find), a film's and a series' details, seasons, episode groups, artwork
   webdav/            a WebDAV share — Zurg's above all: its folders, an entry's files, a file's bytes with ranges
   webdav/webdavtest/ a pretend share, answering as Zurg does where asked, for the tests
-internal/titles/     Loge's titleKey and bareTitle, ported to the byte
+internal/titles/     Loge's titleKey and bareTitle, ported to the byte; compareItems' keys — JavaScript's lower case,
+                     UTF-16 order — and its fold
 internal/parse/      release names: title, year, season and episode, numbers counted from the start, what the file is
 internal/library/    libraries: their collections from one template, the scan — walk, name, identify, place,
                      sweep, artwork — corrections, and the dashboard's library routes
@@ -220,6 +221,14 @@ Go tests sit beside what they test. Everything else is PocketBase's: `serve`,
 - **Titles are keyed as Loge keys them.** `internal/titles` is `@loge/api`'s
   `titleKey` and `bareTitle`, and its tests are Loge's: change one, change
   both.
+- **A title's keys are a hook's, never its writer's.** `sort_title_key`,
+  `sort_release`, `sort_rating`, `search_text` and `genre_keys` are set on
+  every save of a title (`library/keys.go`), and `Backfill` gives them at
+  start, 500 at a time, to a title saved before they existed. They are
+  `compareItems`' order as bytes — JavaScript's lower case, `İ` and a final
+  sigma included, in UTF-16 order — held to the app's `order.json`. Never
+  order what Loge reads by `title` or `rating` themselves: SQLite's order is
+  not JavaScript's, and the app merges pages by its own.
 
 - **Migrations sort by file name, as text.** `10_x.go` runs before `1_x.go`,
   so names are zero-padded: `0001_…`, `0002_…`. A server that ran one never

@@ -20,7 +20,8 @@ import (
 
 // TemplateVersion is the shape of a library's collections. Raise it with any
 // change to the template; Ensure brings every library up to it at start.
-const TemplateVersion = 1
+// 2: the keys a title is sorted and searched by.
+const TemplateVersion = 2
 
 const (
 	Movies = "movies"
@@ -184,6 +185,13 @@ func titled() []core.Field {
 		&core.SelectField{Name: "match_state", Required: true, MaxSelect: 1, Values: []string{"matched", "uncertain", "unmatched", "manual"}},
 		&core.TextField{Name: "match_key", Max: 600},
 		&core.DateField{Name: "metadata_at"},
+		// What the catalogue sorts and searches by, kept on every save
+		// (keys.go): compareItems' order as text SQLite orders alike.
+		&core.TextField{Name: "sort_title_key", Max: 4000},
+		&core.TextField{Name: "sort_release", Max: 10},
+		&core.TextField{Name: "sort_rating", Max: 12},
+		&core.TextField{Name: "search_text", Max: 4000},
+		&core.JSONField{Name: "genre_keys", MaxSize: 4 << 10},
 	}
 }
 

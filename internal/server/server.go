@@ -112,7 +112,13 @@ func (s *Server) Background() *Server {
 		if err := s.Streams.StartTwin(); err != nil {
 			return err
 		}
-		wg.Go(func() { s.Library.Run(ctx) })
+		wg.Go(func() {
+			// Titles saved before their keys existed get them first: the catalogue sorts by them.
+			if err := s.Library.Backfill(ctx); err != nil && ctx.Err() == nil {
+				s.App.Logger().Error("Titles' keys could not be filled in", "error", err)
+			}
+			s.Library.Run(ctx)
+		})
 		wg.Go(func() { s.Probes.Run(ctx) })
 		return se.Next()
 	})

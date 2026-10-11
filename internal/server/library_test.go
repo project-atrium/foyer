@@ -1,6 +1,8 @@
 package server_test
 
 import (
+	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -11,6 +13,7 @@ import (
 
 	"foyer/internal/adapters/webdav/webdavtest"
 	"foyer/internal/library"
+	"foyer/internal/titles"
 )
 
 // addLibrary makes a library of a folder of the household's one share — made
@@ -179,6 +182,8 @@ func TestEnsureRepairsALibrarysCollections(t *testing.T) {
 	body := h.addLibrary(admin, "movies", "movies", "movies")
 	movies, _ := h.app.FindCollectionByNameOrId("movies")
 	movies.Fields.RemoveByName("tagline")
+	// As a library made at template 1 has it: no keys.
+	movies.Fields.RemoveByName("sort_title_key")
 	if err := h.app.Save(movies); err != nil {
 		t.Fatal(err)
 	}
@@ -192,8 +197,72 @@ func TestEnsureRepairsALibrarysCollections(t *testing.T) {
 		}
 	}
 	movies, _ = h.app.FindCollectionByNameOrId("movies")
-	if movies.Fields.GetByName("tagline") == nil || lib.GetInt("template") != library.TemplateVersion {
+	if movies.Fields.GetByName("tagline") == nil || movies.Fields.GetByName("sort_title_key") == nil || lib.GetInt("template") != library.TemplateVersion {
 		t.Fatal("the template was not applied")
+	}
+}
+
+// A title keeps what the catalogue sorts and searches it by, whoever saves
+// it — compareItems' order as text, a missing rating or date as nothing.
+func TestATitleKeepsItsKeys(t *testing.T) {
+	h := start(t, options{})
+	admin := h.superuser()
+	h.addLibrary(admin, "movies", "movies", "movies")
+	h.addLibrary(admin, "shows", "shows", "shows")
+	film := h.save("movies", map[string]any{
+		"title": "İstanbul Hatırası", "original_title": "Istanbul Memories", "year": 2010, "release_date": "2010-05-01",
+		"rating": 6.4, "genres": []string{"Drama", "Science  Fiction"}, "match_state": "matched",
+	})
+	if film.GetString("sort_title_key") != titles.SortKey("İstanbul Hatırası") || film.GetString("sort_release") != "2010-05-01" ||
+		film.GetString("sort_rating") != "0006.400" || film.GetString("search_text") != "istanbul hatırası istanbul memories 2010" {
+		t.Errorf("the film's keys: %v", film.PublicExport())
+	}
+	if keys := film.GetStringSlice("genre_keys"); strings.Join(keys, "|") != "drama|science fiction" {
+		t.Errorf("genre keys %v", keys)
+	}
+	// Renamed and rated nothing: the keys follow.
+	film.Set("sort_title", "Hatırası")
+	film.Set("rating", 0)
+	if err := h.app.Save(film); err != nil {
+		t.Fatal(err)
+	}
+	if film.GetString("sort_title_key") != titles.SortKey("Hatırası") || film.GetString("sort_rating") != "" {
+		t.Errorf("after a change: %q %q", film.GetString("sort_title_key"), film.GetString("sort_rating"))
+	}
+	// A series sorts by its first air date, or its year.
+	show := h.save("shows", map[string]any{"title": "Dark", "year": 2017, "match_state": "matched"})
+	if show.GetString("sort_release") != "2017-01-01" {
+		t.Errorf("the series' release key %q", show.GetString("sort_release"))
+	}
+}
+
+// Titles saved before their keys existed get them, a chunk at a time, and a
+// second run does nothing.
+func TestTheBackfillKeysEveryTitleOnce(t *testing.T) {
+	h := start(t, options{})
+	admin := h.superuser()
+	h.addLibrary(admin, "movies", "movies", "movies")
+	for i := range 3 {
+		h.save("movies", map[string]any{"title": fmt.Sprintf("Film %d", i), "match_state": "matched"})
+	}
+	// As a database from before template 2 has them: no keys.
+	if _, err := h.app.DB().NewQuery("UPDATE movies SET sort_title_key = '', search_text = ''").Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.server.Library.Backfill(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	films, err := h.app.FindAllRecords("movies")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range films {
+		if f.GetString("sort_title_key") != titles.SortKey(f.GetString("title")) || f.GetString("search_text") == "" {
+			t.Errorf("%s was not keyed: %v", f.GetString("title"), f.PublicExport())
+		}
+	}
+	if err := h.server.Library.Backfill(context.Background()); err != nil {
+		t.Fatal(err)
 	}
 }
 

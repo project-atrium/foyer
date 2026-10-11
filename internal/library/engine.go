@@ -122,6 +122,7 @@ func New(app core.App, registry *adapters.Registry) *Engine {
 		}
 		return nil
 	})
+	e.bindKeys()
 	return e
 }
 

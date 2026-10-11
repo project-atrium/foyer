@@ -61,6 +61,18 @@ Zurg lists nothing while it starts: a scan that finds the folder empty takes
 nothing away. And where most of a library vanishes at once, nothing is taken
 away until the next scan, ten minutes or more later, agrees.
 
+## In the app's order
+
+Loge merges every source's pages by one comparison, so Foyer hands out its
+titles in exactly that order. Each title keeps what it is sorted and searched
+by, written on every save: its sort title, else its title, lowered as
+JavaScript lowers it and in the order JavaScript compares text (`İ`, a Greek
+word's last sigma and characters beyond the basic plane are where Go and
+SQLite would differ); its release date, else the year; its rating to the
+thousandth — a date or a rating it lacks sorts first; its names and year
+with their accents folded away, for search; and its genres as the app keys
+them. A title saved before these existed gets them when Foyer starts.
+
 ## When a title was added
 
 The Library page shows the newest first. A title was added when its first
