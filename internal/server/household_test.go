@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"foyer/internal/fixtures"
 )
 
 // deviceHeader is what a device says of itself on the calls that sign in.
@@ -202,5 +204,47 @@ func TestTheHouseholdsCollectionsAreFoyers(t *testing.T) {
 		if got := h.call(http.MethodPost, "/api/collections/"+name+"/records", admin, map[string]any{"name": "x"}); got.status != http.StatusForbidden {
 			t.Errorf("%s: %d %v", name, got.status, got.body)
 		}
+	}
+}
+
+// The household's answers are as the app's fixtures say, key for key: what
+// Loge's household adapter reads is what Foyer sends.
+func TestTheHouseholdAnswersAsTheAppReadsThem(t *testing.T) {
+	h := start(t, options{})
+	admin := h.superuser()
+	alex := h.makeUser("alex", map[string]any{"name": "Alex", "pin": "1234"})
+	var household, pair, signIn struct {
+		Answer map[string]any `json:"answer"`
+	}
+	fixtures.Load(t, "routes/household.json", &household)
+	fixtures.Load(t, "routes/pair.json", &pair)
+	fixtures.Load(t, "routes/sign-in.json", &signIn)
+
+	got := h.call(http.MethodGet, "/api/foyer/household", alex.token, nil)
+	if !sameKeys(got.body, household.Answer) {
+		t.Errorf("household %v; the app's %v", got.body, household.Answer)
+	}
+	member := got.body["members"].([]any)[0].(map[string]any)
+	if !sameKeys(member, household.Answer["members"].([]any)[0].(map[string]any)) {
+		t.Errorf("a member %v", member)
+	}
+
+	code := h.call(http.MethodPost, "/api/foyer/admin/pairings", admin, map[string]any{"users": []string{alex.id}}).body["code"]
+	paired := h.call(http.MethodPost, "/api/foyer/pair", "", map[string]any{"code": code, "device": map[string]any{"installation": "device-hash-1"}})
+	wantUser := pair.Answer["users"].([]any)[0].(map[string]any)
+	gotUser := paired.body["users"].([]any)[0].(map[string]any)
+	if !sameKeys(paired.body, pair.Answer) || !sameKeys(gotUser, wantUser) || !sameKeys(gotUser["member"].(map[string]any), wantUser["member"].(map[string]any)) {
+		t.Errorf("pairing %v; the app's %v", paired.body, pair.Answer)
+	}
+
+	signed := h.signIn("alex", password)
+	record := signed.body["record"].(map[string]any)
+	for _, key := range []string{"id", "username", "name", "pin"} {
+		if _, ok := record[key]; !ok {
+			t.Errorf("a sign-in's record has no %s: %v", key, record)
+		}
+	}
+	if !sameKeys(signed.body, signIn.Answer) {
+		t.Errorf("sign-in %v; the app's %v", signed.body, signIn.Answer)
 	}
 }
