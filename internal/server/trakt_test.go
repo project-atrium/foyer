@@ -71,7 +71,7 @@ func TestAUsersTraktIsKeptInStepBothWays(t *testing.T) {
 	sync := func() {
 		t.Helper()
 		// Due now, as ten minutes on would make it.
-		if got := h.call(http.MethodPatch, "/api/foyer/me/integrations/trakt", alex.token, map[string]any{"mode": view()["mode"]}); got.status != http.StatusOK {
+		if got := h.call(http.MethodPost, "/api/foyer/me/integrations/trakt/mode", alex.token, map[string]any{"mode": view()["mode"]}); got.status != http.StatusOK {
 			t.Fatalf("mode: %d %v", got.status, got.body)
 		}
 		h.server.Trakt.Tick(ctx)
@@ -99,6 +99,7 @@ func TestAUsersTraktIsKeptInStepBothWays(t *testing.T) {
 	h.played(t, alex.id, "title:movie:a home video:2020", true, 1, here)
 
 	connecting := h.call(http.MethodPost, "/api/foyer/me/integrations/trakt/connect", alex.token, nil)
+	fits(t, "connecting", connecting.body, fixtureAnswer(t, "routes/integration-connecting.json"))
 	code, _ := connecting.body["code"].(map[string]any)
 	if connecting.status != http.StatusOK || connecting.body["state"] != "connecting" || code["verificationUrl"] != "https://trakt.tv/activate" || code["userCode"] == "" {
 		t.Fatalf("connecting: %d %v", connecting.status, connecting.body)
@@ -116,6 +117,7 @@ func TestAUsersTraktIsKeptInStepBothWays(t *testing.T) {
 	if v := view(); v["state"] != "connected" || v["account"] != "Alex" || v["mode"] != "two-way" || v["code"] != nil || v["lastSync"] == nil {
 		t.Fatalf("connected: %v", v)
 	}
+	fits(t, "integrations", h.call(http.MethodGet, "/api/foyer/me/integrations", alex.token, nil).body, fixtureAnswer(t, "routes/integrations.json"))
 	// Trakt's history came in, as often and when; what it lacked went, at when Foyer heard; a title by its name stayed.
 	if s := h.state(t, alex.id, matrix); s == nil || !s.GetBool("watched") || s.GetInt("play_count") != 2 || !s.GetDateTime("last_played_at").Time().Equal(then) {
 		t.Errorf("the Matrix: %v", s)
@@ -148,7 +150,7 @@ func TestAUsersTraktIsKeptInStepBothWays(t *testing.T) {
 	}
 
 	// Sent only: Trakt's new play stays there; a play here still goes.
-	if got := h.call(http.MethodPatch, "/api/foyer/me/integrations/trakt", alex.token, map[string]any{"mode": "send"}); got.status != http.StatusOK || got.body["mode"] != "send" {
+	if got := h.call(http.MethodPost, "/api/foyer/me/integrations/trakt/mode", alex.token, map[string]any{"mode": "send"}); got.status != http.StatusOK || got.body["mode"] != "send" {
 		t.Fatalf("send only: %d %v", got.status, got.body)
 	}
 	tr.Watch("Alex", 550, 1, here)
@@ -160,7 +162,7 @@ func TestAUsersTraktIsKeptInStepBothWays(t *testing.T) {
 	if posts := tr.Posts(); posts[len(posts)-1] != "add movie 27205 at 2026-10-01T23:00:00Z" {
 		t.Errorf("sent %q", posts)
 	}
-	if got := h.call(http.MethodPatch, "/api/foyer/me/integrations/trakt", alex.token, map[string]any{"mode": "sideways"}); got.status != http.StatusBadRequest {
+	if got := h.call(http.MethodPost, "/api/foyer/me/integrations/trakt/mode", alex.token, map[string]any{"mode": "sideways"}); got.status != http.StatusBadRequest {
 		t.Errorf("a mode that is none: %d", got.status)
 	}
 

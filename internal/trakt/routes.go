@@ -32,7 +32,8 @@ func (s *Service) Routes(r *router.Router[*core.RequestEvent], admin *router.Rou
 		return e.JSON(http.StatusOK, v)
 	}).Bind(apis.RequireAuth("users"))
 
-	r.PATCH("/api/foyer/me/integrations/{key}", func(e *core.RequestEvent) error {
+	// POST, as the app's HTTP port has no PATCH.
+	r.POST("/api/foyer/me/integrations/{key}/mode", func(e *core.RequestEvent) error {
 		if e.Request.PathValue("key") != Key {
 			return e.NotFoundError("", nil)
 		}
