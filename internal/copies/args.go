@@ -23,8 +23,9 @@ var presets = map[string]map[string]string{
 var statistics = []string{"BPS", "DURATION", "NUMBER_OF_FRAMES", "NUMBER_OF_BYTES", "_STATISTICS_WRITING_APP", "_STATISTICS_WRITING_DATE_UTC", "_STATISTICS_TAGS"}
 
 // Args is ffmpeg's command for the copy: the file through the loopback at
-// input, written to output in the container asked, its progress on stdout.
-func (r Recipe) Args(input, output, effort string) []string {
+// input, written to output in the container asked, its progress on stdout —
+// lean, in what little memory the server has left (`parallelism`).
+func (r Recipe) Args(input, output, effort string, lean bool) []string {
 	if !contains(Efforts, effort) {
 		effort = "balanced"
 	}
@@ -54,6 +55,10 @@ func (r Recipe) Args(input, output, effort string) []string {
 	}
 	args = append(args, "-map", "0:V:0", "-filter:v", strings.Join(filters, ","), "-c:v", encoders[v.Codec],
 		"-preset", presets[v.Codec][effort], "-crf", strconv.Itoa(v.CRF))
+	if v.Codec == "av1" && lean {
+		// The same file, made slower in less memory.
+		args = append(args, "-svtav1-params", "lp=1")
+	}
 	if v.Codec == "hevc" {
 		args = append(args, "-x265-params", "log-level=error")
 		if r.Encode.Container == "mp4" {

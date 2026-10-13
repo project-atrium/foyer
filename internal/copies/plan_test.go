@@ -206,11 +206,15 @@ func TestAnMP4HoldsTextSubtitlesAlone(t *testing.T) {
 	if want := []string{"tx3g mov_text", "tx3g mov_text"}; !slices.Equal(formats, want) {
 		t.Errorf("the subtitles %q", formats)
 	}
-	args := strings.Join(r.Args("http://127.0.0.1:1/g/x", "/tmp/out.part", "fast"), " ")
+	args := strings.Join(r.Args("http://127.0.0.1:1/g/x", "/tmp/out.part", "fast", true), " ")
 	for _, want := range []string{"-c:v libx265 -preset fast -crf 23", "-tag:v hvc1", "-f mp4 -movflags +faststart"} {
 		if !strings.Contains(args, want) {
 			t.Errorf("no %q in %s", want, args)
 		}
+	}
+	// x265's file changes with its threads: it is never made lean.
+	if strings.Contains(args, "svtav1") {
+		t.Errorf("x265 told SVT-AV1's parallelism: %s", args)
 	}
 }
 
@@ -221,7 +225,7 @@ func TestFFmpegIsToldEverythingThePlanSays(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	args := r.Args("http://127.0.0.1:1/g/x", "/tmp/out.part", "balanced")
+	args := r.Args("http://127.0.0.1:1/g/x", "/tmp/out.part", "balanced", false)
 	line := strings.Join(args, " ")
 	for _, want := range []string{
 		"-protocol_whitelist http,tcp", "-i http://127.0.0.1:1/g/x", "-map 0:V:0",
@@ -239,6 +243,13 @@ func TestFFmpegIsToldEverythingThePlanSays(t *testing.T) {
 	}
 	if args[len(args)-1] != "/tmp/out.part" {
 		t.Errorf("the output %q", args[len(args)-1])
+	}
+	if strings.Contains(line, "-svtav1-params") {
+		t.Errorf("SVT-AV1 held back with room to spare: %s", line)
+	}
+	// Short of memory, the same file at the encoder's least parallelism.
+	if lean := strings.Join(r.Args("http://127.0.0.1:1/g/x", "/tmp/out.part", "balanced", true), " "); !strings.Contains(lean, "-c:v libsvtav1 -preset 6 -crf 30 -svtav1-params lp=1") {
+		t.Errorf("made lean with %s", lean)
 	}
 }
 

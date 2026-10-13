@@ -157,6 +157,8 @@ type job struct {
 	failedAt time.Time
 	err      string
 	cancel   context.CancelFunc
+	// need is what the copy was thought to take as it started.
+	need int64
 }
 
 // Manager makes copies, a few at a time, in the order they were asked for,
@@ -344,7 +346,23 @@ func (m *Manager) make(ctx context.Context, j *job, settings Settings) error {
 	// A part of its own: a copy stopped and asked for again writes beside it.
 	part := filepath.Join(m.o.Root, fmt.Sprintf("%s-%d.part", j.Key, time.Now().UnixNano()))
 	defer os.Remove(part)
-	cmd := ffmpeg.Command(ctx, settings.Tool, j.Recipe.Args(input, part, settings.Effort)...)
+	// What the other copies being made were thought to take is set aside,
+	// counted twice where they have taken it already: a copy made lean that
+	// need not have been is only slower.
+	free := left()
+	m.mu.Lock()
+	for _, other := range m.jobs {
+		if other != j && other.state == Running && free >= 0 {
+			free = max(free-other.need, 0)
+		}
+	}
+	lean, need := parallelism(j.Recipe.Video, j.Source.Video, free)
+	j.need = need
+	m.mu.Unlock()
+	if lean {
+		m.o.Log("A copy is made in less memory, and slower: the server has little left", "file", j.File, "free", gb(free), "needs", gb(need))
+	}
+	cmd := ffmpeg.Command(ctx, settings.Tool, j.Recipe.Args(input, part, settings.Effort, lean)...)
 	// SVT-AV1 prints its whole configuration otherwise, and what went wrong
 	// would be lost behind it.
 	cmd.Env = append(cmd.Env, "SVT_LOG=1")
@@ -363,6 +381,10 @@ func (m *Manager) make(ctx context.Context, j *job, settings Settings) error {
 	if err := cmd.Wait(); err != nil {
 		if ctx.Err() != nil {
 			return ctx.Err()
+		}
+		if killed(err) {
+			// The kernel says nothing on ffmpeg's stderr when it stops it.
+			return errors.New(starved(need, free))
 		}
 		return errors.New(redact(strings.TrimSpace(said.String()), input, m.o.Grants.Loopback()))
 	}

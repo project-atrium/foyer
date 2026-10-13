@@ -317,6 +317,14 @@ Go tests sit beside what they test. Everything else is PocketBase's: `serve`,
   `OnBackupRestore`'s `Exclude`; never put them anywhere a backup reads.
   Raise `copies.RecipeVersion` when what ffmpeg is told changes what comes
   out: copies made before are made again.
+- **A copy is made in the memory the server has left.** SVT-AV1 takes
+  about 1 GB for a 1080p copy at its least parallelism and 0.5 GB more at
+  its own choice, and the kernel stops ffmpeg without a word when there is
+  not that much. What is left — `MemAvailable`, or less where Foyer's
+  cgroup allows less — decides `lp=1` (`copies.parallelism`): the same file
+  to the byte, slower, so it names no copy. A copy the system stopped says
+  it most likely ran short of memory, never "ffmpeg stopped". Only SVT-AV1
+  is held so: x265's and x264's files change with their threads.
 - **A copy keeps what is worth keeping, and nothing twice**: one sound per
   language and no commentary, text subtitles over pictures of the same
   kind, the chapters and a styled subtitle's fonts — and never mkvmerge's

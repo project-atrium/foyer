@@ -3,6 +3,7 @@
 package copies
 
 import (
+	"errors"
 	"os/exec"
 	"syscall"
 )
@@ -22,4 +23,16 @@ func lower(cmd *exec.Cmd) {
 	if cmd.Process != nil {
 		_ = syscall.Setpriority(syscall.PRIO_PROCESS, cmd.Process.Pid, 10)
 	}
+}
+
+// killed says whether something else stopped the process with SIGKILL —
+// above all the kernel, out of memory. A copy Foyer stops is told apart by
+// its context, first.
+func killed(err error) bool {
+	var exit *exec.ExitError
+	if !errors.As(err, &exit) {
+		return false
+	}
+	status, ok := exit.Sys().(syscall.WaitStatus)
+	return ok && status.Signaled() && status.Signal() == syscall.SIGKILL
 }

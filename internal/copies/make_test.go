@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -269,6 +270,26 @@ func TestACopyThatCannotBeMadeSaysSoAndWaitsToBeAskedAgain(t *testing.T) {
 	m.mu.Unlock()
 	if s := m.Ask(r); s.State != Queued {
 		t.Errorf("asked again later: %+v", s)
+	}
+}
+
+// A copy whose ffmpeg the system stopped — the kernel, out of memory, says
+// nothing on its stderr — says so, never "ffmpeg stopped".
+func TestACopyTheSystemStoppedSaysWhy(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("no SIGKILL here")
+	}
+	tool := filepath.Join(t.TempDir(), "ffmpeg")
+	if err := os.WriteFile(tool, []byte("#!/bin/sh\nkill -KILL $$\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	m, _ := manager(t, tool, shared(t, []byte("a film")), t.TempDir())
+	r := Request{Key: "00112233445566778899aabbccddeeff", File: "file4", Source: media.Version{Video: &media.Video{Width: 1920, Height: 1080}},
+		Recipe: Recipe{Encode: asLoge, Video: VideoPlan{Codec: "av1", Width: 1920, Height: 1080, BitDepth: 10, CRF: 30}}}
+	m.Ask(r)
+	failed := until(t, m, r, Failed)
+	if !strings.HasPrefix(failed.Err, "the system stopped ffmpeg, most likely for want of memory: a copy like this takes about ") {
+		t.Errorf("said %q", failed.Err)
 	}
 }
 

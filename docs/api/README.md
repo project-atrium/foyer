@@ -375,6 +375,12 @@ and their rules, and how they fail.
   least lately asked go first, and the disk always keeps 10 GB free. Nothing
   asked for within the hour is let go of: it may be coming down. A copy half
   made when Foyer stops is let go of, and made again when asked.
+- **Made in the memory left.** An AV1 copy takes about 0.6 GB at 720p,
+  1 GB at 1080p and 2.8 GB at 2160p at SVT-AV1's least parallelism, and
+  some 0.5 GB more, three or four times faster, at its own. Where what the
+  server has left — or its container's limit — would not hold the faster
+  way, the copy is made the slower: the same file to the byte. A copy the
+  system stopped says it most likely ran short of memory, and what it takes.
 - **Settings → Adapters → FFmpeg**: Make smaller copies for downloads (on),
   Effort for copies (SVT-AV1's preset 8, 6 or 4; x265's and x264's alike),
   Copies made at once, Keep copies for, Room for copies.
