@@ -82,6 +82,11 @@ internal/adapters/   what Foyer connects to: adapters by category, the connectio
   tmdb/              TMDB: Loge's matcher ported (Find), a film's and a series' details, seasons, episode groups, artwork
   webdav/            a WebDAV share — Zurg's above all: its folders, an entry's files, a file's bytes with ranges
   webdav/webdavtest/ a pretend share, answering as Zurg does where asked, for the tests
+  stalker/           a Stalker portal, reached as the one MAG box its MAC address is: Loge's iptv/stalker ported —
+                     one sign-in shared by every call, a refusal latched, a session ended elsewhere said, a 429 a
+                     pause; the gate, a channel first and a quarter second apart; every channel in one answer, the
+                     whole guide held small, each channel's read by its country; held to the app's fixtures
+  stalker/stalkertest/ a pretend portal, answering as the app's own fake does
 internal/titles/     Loge's titleKey and bareTitle, ported to the byte; compareItems' keys — JavaScript's lower case,
                      UTF-16 order — and its fold
 internal/parse/      release names: title, year, season and episode, numbers counted from the start, what the file is
