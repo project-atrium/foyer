@@ -24,6 +24,8 @@ export interface Server {
   devices(): Promise<readonly { readonly name: string; readonly platform: string; readonly appVersion: string; readonly users: readonly string[]; readonly paired: boolean }[]>;
   /** A WebDAV share set up on the Adapters page, and its connection's id. */
   share(address: string): Promise<string>;
+  /** A Stalker portal set up on the Adapters page, and its connection's id. */
+  portal(address: string, mac: string, values?: Readonly<Record<string, unknown>>): Promise<string>;
   /** One of its folders made a library, and the library's id. */
   addLibrary(connection: string, folder: string, name: string, kind: 'movies' | 'shows'): Promise<string>;
   /** Scan now, and wait until the library holds this many titles. */
@@ -135,6 +137,15 @@ export async function startServer(): Promise<Server> {
         body: JSON.stringify({ adapter: 'webdav', name: 'Zurg', enabled: true, values: { url: address } }),
       });
       if (!response.ok) throw new Error(`The share could not be set up (${response.status}): ${await response.text()}`);
+      return ((await response.json()) as { id: string }).id;
+    },
+    portal: async (address, mac, values = {}) => {
+      const response = await fetch(`${url}/api/foyer/admin/connections`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: await superuserToken() },
+        body: JSON.stringify({ adapter: 'stalker', name: 'Home portal', enabled: true, values: { portalUrl: address, mac, ...values } }),
+      });
+      if (!response.ok) throw new Error(`The portal could not be set up (${response.status}): ${await response.text()}`);
       return ((await response.json()) as { id: string }).id;
     },
     addLibrary: async (connection, folder, name, kind) => {

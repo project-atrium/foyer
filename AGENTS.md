@@ -134,6 +134,8 @@ migrations/          0001 users are profiles; 0002 the name, the rate limits, th
                      0014 each user's integrations, and what each state agreed with a tracker; 0015 a superuser's word on
                      single files of a series; 0016 each IPTV connection's lineup
 dev/fakezurg/        a pretend Zurg for running Foyer here, from Zurg's .zurgtorrent records; never in the image
+dev/fakeportal/      a pretend Stalker portal: a few channels, a guide around now, ffmpeg's test picture as MPEG-TS, as
+                     many streams at once as it allows — a new one past that ends the oldest; never in the image
 harness/             Node and vitest, test-only: the app's code that speaks Foyer against the real binary
 Dockerfile           two stages: a Go build, then Debian with Jellyfin's ffmpeg and the binary
 docker-compose.yml   the server, and pb_data in a volume

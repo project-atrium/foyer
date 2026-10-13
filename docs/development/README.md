@@ -44,6 +44,25 @@ go build -o foyer .               # one static binary
   - Foyer's files are served `no-cache`; the rest of `/_/` PocketBase lets a
     browser keep for two weeks outside `--dev`.
 
+## A pretend portal
+
+`dev/fakeportal` is a Stalker portal on this machine — never the
+household's own, which counts devices:
+
+```bash
+go run ./dev/fakeportal -addr 127.0.0.1:9988 -mac 00:1A:79:00:00:01 -streams 1
+```
+
+- Six channels in three groups, one of them German with a guide id, one
+  whose id holds a colon; a guide of half-hour programmes around now.
+- Each channel's stream is ffmpeg's test picture and a tone, tinted and
+  pitched per channel, as raw MPEG-TS — made as it is asked for.
+- Like a real subscription it plays `-streams` at once, and a new stream
+  past that ends the oldest — what Foyer's lines must never make it do;
+  `/debug/streams` says what is open and how often each was asked for.
+- Add a Stalker portal on the Adapters page at `http://127.0.0.1:9988/c/`
+  with that MAC address.
+
 ## A pretend Zurg
 
 `dev/fakezurg` serves Zurg's WebDAV on this machine, from a folder of
@@ -188,7 +207,11 @@ renewed and then refused once after a password change, the owner check —
 and `sources/foyer` on a user's lent session, over a library scanned from
 `dev/fakezurg` (built beside the server, fed records written for the test):
 every page in the app's own order, a film's bytes by range, its progress
-resumed, marked watched, and downloaded afresh.
+resumed, marked watched, and downloaded afresh — and `iptv/foyer` over
+`dev/fakeportal`, which plays one stream at a time: the lineup and guide
+through Foyer, one channel on two devices as one stream from the portal, a
+full line saying who holds it, a take-over, and the device that held it told
+who took it.
 
 ```bash
 cd harness && npm install && npm run typecheck && npm test

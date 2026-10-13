@@ -12,6 +12,7 @@ declare module 'vitest' {
   export interface ProvidedContext {
     readonly binary: string;
     readonly fakezurg: string;
+    readonly fakeportal: string;
     readonly appVersion: string;
   }
 }
@@ -27,5 +28,9 @@ export default function setup(project: TestProject) {
   const fakezurg = join(directory, 'fakezurg');
   execFileSync('go', ['build', '-o', fakezurg, './dev/fakezurg'], { cwd: repository, stdio: 'inherit' });
   project.provide('fakezurg', fakezurg);
+  // A pretend Stalker portal, for IPTV: never the household's own, which counts devices.
+  const fakeportal = join(directory, 'fakeportal');
+  execFileSync('go', ['build', '-o', fakeportal, './dev/fakeportal'], { cwd: repository, stdio: 'inherit' });
+  project.provide('fakeportal', fakeportal);
   return () => rmSync(directory, { recursive: true, force: true });
 }

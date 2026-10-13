@@ -15,12 +15,18 @@ a user's own lists, follows and ★ between their devices and to nobody else
 (`test/state.test.ts`); and
 `sources/foyer`, lent a signed-in user's session, browses a library scanned
 from a pretend Zurg in the app's own order, plays a film's bytes by range,
-reports, resumes, marks it watched and downloads it (`test/library.test.ts`).
+reports, resumes, marks it watched and downloads it (`test/library.test.ts`);
+and `iptv/foyer`, over a pretend portal that plays one stream at a time,
+reads the lineup and guide through Foyer, shares one channel on two devices
+as one stream, finds a line full, takes it over, and tells the device that
+held it who took it (`test/iptv.test.ts`).
 
 ## How it works
 
 - `test/support/build.ts` builds the binary once per run (`go build`), in a
-  temporary directory — and `dev/fakezurg` beside it.
+  temporary directory — and `dev/fakezurg` and `dev/fakeportal` beside it.
+- `test/support/portal.ts` starts fakeportal, which counts the streams it
+  plays: a test can see that Foyer never opened two where one was allowed.
 - `test/support/zurg.ts` starts fakezurg over `.zurgtorrent` records written
   for the test, every file the same known bytes — never the household's own
   records, which hold Real-Debrid's links.

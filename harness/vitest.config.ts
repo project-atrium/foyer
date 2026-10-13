@@ -15,6 +15,7 @@ export default defineConfig({
       '@loge/api': source('api/src/index.ts'),
       '@loge/sync-foyer': source('sync/foyer/src/index.ts'),
       '@loge/source-foyer': source('sources/foyer/src/index.ts'),
+      '@loge/iptv-foyer': source('iptv/foyer/src/index.ts'),
     },
   },
   test: {
