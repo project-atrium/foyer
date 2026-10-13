@@ -355,10 +355,15 @@ func (s *Service) relay(e *core.RequestEvent) error {
 		return nil
 	}
 	_ = rc.Flush()
-	for at := cast.join(joinLead); ; at++ {
+	for at, first := cast.join(joinLead), true; ; at++ {
 		chunk, err := cast.next(ctx, at)
 		if err != nil {
 			return nil
+		}
+		// A viewer joining a stream already running starts where an upstream
+		// read began, mid-packet as likely as not: from the first packet on.
+		if first {
+			chunk, first = packets(chunk), false
 		}
 		_ = rc.SetWriteDeadline(time.Now().Add(writeStall))
 		if _, err := w.Write(chunk); err != nil {
@@ -366,4 +371,16 @@ func (s *Service) relay(e *core.RequestEvent) error {
 		}
 		_ = rc.Flush()
 	}
+}
+
+// packets is an MPEG-TS chunk from its first packet on: where three sync
+// bytes stand a packet apart. A chunk too short to tell is left as it is.
+func packets(chunk []byte) []byte {
+	const size = 188
+	for i := 0; i+2*size < len(chunk) && i < size; i++ {
+		if chunk[i] == 0x47 && chunk[i+size] == 0x47 && chunk[i+2*size] == 0x47 {
+			return chunk[i:]
+		}
+	}
+	return chunk
 }
