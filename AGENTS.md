@@ -121,8 +121,8 @@ internal/catalogue/  the library as Loge reads it: keyset pages in compareItems'
                      episodes and extras, genres, what was begun — each with its user's watch status; what is served
 internal/identity/   Loge's watchIdentity and identityHash, ported
 internal/dashboard/  the dashboard's icon and pages — Library (a title corrected by searching TMDB), Live Activity (playings, and the copies being made
-                     and kept), Settings → Adapters and Household: a PocketBase UI extension, plain JavaScript,
-                     embedded
+                     and kept), Settings → Adapters (a share's libraries, a portal's channels and streams in use) and
+                     Household: a PocketBase UI extension, plain JavaScript, embedded
 internal/version/    the version, always the app's: its `npm run release` moves both; the protocol Loge's adapters speak
 internal/fixtures/   reads what both sides must answer alike from the app beside Foyer; tests only, skipping without it
 migrations/          0001 users are profiles; 0002 the name, the rate limits, the first superuser; 0003 adapters;

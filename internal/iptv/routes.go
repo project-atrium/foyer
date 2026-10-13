@@ -384,3 +384,71 @@ func packets(chunk []byte) []byte {
 	}
 	return chunk
 }
+
+// Status is a portal's lineup as the dashboard shows it: how much of it
+// Foyer keeps, when it was read, why the last read failed, and the lines in
+// use.
+type Status struct {
+	ReadAt   *time.Time `json:"readAt,omitempty"`
+	TriedAt  *time.Time `json:"triedAt,omitempty"`
+	Error    string     `json:"error,omitempty"`
+	Groups   int        `json:"groups"`
+	Channels int        `json:"channels"`
+	// Streams is how many the subscription allows at once.
+	Streams int      `json:"streams"`
+	Lines   []Stream `json:"lines"`
+}
+
+// AdminRoutes mount what the dashboard shows of each portal, and its read
+// now.
+func (s *Service) AdminRoutes(admin *router.RouterGroup[*core.RequestEvent]) {
+	admin.GET("/iptv/{conn}", s.adminStatus)
+	admin.POST("/iptv/{conn}/read", s.adminRead)
+}
+
+func (s *Service) status(conn string) (Status, error) {
+	c, err := s.registry.Connection(conn)
+	if err != nil || c.Adapter != Key {
+		return Status{}, adapters.ErrNoConnection
+	}
+	out := Status{Streams: max(1, c.Int("streams")), Lines: s.Watching(conn)}
+	l, err := s.Lineup(conn)
+	if err != nil {
+		return Status{}, err
+	}
+	if l != nil {
+		if !l.ReadAt.IsZero() {
+			at := l.ReadAt.UTC()
+			out.ReadAt = &at
+		}
+		if !l.TriedAt.IsZero() {
+			at := l.TriedAt.UTC()
+			out.TriedAt = &at
+		}
+		out.Error, out.Groups, out.Channels = l.Error, len(l.Groups), len(l.Channels)
+	}
+	return out, nil
+}
+
+func (s *Service) adminStatus(e *core.RequestEvent) error {
+	out, err := s.status(e.Request.PathValue("conn"))
+	if errors.Is(err, adapters.ErrNoConnection) {
+		return e.NotFoundError("There is no such portal.", nil)
+	}
+	if err != nil {
+		return e.InternalServerError("", err)
+	}
+	return e.JSON(http.StatusOK, out)
+}
+
+// adminRead reads a portal's lineup now, as a superuser asks. A portal's
+// refusal is said in the status, never as a 401, which would sign the
+// dashboard out.
+func (s *Service) adminRead(e *core.RequestEvent) error {
+	conn := e.Request.PathValue("conn")
+	if _, err := s.Connection(conn); err != nil {
+		return e.BadRequestError("Only a portal that is switched on is read.", nil)
+	}
+	_ = s.Read(e.Request.Context(), conn)
+	return s.adminStatus(e)
+}

@@ -245,6 +245,7 @@ func Bind(app core.App, cfg config.Config) *Server {
 		s.Library.Routes(admin)
 		s.Household.Routes(se.Router, admin)
 		s.Trakt.Routes(se.Router, admin)
+		s.IPTV.AdminRoutes(admin)
 		s.Library.HookRoutes(se.Router)
 		// Read by PocketBase's own handler for UI extensions, which runs last.
 		se.Router.BindFunc(dashboard.Fresh)

@@ -386,3 +386,30 @@ func TestAPortalThatRefusesFoyersBoxIsNeverA401(t *testing.T) {
 		t.Errorf("%d handshakes", v.portal.Handshakes())
 	}
 }
+
+func TestTheDashboardShowsAPortalsChannelsAndItsStreamsAndReadsThemNow(t *testing.T) {
+	v := startTV(t, map[string]any{"streams": 2}, stalkertest.Options{})
+	alex := v.makeUser("alex", nil)
+	before := v.call(http.MethodGet, "/api/foyer/admin/iptv/"+v.conn, v.admin, nil)
+	if before.status != http.StatusOK || before.body["readAt"] != nil || before.body["channels"] != float64(0) || before.body["streams"] != float64(2) {
+		t.Fatalf("before: %d %v", before.status, before.body)
+	}
+	read := v.call(http.MethodPost, "/api/foyer/admin/iptv/"+v.conn+"/read", v.admin, nil)
+	if read.status != http.StatusOK || read.body["channels"] != float64(3) || read.body["groups"] != float64(2) || read.body["readAt"] == nil {
+		t.Fatalf("read: %d %v", read.status, read.body)
+	}
+	p := v.watch(t, v.play(deviceHeader(t, "alex-phone-0001", "Alex’s phone"), alex, "ch:102", nil))
+	lines := v.call(http.MethodGet, "/api/foyer/admin/iptv/"+v.conn, v.admin, nil).body["lines"].([]any)
+	if len(lines) != 1 || lines[0].(map[string]any)["name"] != "Stadium One" {
+		t.Fatalf("lines %v", lines)
+	}
+	p.leave()
+}
+
+func TestADashboardReadOfARefusingPortalSaysWhyWithoutSigningItOut(t *testing.T) {
+	v := startTV(t, nil, stalkertest.Options{Profile: map[string]any{"status": 1}})
+	read := v.call(http.MethodPost, "/api/foyer/admin/iptv/"+v.conn+"/read", v.admin, nil)
+	if read.status != http.StatusOK || !strings.Contains(fmt.Sprint(read.body["error"]), "MAC") {
+		t.Fatalf("read: %d %v", read.status, read.body)
+	}
+}

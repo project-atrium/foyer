@@ -1,7 +1,7 @@
 // The Adapters page, under Settings: what Foyer connects to, by category —
 // each adapter with the connections the household set up, every form drawn
-// from the fields the adapter describes — and each WebDAV share's folders
-// made into libraries.
+// from the fields the adapter describes — each WebDAV share's folders made
+// into libraries, and each portal's channels and the streams in use.
 import { failed, send, settingsSidebar, when } from './common.js';
 
 const masked = '******';
@@ -359,6 +359,97 @@ function connectionPanel(type, connection, reload, open, discard) {
       ),
     ),
     key == 'webdav' && connection ? libraries(connection, () => form.init) : null,
+    key == 'stalker' && connection ? lineup(connection, () => form.init) : null,
+  );
+}
+
+// lineup is a portal's channels as Foyer keeps them — how many, when they
+// were read, why the last read failed — the lines in use, and a read now.
+function lineup(connection, saved) {
+  const data = store({ loading: false, reading: false, status: null });
+
+  async function load() {
+    data.loading = true;
+    try {
+      data.status = await send(`/api/foyer/admin/iptv/${connection.id}`);
+    } catch (err) {
+      failed(err);
+    }
+    data.loading = false;
+  }
+
+  async function readNow() {
+    data.reading = true;
+    try {
+      data.status = await send(`/api/foyer/admin/iptv/${connection.id}/read`, { method: 'POST' });
+      if (!data.status.error) {
+        app.toasts.success(`${data.status.channels} channels read.`);
+      }
+    } catch (err) {
+      failed(err);
+    }
+    data.reading = false;
+  }
+
+  let watcher;
+
+  return t.div(
+    {
+      className: 'foyer-section m-t-base',
+      onmount: () => {
+        load();
+        // A watcher runs once as it is made; only a later save reads again.
+        watcher = watch(saved, (now, before) => {
+          if (before !== undefined && now !== before) {
+            load();
+          }
+        });
+      },
+      onunmount: () => watcher?.unwatch(),
+    },
+    t.header(
+      null,
+      t.h5(null, 'Channels'),
+      app.components.refreshButton({ onclick: load }),
+      t.div({ className: 'flex-fill' }),
+      t.button(
+        { type: 'button', className: () => `btn sm secondary ${data.reading ? 'loading' : ''}`, disabled: () => data.reading || !connection.enabled, onclick: readNow },
+        t.i({ className: 'ri-refresh-line', ariaHidden: true }),
+        t.span({ className: 'txt' }, 'Read the channels now'),
+      ),
+    ),
+    t.p(
+      { className: 'txt-hint' },
+      "Foyer reads the portal's channels once in a while and keeps them, and every device of the household reads them from here: a portal counts requests.",
+    ),
+    () => {
+      const s = data.status;
+      if (!s) {
+        return data.loading ? t.div({ className: 'block txt-center' }, t.span({ className: 'loader' })) : null;
+      }
+      return t.div(
+        null,
+        t.p(null, s.readAt ? `${s.channels} channels in ${s.groups} groups, read ${when(s.readAt)}.` : 'Not read yet: the first device that opens Live reads them.'),
+        s.error ? t.div({ className: 'alert danger' }, s.error, s.triedAt ? t.span({ className: 'txt-hint' }, ` — ${when(s.triedAt)}`) : null) : null,
+        t.h6({ className: 'm-t-sm' }, `Streams in use: ${s.lines.length} of ${s.streams}`),
+        s.lines.length
+          ? t.table(
+              { className: 'foyer-table' },
+              t.thead(null, t.tr(null, t.th(null, 'Channel'), t.th(null, 'Watching'))),
+              t.tbody(
+                null,
+                s.lines.map((line) =>
+                  t.tr(
+                    null,
+                    t.td(null, line.name, line.forced ? t.span({ className: 'label sm m-l-5' }, 'one more') : null),
+                    t.td({ className: 'txt-sm' }, line.viewers.map((v) => (v.device ? `${v.user} on ${v.device}` : v.user)).join(', ')),
+                  ),
+                ),
+              ),
+            )
+          : t.p({ className: 'txt-hint' }, 'None.'),
+      );
+    },
   );
 }
 
