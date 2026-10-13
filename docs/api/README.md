@@ -36,7 +36,7 @@ and their rules, and how they fail.
 | `GET /api/foyer/catalogue/{collection}/{id}/seasons` | users | `{ seasons: [{ key, number?, name, airDate?, episodeCount, posterPath?, unwatched? }] }`: what the series holds, specials as season 0, named as TMDB names them, and its extras last as `extras` |
 | `GET /api/foyer/catalogue/{collection}/{id}/seasons/{season}` | users | `{ episodes }`: a season's in order, each with this user's watch status — or, for `extras`, the extras played as episodes: `id` `extra:<file>`, by the series' record and the file |
 | `GET`, `HEAD /api/foyer/stream/{file}?u&s&exp&sig` | whoever holds the address | the file's bytes, a `Range` passed on: `206` with `Content-Range`; `403` when the signature is wrong or six hours old, or its playing (`s`) was stopped |
-| `POST /api/foyer/videos/play` | users | `{ id, startMs? }` → `{ session, expiresAt, live, durationMs?, sources: [{ url, protocol: hls \| progressive, container?, videoCodec?, audioCodecs?, height? }], subtitles: [{ url, language?, label, auto? }], chapters }`: a video of YouTube's, played through Foyer — a playing, and its sources best first: the site's HLS master, every rendition, dub and caption of it, then the file the site muxed where it still has one; the uploader's captions and the one the site heard in the video's own language. Every address is Foyer's own. `409 { message, reason }` where the site will not play it — `unavailable`, `age`, `members`, `upcoming`, `blocked`, `failed`. See YouTube |
+| `POST /api/foyer/videos/play` | users | `{ id, startMs?, profile?: { videoCodecs, maxHeight? } }` → `{ session, expiresAt, live, durationMs?, sources: [{ url, protocol: hls \| progressive, container?, videoCodec?, audioCodecs?, height? }], subtitles: [{ url, language?, label, auto? }], chapters }`: a video of YouTube's, played through Foyer — a playing, and its sources best first: the site's HLS master, every rendition, dub and caption of it, then the file the site muxed where it still has one; the uploader's captions and the one the site heard in the video's own language. Every address is Foyer's own. `409 { message, reason }` where the site will not play it — `unavailable`, `age`, `members`, `upcoming`, `blocked`, `failed`. See YouTube |
 | `GET /api/foyer/videos/search` | users | `?q&scope=all \| video \| channel \| playlist&cursor` → `{ items: [{ kind: video, video } \| { kind: channel, channel } \| { kind: playlist, playlist }], next? }`: the site's own search, in its order — never a short, which has its channel's own tab; `next` is the site's token for the page after, asked again as `cursor` |
 | `GET /api/foyer/videos/v/{id}` | users | `{ video, related }`: a video's page — its description, its channel with its face and followers, its views and when it went up, its length where yt-dlp said it — and what the site suggests after it |
 | `GET /api/foyer/videos/channels/{id}` | users | `{ channel: { id, name, handle?, avatar?, banner?, followers?, videoCount?, description? }, tabs }`: a channel, and which of its tabs — videos, shorts, live, playlists — it has |
@@ -253,6 +253,17 @@ and their rules, and how they fail.
   ticket. Nothing to keep per playing, a restart forgets nothing, a sealed
   link opens only to the site's hosts, and a device never learns the house's
   address, which the site writes into each link.
+- **A player is handed only what it plays, and what it reads first is
+  waiting.** ffmpeg's HLS reader — mpv's — opens every playlist a master
+  names and reads the first segment of each before it starts: the site
+  names a dozen pictures and more, so a phone waited on every one, through
+  Foyer and back. Asked with the player's profile, the master holds only
+  pictures it decodes, no taller than it shows, at each height the codec it
+  would rather, and the sounds and captions they name; and while the player
+  reads it, Foyer fetches every playlist it names, and each one's map and
+  first segment, six at a time, kept a minute — a video that is over only,
+  since a live one's moves on. Measured: mpv's open from a second away,
+  seven seconds before.
 - **Each address ends in what it is** — `.m3u8`, `.ts`, `.m4s`, `.mp4`,
   `.vtt`: ffmpeg's HLS reader, mpv's too, refuses a segment whose address
   names no media extension, or one that is not what it finds inside.

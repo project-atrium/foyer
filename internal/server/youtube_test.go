@@ -10,8 +10,10 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -483,5 +485,103 @@ func TestAVideoIsKeptAsTheSitesOwnRenditions(t *testing.T) {
 	// A video the site will not play is kept no more than played.
 	if refused := h.callFrom(device, http.MethodPost, "/api/foyer/videos/download/options", alex.token, map[string]any{"id": "dQw4w9WgXcR"}); refused.status != http.StatusConflict || refused.body["reason"] != "unavailable" {
 		t.Errorf("refused: %d %v", refused.status, refused.body)
+	}
+}
+
+// A player that says what it plays is handed a master of only that — no 4K
+// to a phone that decodes 1080p, one codec at each height — and what it
+// reads before it starts is fetched ahead while it reads the master: each
+// playlist, its map and its first segment, then handed over without asking
+// the site again.
+func TestAPlayersMasterHoldsWhatItPlaysAndWhatItAsksFirstIsFetchedAhead(t *testing.T) {
+	h := start(t, options{})
+	admin := h.superuser()
+	var mu sync.Mutex
+	asked := map[string]int{}
+	site := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		asked[r.URL.Path]++
+		mu.Unlock()
+		switch {
+		case strings.Contains(r.URL.Path, "/hls_variant/"):
+			_, _ = w.Write([]byte("#EXTM3U\n" +
+				`#EXT-X-MEDIA:URI="https://manifest.googlevideo.com/api/manifest/hls_playlist/itag/234/index.m3u8",TYPE=AUDIO,GROUP-ID="234",NAME="Default",DEFAULT=YES` + "\n" +
+				`#EXT-X-STREAM-INF:BANDWIDTH=2566638,CODECS="avc1.4D401F,mp4a.40.2",RESOLUTION=1280x720,AUDIO="234"` + "\n" +
+				"https://manifest.googlevideo.com/api/manifest/hls_playlist/itag/136/index.m3u8\n" +
+				`#EXT-X-STREAM-INF:BANDWIDTH=1931139,CODECS="vp09.00.31.08,mp4a.40.2",RESOLUTION=1280x720,AUDIO="234"` + "\n" +
+				"https://manifest.googlevideo.com/api/manifest/hls_playlist/itag/247/index.m3u8\n" +
+				`#EXT-X-STREAM-INF:BANDWIDTH=12000000,CODECS="vp09.00.51.08,mp4a.40.2",RESOLUTION=3840x2160,AUDIO="234"` + "\n" +
+				"https://manifest.googlevideo.com/api/manifest/hls_playlist/itag/313/index.m3u8\n"))
+		case strings.HasSuffix(r.URL.Path, "/index.m3u8"):
+			_, _ = w.Write([]byte("#EXTM3U\n#EXT-X-TARGETDURATION:6\n#EXT-X-PLAYLIST-TYPE:VOD\n" + `#EXT-X-MAP:URI="init.mp4"` + "\n" +
+				"#EXTINF:5.0,\nsq/0/seg.m4s\n#EXTINF:5.0,\nsq/1/seg.m4s\n#EXT-X-ENDLIST\n"))
+		default:
+			_, _ = w.Write([]byte("bytes of " + r.URL.Path))
+		}
+	}))
+	t.Cleanup(site.Close)
+	tool := fakeYtDlp(t, time.Now().Add(5*time.Hour))
+	if got := h.call(http.MethodPut, "/api/foyer/admin/adapters/youtube", admin, map[string]any{"enabled": true, "values": map[string]any{"ytdlp": tool}}); got.status != http.StatusOK {
+		t.Fatalf("youtube: %d %v", got.status, got.body)
+	}
+	h.server.YouTube.Relay.Client.Transport = &http.Transport{
+		DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+			return (&net.Dialer{}).DialContext(ctx, "tcp", site.Listener.Addr().String())
+		},
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+	alex := h.makeUser("alex", map[string]any{"name": "Alex"})
+	got := h.call(http.MethodPost, "/api/foyer/videos/play", alex.token, map[string]any{"id": "x3TJFoQWCHA", "profile": map[string]any{"videoCodecs": []string{"h264", "vp9", "av1"}, "maxHeight": 1080}})
+	if got.status != http.StatusOK {
+		t.Fatalf("play: %d %v", got.status, got.body)
+	}
+	_, _, master := h.fetch(got.body["sources"].([]any)[0].(map[string]any)["url"].(string))
+	if bytes.Contains(master, []byte("3840x2160")) || bytes.Contains(master, []byte("vp09")) || !bytes.Contains(master, []byte("avc1.4D401F")) {
+		t.Fatalf("the master:\n%s", master)
+	}
+	count := func(path string) int {
+		mu.Lock()
+		defer mu.Unlock()
+		return asked[path]
+	}
+	waitFor(t, "the first segments fetched ahead", func() bool {
+		return count("/api/manifest/hls_playlist/itag/136/sq/0/seg.m4s") == 1 && count("/api/manifest/hls_playlist/itag/234/sq/0/seg.m4s") == 1
+	})
+	if count("/api/manifest/hls_playlist/itag/313/index.m3u8") != 0 || count("/api/manifest/hls_playlist/itag/247/index.m3u8") != 0 {
+		t.Errorf("fetched what the player was not handed: %v", asked)
+	}
+	// What the player asks for in turn is here: the site is not asked again.
+	var playlists []string
+	for _, line := range strings.Split(string(master), "\n") {
+		if strings.HasPrefix(line, youtube.Prefix) {
+			playlists = append(playlists, line)
+		}
+		if m := regexp.MustCompile(`URI="([^"]+)"`).FindStringSubmatch(line); m != nil {
+			playlists = append(playlists, m[1])
+		}
+	}
+	for _, playlist := range playlists {
+		_, _, media := h.fetch(playlist)
+		var first []string
+		for _, line := range strings.Split(string(media), "\n") {
+			if m := regexp.MustCompile(`URI="([^"]+)"`).FindStringSubmatch(line); m != nil {
+				first = append(first, m[1])
+			} else if strings.HasPrefix(line, youtube.Prefix) {
+				first = append(first, line)
+				break
+			}
+		}
+		for _, address := range first {
+			if status, _, body := h.fetch(address); status != http.StatusOK || !strings.HasPrefix(string(body), "bytes of ") {
+				t.Errorf("%d %q", status, body)
+			}
+		}
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	for path, n := range asked {
+		if n != 1 {
+			t.Errorf("%s asked %d times", path, n)
+		}
 	}
 }

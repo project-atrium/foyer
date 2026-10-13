@@ -39,13 +39,15 @@ type Relay struct {
 	// Client fetches from the site: over IPv4, as yt-dlp asked, since the
 	// site's links are bound to the address that asked for them.
 	Client *http.Client
+	// warm holds what a player asks for first, fetched while it reads the master.
+	warm *warm
 }
 
 // NewRelay relays under keys drawn by derive and sign, each address opened
 // under its playing.
 func NewRelay(sign func(string, []byte) ([]byte, error), derive func(string) ([]byte, error), playings stream.Playings) *Relay {
 	dialer := &net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second}
-	return &Relay{sign: sign, derive: derive, playings: playings, Client: &http.Client{
+	r := &Relay{sign: sign, derive: derive, playings: playings, Client: &http.Client{
 		Transport: &http.Transport{
 			Proxy: nil,
 			DialContext: func(ctx context.Context, _, addr string) (net.Conn, error) {
@@ -64,6 +66,34 @@ func NewRelay(sign func(string, []byte) ([]byte, error), derive func(string) ([]
 			return nil
 		},
 	}}
+	r.warm = newWarm(r.Client)
+	return r
+}
+
+// playlistOf is a playlist of the site's: fetched ahead where it was, else
+// asked for now — and whether it had been fetched ahead.
+func (r *Relay) playlistOf(ctx context.Context, link *url.URL) ([]byte, bool, error) {
+	if body, _, ok := r.warm.take(ctx, link.String()); ok {
+		return body, true, nil
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, link.String(), nil)
+	if err != nil {
+		return nil, false, err
+	}
+	req.Header.Set("User-Agent", agent)
+	resp, err := r.Client.Do(req)
+	if err != nil {
+		return nil, false, errors.New("The site did not answer.")
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, false, errors.New("The site refused the playlist (" + strconv.Itoa(resp.StatusCode) + ").")
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 32<<20))
+	if err != nil {
+		return nil, false, errors.New("The site broke off.")
+	}
+	return body, false, nil
 }
 
 // ticket is what a relayed address carries in its path: the video, the
@@ -73,6 +103,7 @@ type ticket struct {
 	User    string `json:"u"`
 	Session string `json:"s"`
 	Expires int64  `json:"e"`
+	Fit     fit    `json:"f,omitzero"`
 }
 
 func (r *Relay) issue(t ticket) (string, error) {
@@ -188,34 +219,26 @@ func (r *Relay) playlist(captions bool) func(e *core.RequestEvent) error {
 }
 
 func (r *Relay) rewritten(e *core.RequestEvent, captions bool) error {
-	ctx, done, link, base, _, err := r.opened(e)
+	ctx, done, link, base, t, err := r.opened(e)
 	if err != nil {
 		return err
 	}
 	defer done()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, link.String(), nil)
-	if err != nil {
-		return e.InternalServerError("", err)
-	}
-	req.Header.Set("User-Agent", agent)
-	resp, err := r.Client.Do(req)
+	body, ok, err := r.playlistOf(ctx, link)
 	if err != nil {
 		if ctx.Err() != nil {
 			return nil
 		}
-		return e.Error(http.StatusBadGateway, "The site did not answer.", nil)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return e.Error(http.StatusBadGateway, "The site refused the playlist ("+strconv.Itoa(resp.StatusCode)+").", nil)
-	}
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 32<<20))
-	if err != nil {
-		return e.Error(http.StatusBadGateway, "The site broke off.", nil)
+		return e.Error(http.StatusBadGateway, err.Error(), nil)
 	}
 	s, err := r.sealer()
 	if err != nil {
 		return e.InternalServerError("", err)
+	}
+	body = fitted(body, t.Fit)
+	if !ok && strings.Contains(string(body), "#EXT-X-STREAM-INF") {
+		// What the player asks for next, fetched while it reads this.
+		r.warm.ahead(body, link)
 	}
 	out, err := rewrite(body, link, base, s, captions)
 	if err != nil {
@@ -304,6 +327,20 @@ func (r *Relay) bytes(e *core.RequestEvent) error {
 	defer done()
 	w := stream.Counted(e.Response, func(n int) { r.playings.Sent(t.Session, n) })
 	rc := stream.Lift(w)
+	// A segment fetched ahead, asked for whole.
+	if rng := e.Request.Header.Get("Range"); e.Request.Method == http.MethodGet && (rng == "" || rng == "bytes=0-") {
+		if body, ctype, ok := r.warm.take(ctx, link.String()); ok {
+			h := w.Header()
+			if ctype != "" {
+				h.Set("Content-Type", ctype)
+			}
+			h.Set("Content-Length", strconv.Itoa(len(body)))
+			h.Set("Cache-Control", "private")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write(body)
+			return nil
+		}
+	}
 	req, err := http.NewRequestWithContext(ctx, e.Request.Method, link.String(), nil)
 	if err != nil {
 		return e.InternalServerError("", err)

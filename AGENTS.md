@@ -292,6 +292,14 @@ Go tests sit beside what they test. Everything else is PocketBase's: `serve`,
   of its own — two at once, never behind a film being made anew — and its
   key names the video and its two formats: raise `fetchVersion` when what
   one holds changes.
+- **A player's master holds what it plays, and its first asks are fetched
+  ahead.** mpv opens every playlist a master names and the first segment of
+  each before it starts; the site's masters name a dozen pictures and more.
+  Asked with the player's codecs and height (the ticket's `fit`), the master
+  is cut to them, one codec at each height (`fitted`), and its playlists,
+  maps and first segments are fetched while it is read (`warm`) — for a
+  video that is over, never a live one, whose playlists move on. Never
+  leave a master empty: one with nothing that fits goes as it is.
 - **A master's sounds stay in the site's order.** A player that reads a
   master's renditions as one list chooses a sound by rules of its own: VLC 3
   plays the last group listed — the site lists its richest, AAC at 128 kb/s,

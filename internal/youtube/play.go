@@ -114,6 +114,11 @@ func (y *YouTube) play(e *core.RequestEvent) error {
 	var body struct {
 		ID      string `json:"id"`
 		StartMs int64  `json:"startMs"`
+		// What the player plays, where it says: its master then holds only that.
+		Profile *struct {
+			VideoCodecs []string `json:"videoCodecs"`
+			MaxHeight   int      `json:"maxHeight"`
+		} `json:"profile"`
 	}
 	if err := e.BindBody(&body); err != nil {
 		return e.BadRequestError("The request could not be read.", err)
@@ -138,7 +143,11 @@ func (y *YouTube) play(e *core.RequestEvent) error {
 	}
 	expires = expires.UTC().Truncate(time.Second)
 	session := sessions.NewID()
-	base, err := y.Relay.issue(ticket{ID: info.ID, User: e.Auth.Id, Session: session, Expires: expires.Unix()})
+	t := ticket{ID: info.ID, User: e.Auth.Id, Session: session, Expires: expires.Unix()}
+	if body.Profile != nil {
+		t.Fit = fit{Height: max(0, body.Profile.MaxHeight), Codecs: body.Profile.VideoCodecs}
+	}
+	base, err := y.Relay.issue(t)
 	if err != nil {
 		return e.InternalServerError("", err)
 	}
