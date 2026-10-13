@@ -154,6 +154,8 @@ func TestAPortalsLineupComesThroughFoyerWithoutItsCommands(t *testing.T) {
 	if !slices.Equal(keys, []string{"ch:101", "ch:102", "ch:103"}) || len(got.body["groups"].([]any)) != 2 {
 		t.Fatalf("lineup %v", got.body)
 	}
+	// As the app reads it, key for key.
+	fits(t, "lineup", got.body, fixtureAnswer(t, "routes/iptv-lineup.json"))
 	first := got.body["channels"].([]any)[0].(map[string]any)
 	if first["name"] != "Morning Wire" || first["number"] != float64(1) || first["catchupDays"] != float64(7) || !strings.HasSuffix(first["logo"].(string), "/stalker_portal/misc/logos/320/101.png") {
 		t.Errorf("first %v", first)
@@ -198,6 +200,7 @@ func TestTheGuideComesThroughFoyerEachChannelReadByItsCountry(t *testing.T) {
 	if want := []string{"ch:12 2026-10-04T15:25:00Z", "ch:534 2026-10-04T18:00:00Z", "ch:24 2026-10-04T15:00:00Z"}; !slices.Equal(starts, want) {
 		t.Errorf("guide %v", starts)
 	}
+	fits(t, "guide", got.body, fixtureAnswer(t, "routes/iptv-guide.json"))
 	if got := v.call(http.MethodPost, v.path("/guide"), alex.token, map[string]any{"from": "2026-10-04T00:00:00Z", "to": "2026-10-09T00:00:00Z", "channels": []string{"ch:12"}}); got.status != http.StatusBadRequest {
 		t.Errorf("five days of guide: %d", got.status)
 	}
@@ -209,6 +212,7 @@ func TestOneChannelOnTwoDevicesIsOneStream(t *testing.T) {
 	phone, telly := deviceHeader(t, "alex-phone-0001", "Alex’s phone"), deviceHeader(t, "living-room-tv-0001", "Living room")
 	first := v.play(phone, alex, "ch:101", nil)
 	second := v.play(telly, kids, "ch:101", nil)
+	fits(t, "play", first.body, fixtureAnswer(t, "routes/iptv-play.json"))
 	a, b := v.watch(t, first), v.watch(t, second)
 	if first.body["line"] != second.body["line"] || v.streams.askedFor("101") != 1 || v.streams.openNow("101") != 1 {
 		t.Fatalf("lines %v %v, asked %d", first.body["line"], second.body["line"], v.streams.askedFor("101"))
@@ -272,6 +276,7 @@ func TestAFullSubscriptionSaysWhoWatchesAndALineIsTakenOver(t *testing.T) {
 	if full.status != http.StatusConflict || full.body["reason"] != "line-full" || full.body["canForce"] != false {
 		t.Fatalf("full: %d %v", full.status, full.body)
 	}
+	fits(t, "line full", full.body, fixtureAnswer(t, "routes/iptv-line-full.json"))
 	streams := full.body["streams"].([]any)
 	stream := streams[0].(map[string]any)
 	viewers := stream["viewers"].([]any)
@@ -290,6 +295,7 @@ func TestAFullSubscriptionSaysWhoWatchesAndALineIsTakenOver(t *testing.T) {
 	if again.status != http.StatusConflict || again.body["reason"] != "taken-over" || by["user"] != "kids" || by["device"] != "Living room" {
 		t.Fatalf("taken over: %d %v", again.status, again.body)
 	}
+	fits(t, "taken over", again.body, fixtureAnswer(t, "routes/iptv-taken-over.json"))
 	if after := v.play(phone, alex, "ch:101", nil); after.status != http.StatusConflict || after.body["reason"] != "line-full" {
 		t.Fatalf("after: %d %v", after.status, after.body)
 	}
