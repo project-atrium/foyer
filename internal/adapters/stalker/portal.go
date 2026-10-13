@@ -17,9 +17,10 @@ import (
 	"time"
 )
 
-// A MAG box, as portals expect to see one. Some refuse anything else.
+// A MAG box, as portals expect to see one. Some refuse anything else, and a
+// portal's streams are asked for as the same box.
 const (
-	userAgent  = "Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3 (KHTML, like Gecko) MAG200 stbapp ver: 2 rev: 250 Safari/533.3"
+	UserAgent  = "Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3 (KHTML, like Gecko) MAG200 stbapp ver: 2 rev: 250 Safari/533.3"
 	xUserAgent = "Model: MAG250; Link: WiFi"
 	profileVer = "ImageDescription: 0.2.18-r23-250; ImageDate: Wed Aug 29 10:49:53 EEST 2018; PORTAL version: 5.6.2; API Version: JS API version: 343; STB API version: 146; Player Engine version: 0x58c"
 )
@@ -414,7 +415,7 @@ func (p *Portal) send(ctx context.Context, endpoint string, params Params, token
 		if err != nil {
 			return nil, err
 		}
-		req.Header.Set("User-Agent", userAgent)
+		req.Header.Set("User-Agent", UserAgent)
 		req.Header.Set("X-User-Agent", xUserAgent)
 		req.Header.Set("Referer", rootOf(endpoint)+"/c/")
 		req.Header.Set("Cookie", "mac="+mac+"; stb_lang=en; timezone=UTC")

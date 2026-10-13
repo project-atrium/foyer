@@ -324,6 +324,26 @@ func (r *Registry) Heard(req *http.Request, session, user, kind string, position
 	r.keep(ended, false)
 }
 
+// Left is a playing its player let go of without a word — a live channel
+// whose device moved on to another: it ends once no stream of it is open,
+// as a stop would.
+func (r *Registry) Left(id string) {
+	r.mu.Lock()
+	s, ok := r.live[id]
+	if !ok {
+		r.mu.Unlock()
+		return
+	}
+	var ended *Session
+	if len(s.running) == 0 {
+		ended = r.endLocked(s, false)
+	} else {
+		s.stopping = true
+	}
+	r.mu.Unlock()
+	r.keep(ended, false)
+}
+
 // Stop is a superuser's: the playing ends, its streams end with it, and its
 // addresses are refused until they would have expired. False for a playing
 // that is not on.

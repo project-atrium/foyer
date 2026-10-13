@@ -63,13 +63,16 @@ func TestAPlannedAdapterIsListedAndCannotBeSetUp(t *testing.T) {
 	h := start(t, options{})
 	admin := h.superuser()
 	got := h.call(http.MethodGet, "/api/foyer/admin/adapters", admin, nil)
-	for key, category := range map[string]string{"jellyfin": "sources", "stalker": "iptv", "simkl": "tracking", "yattee": "sources"} {
+	for key, category := range map[string]string{"jellyfin": "sources", "xtream": "iptv", "simkl": "tracking", "yattee": "sources"} {
 		view := typeView(t, got.list, key)
 		if view["planned"] != true || view["category"] != category || len(view["fields"].([]any)) == 0 {
 			t.Errorf("%s: %v", key, view)
 		}
 	}
-	// A portal's MAC address is a secret shown as typed.
+	// A portal — built now — keeps its MAC address a secret shown as typed.
+	if stalker := typeView(t, got.list, "stalker"); stalker["planned"] != false || stalker["category"] != "iptv" {
+		t.Errorf("stalker: %v", stalker)
+	}
 	for _, raw := range typeView(t, got.list, "stalker")["fields"].([]any) {
 		if f := raw.(map[string]any); f["key"] == "mac" && (f["type"] != "password" || f["visible"] != true) {
 			t.Errorf("mac %v", f)

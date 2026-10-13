@@ -15,7 +15,7 @@ and their rules, and how they fail.
 | Route | Who | Answer |
 | --- | --- | --- |
 | `GET /api/foyer/info` | anyone | `{ serverVersion, protocol, household: { id, name } }`: the version, always the app's, the protocol Loge's Foyer adapters speak (1), and the household — its id is what a device keys this Foyer by |
-| `GET /api/foyer/household` | users | `{ household, members: [{ id, username, name, avatar?, hasPin }], served: [{ key, type, name }] }`: who else is in the household — names and pictures, never a PIN or an email — and what this Foyer serves: `{ key: "library", type: "library", name: "Library" }` while it has a library — one switched off is served empty, since a device lets go of what it kept of a thing no longer served; each device in the household runs it as a connection of its own |
+| `GET /api/foyer/household` | users | `{ household, members: [{ id, username, name, avatar?, hasPin }], served: [{ key, type, name }] }`: who else is in the household — names and pictures, never a PIN or an email — and what this Foyer serves: `{ key: "library", type: "library", name: "Library" }` while it has a library, `{ key: "iptv-<connection>", type: "iptv", name }` for each portal that is on — one switched off is served empty, since a device lets go of what it kept of a thing no longer served; each device in the household runs it as a connection of its own |
 | `POST /api/foyer/pair` | anyone with a code — five tries a minute per address | `{ code, device: { installation, name, platform, appVersion } }` → `{ household, users: [{ member, pin, token }] }`: the sessions of the users the code names, each with its own PIN; the code is spent; any code that will not do is the same `400` |
 | `GET /api/foyer/admin/household` | superusers | `{ household, members, devices: [{ id, name, platform, appVersion, users, paired, lastSeen }] }` |
 | `PATCH /api/foyer/admin/household` | superusers | `{ name }` → the household |
@@ -44,6 +44,11 @@ and their rules, and how they fail.
 | `GET /api/foyer/videos/playlists/{id}` | users | `?cursor` → `{ playlist, items, next? }`: a playlist — whose, how many videos — and a page of them |
 | `POST /api/foyer/videos/feed` | users | `{ channels, cursor?, limit? }` → `{ items, next?, incomplete? }`: the newest videos of the channels a user follows — five hundred at most — newest first, from each channel's own feed, kept a quarter of an hour; `incomplete` while some are still being read |
 | `GET /api/foyer/videos/resume` | users | `?limit` (20) → `{ items }`: the videos the user began past half a minute and has not finished, the latest first, drawn from what each was when it was reported |
+| `GET /api/foyer/iptv/{conn}/lineup` | users | `{ readAt, groups: [{ id, name }], channels: [{ key, name, number?, groupIds, logo?, catchupDays?, country? }] }`: a portal's groups and every channel, in its channel order, as Foyer last read them — read now where they never were; `key` is the app's own adapter's (`ch:<the portal's id>`, encoded), and no channel's command is ever in it. An `ETag` of when it was read: `304` for `If-None-Match`. See IPTV |
+| `POST /api/foyer/iptv/{conn}/refresh` | users | → the lineup, read again from the portal unless it was read in the last ten minutes |
+| `POST /api/foyer/iptv/{conn}/guide` | users | `{ from, to, channels: [key] }` — two thousand channels and two days at most → `{ channels: [{ channel, programmes: [{ title, description?, startsAt, endsAt }] }] }`: from the whole portal's guide, which Foyer keeps an hour while it covers what is asked, each channel's read by its country |
+| `POST /api/foyer/iptv/{conn}/play` | users | `{ channel, takeOver?, force? }` → `{ session, expiresAt, live: true, sources: [{ url, protocol: "mpegts", container: "ts" }], line, forced? }`: a playing on the channel's line — the one already open for it, a free one, the one `takeOver` names, or one more `force`d where the connection allows it. `409 { reason }`: `line-full`, with `streams: [{ id, channel, name, forced?, viewers: [{ user, device? }] }]` and `canForce`; `taken-over`, once, with `by: { user, device? }`, for a device whose line someone took; `limit`, where the portal says another device of the subscription's holds it; `refused`, where the portal refuses Foyer's box — never a `401`. `404 { reason: "not-found" }` for a channel the portal no longer has |
+| `GET /api/foyer/stream/iptv/{ticket}/live.ts` | whoever holds the address | the channel's MPEG-TS, from its line's one upstream, from a little before the newest bytes; `403` as a stream address; `410` for a playing no longer on a line — taken over, or let go of |
 | `GET /api/foyer/me/integrations` | users | `{ integrations: [{ key: "trakt", name, available, state?: connecting \| connected \| refused \| failed, mode?: two-way \| send \| off, account?, code?: { userCode, verificationUrl, expiresAt }, lastSync?, error? }] }`: the user's own Trakt — `available` while the household set Trakt up; never a token. See Trakt |
 | `POST /api/foyer/me/integrations/trakt/connect` | users | → the integration, `connecting`, with the code to type at `verificationUrl`; one still good is handed out again. Foyer asks Trakt whether it was entered, at Trakt's interval, until it was, was denied, or ran out. `409` where Trakt is not set up |
 | `POST /api/foyer/me/integrations/trakt/mode` | users | `{ mode: two-way \| send \| off }` → the integration: both ways, Foyer's way alone, or nothing — and read again at once |
@@ -289,6 +294,42 @@ and their rules, and how they fail.
   asked for; its Test reads a short video the site has kept since its first
   days, as play would.
 
+### IPTV
+
+- **Foyer is a portal's only client.** A Stalker portal is reached as the
+  one MAG box its MAC address is — its address, its box's ids, the box's
+  own User-Agent — from Foyer alone, never from a device: Loge's own
+  adapter ported to Go (`internal/adapters/stalker`), one sign-in shared by
+  every call, a refusal latched, a 429 a pause, one request at a time a
+  quarter second apart unless the connection says more, a channel starting
+  before anything else.
+- **Its lineup is kept**, one record per connection (`iptv_lineups`): the
+  groups and every channel, read in one answer — paged where that comes
+  short — when a device first asks, then every few days (Read the channels
+  again every), or on a pull to refresh after ten minutes. A channel a whole
+  read lacks goes only once the next whole read lacks it too, and never on
+  a read that came back mostly empty.
+- **Its guide is held in memory**: the whole portal's, an hour beyond the
+  window asked, kept an hour while it covers what is asked, held small —
+  a programme at a time, as compact as it can be. Each channel's is read by
+  its country, as the app's adapter reads it (the shared `countries.json`
+  and `zones.json`).
+- **A line is one stream of the subscription**: Streams at once, 1 to 4.
+  A channel watched on several devices is one upstream, its bytes passed to
+  each from the last sixteen megabytes — a viewer that falls further behind
+  is dropped, never waited for. A device watches one channel at a time, so
+  its next channel lets go of its last; a viewer whose stream closed keeps
+  its place fifteen seconds; a line nobody watches closes, and its upstream
+  with it. Every line in use: the device is shown who watches what where,
+  and may **take one over** — its viewers' playings stopped, and each told
+  once who took it — or, where the connection's **Can be forced** is on,
+  **force** one more for that playing alone: a zap from it asks again.
+- **Every stream is relayed** under the stream prefix, as a ticket signed in
+  the path, under its playing — Live Activity shows each viewer, a Stop
+  frees its line. The portal's own link never reaches a device, the log, or
+  an error. A channel the portal streams as HLS is not relayed yet; films
+  and series come later.
+
 ### Copies
 
 - **Downloads made smaller are what the household feels most**: a phone's
@@ -425,6 +466,15 @@ Foyer's routes write them.
 last address's — `position_ms`, `duration_ms`, `bytes`, and `revoked`, for a
 superuser's Stop: the rows still to expire are what keeps a stopped
 playing's addresses refused after a restart.
+
+**`iptv_lineups`** — migration 0016, one row per IPTV connection
+(`connection`, unique, cascading with it): `read_at`, `tried_at`, `error`,
+`groups` and `channels` — each channel with the command its link is made
+from, so superusers alone read it; devices read the lineup through
+`/api/foyer/iptv/{conn}/lineup`, which leaves the commands out. Kept whole in
+one row: a read replaces it in one write. A connection keeps its portal
+session — where the API is, the token, the form its links take — among its
+secrets (`portal_session`), for the box it signed in as.
 
 **`_foyer_seq`** — a table of Foyer's own, outside PocketBase's collections:
 `state`, the last seq a write took, and `pruned`, the newest a tombstone let

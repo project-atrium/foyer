@@ -103,6 +103,14 @@ Then make the dashboard's superuser, and a user for each person.
   feed; each user's watch status is kept like a film's. A video is kept for
   offline as the site's own renditions, at the height a device asks.
   Signing in, for each user's own recommendations, comes next.
+- **IPTV through Foyer**: a Stalker portal set up once on Foyer, which
+  becomes its only client — the one box its MAC address is, gentle with its
+  requests. Its channels are read once in a while and kept, its guide held
+  in memory and put right for each channel's country, and every channel is
+  relayed: one stream for a channel however many devices watch it, as many
+  streams as the subscription allows. A device that finds them all in use
+  is shown who watches what where, and may take one over — or force one
+  more, where you allow it. Its films and series come later.
 - **Downloads made smaller**: a device keeping a film asks for a copy made
   to its own download settings — AV1 and Opus in Matroska by default, 1080p,
   a few GB where the file is tens — and Foyer makes it on the processor,

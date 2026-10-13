@@ -24,6 +24,7 @@ import (
 	"foyer/internal/guard"
 	"foyer/internal/hls"
 	"foyer/internal/household"
+	"foyer/internal/iptv"
 	"foyer/internal/library"
 	"foyer/internal/media"
 	"foyer/internal/probe"
@@ -52,6 +53,7 @@ type Server struct {
 	Copies    *copies.Manager
 	YouTube   *youtube.YouTube
 	Trakt     *trakt.Service
+	IPTV      *iptv.Service
 }
 
 // collections are Foyer's own static collections: written by its code alone.
@@ -64,6 +66,7 @@ var collections = []string{
 	userstate.Collections[userstate.KindPlaylist], userstate.Collections[userstate.KindFavoriteChannel],
 	sessions.Collection,
 	trakt.Collection,
+	iptv.LineupsCollection,
 }
 
 // Bind binds Foyer's guard, routes and dashboard pages, and starts nothing:
@@ -71,8 +74,10 @@ var collections = []string{
 // Background.
 func Bind(app core.App, cfg config.Config) *Server {
 	// What is built first: an adapter that is built takes its planned
-	// stand-in's place.
-	built := []adapters.Adapter{webdav.Adapter(), tmdb.Adapter(), ffmpeg.Adapter(), youtube.Adapter(), trakt.Adapter()}
+	// stand-in's place. A portal's test is its service's, made below.
+	var tv *iptv.Service
+	portal := iptv.Adapter(func(ctx context.Context, settings adapters.Settings) adapters.Result { return tv.Check(ctx, settings) })
+	built := []adapters.Adapter{webdav.Adapter(), tmdb.Adapter(), ffmpeg.Adapter(), youtube.Adapter(), trakt.Adapter(), portal}
 	registry := adapters.NewRegistry(app, append(built, adapters.Planned()...)...)
 	lib := library.New(app, registry)
 	s := &Server{
@@ -84,6 +89,10 @@ func Bind(app core.App, cfg config.Config) *Server {
 	}
 	s.Playings = sessions.New(app, library.FilesCollection)
 	s.Streams.SetPlayings(s.Playings)
+	tv = iptv.New(app, registry, s.Streams, s.Playings)
+	s.IPTV = tv
+	// A playing that ends lets go of its channel's line.
+	s.Playings.OnEnd(tv.Lines.Leave)
 	fileOf := func(id string) (*core.Record, error) { return app.FindRecordById(library.FilesCollection, id) }
 	s.Remux = hls.NewManager(hls.Options{
 		Log: func(msg string, args ...any) { app.Logger().Warn(msg, args...) },
@@ -183,7 +192,8 @@ func Bind(app core.App, cfg config.Config) *Server {
 		if settings, err := registry.Settings(youtube.Key); err == nil && settings.Enabled {
 			served = append(served, map[string]any{"key": "videos", "type": "videos", "name": "YouTube"})
 		}
-		return served
+		// Each portal that is on.
+		return append(served, tv.Served()...)
 	})
 	s.Catalogue = catalogue.New(app)
 	lib.OnScanned(s.Probes.Poke)
@@ -214,6 +224,7 @@ func Bind(app core.App, cfg config.Config) *Server {
 		s.Library.PlayRoutes(se.Router, s.Streams, s.Playings, s.Remux, s.Copies)
 		s.Remux.Routes(se.Router)
 		s.YouTube.Routes(se.Router)
+		s.IPTV.Routes(se.Router)
 		watch.Routes(se.Router, library.Managed, func(id string) (watch.Item, bool) {
 			if !youtube.ValidID.MatchString(id) {
 				return watch.Item{}, false
@@ -269,6 +280,7 @@ func (s *Server) Background() *Server {
 		wg.Go(func() { s.Probes.Run(ctx) })
 		wg.Go(func() { s.Copies.Run(ctx) })
 		wg.Go(func() { s.Trakt.Run(ctx) })
+		wg.Go(func() { s.IPTV.Run(ctx) })
 		wg.Go(func() { s.pruneTombstones(ctx) })
 		wg.Go(func() { s.sweepPlayings(ctx) })
 		return se.Next()

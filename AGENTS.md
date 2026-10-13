@@ -101,6 +101,9 @@ internal/youtube/    YouTube through Foyer: what yt-dlp says of a video, its str
                      address of Foyer's own, playlists rewritten — the play route, the adapter; the site's own API
                      read for searches, videos' pages, channels and playlists; channels' feeds; videos' watch status;
                      downloads, the site's own renditions fetched by yt-dlp and kept among the copies
+internal/iptv/       a household's IPTV through Foyer, its portals' only client: each portal's lineup kept
+                     (iptv_lineups), its guide in memory, lines — one upstream per channel for every viewer, within
+                     the subscription's streams, taken over or forced — the relay under the stream prefix, the routes
 internal/copies/     smaller copies for downloads: a device's settings read for a file, the recipe — AV1 and Opus
                      by default — ffmpeg's command, the jobs, the copies kept in pb_data/foyer_copies, their
                      addresses under the stream prefix; a copy another maker makes — YouTube's fetches — beside them
@@ -129,7 +132,7 @@ migrations/          0001 users are profiles; 0002 the name, the rate limits, th
                      0010 each user's preferences, subscriptions, playlists, ★, and the seq; 0011 the history of playings;
                      0012 each file's keyframes; 0013 what a video of the site's is, on its watch states;
                      0014 each user's integrations, and what each state agreed with a tracker; 0015 a superuser's word on
-                     single files of a series
+                     single files of a series; 0016 each IPTV connection's lineup
 dev/fakezurg/        a pretend Zurg for running Foyer here, from Zurg's .zurgtorrent records; never in the image
 harness/             Node and vitest, test-only: the app's code that speaks Foyer against the real binary
 Dockerfile           two stages: a Go build, then Debian with Jellyfin's ffmpeg and the binary
@@ -318,6 +321,29 @@ Go tests sit beside what they test. Everything else is PocketBase's: `serve`,
   read is remuxed** — `play` reads one it has not, at once — and only one
   whose keyframes are known. Never remux by the name's guess: a silent film
   is worse than "this needs another player".
+- **Foyer is a portal's only client, as the one box its MAC address is.**
+  Every request to a portal — a sign-in, a list, the guide, a link, a
+  stream — goes from `internal/adapters/stalker` through its gate, with the
+  connection's MAC address and box ids and the MAG User-Agent: never an
+  identity of Foyer's own, never a second `Portal` for one connection (each
+  handshake ends the token before it), and never a device's own request.
+  A refused sign-in is latched until someone presses Test; a 429 is a pause,
+  never a verdict. The real portal is reached only with the owner's
+  go-ahead, one stream at a time, when nobody at home is watching —
+  `stalkertest` otherwise.
+- **A line is a stream of the subscription, and a channel is one line
+  however many watch it.** `iptv.Lines` decides who holds which: never open
+  a portal's stream anywhere else, or the provider counts one more device
+  and ends another's. A device watches one channel at a time — its next
+  lets go of its last, by its installation id — so a zap never holds two.
+  A take-over stops the taken line's playings; Can be forced opens one line
+  more for one playing alone.
+- **A portal's command and its stream's address never leave Foyer.** A
+  channel's `cmd` — on some portals the stream's address, sign-in and all —
+  is kept in `iptv_lineups`, which only superusers read; devices get the
+  lineup without it, and play through Foyer's relay, whose ticket is in the
+  path under the stream prefix. An upstream's error is said in Foyer's own
+  words, never with its address.
 - **A tool reads files through the loopback**, never from the share: a grant
   on 127.0.0.1 opens one file for minutes, so ffprobe's arguments and output
   never hold the share's address or password.
