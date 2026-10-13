@@ -5,7 +5,7 @@
 // plays as many streams at once as it allows, and a new one past that ends
 // the oldest; /debug/streams says what is open.
 //
-//	go run ./dev/fakeportal [-addr 127.0.0.1:9988] [-mac 00:1A:79:00:00:01] [-streams 1] [-ffmpeg ffmpeg]
+//	go run ./dev/fakeportal [-addr 127.0.0.1:9988] [-link host:port] [-mac 00:1A:79:00:00:01] [-streams 1] [-ffmpeg ffmpeg]
 //
 // Set it up on Foyer's Adapters page as a Stalker portal at
 // http://<addr>/c/ with that MAC address.
@@ -66,11 +66,16 @@ type stream struct {
 
 func main() {
 	addr := flag.String("addr", "127.0.0.1:9988", "where to listen")
+	link := flag.String("link", "", "the address its stream links name, where Foyer reaches it by another than -addr — in a container")
 	mac := flag.String("mac", "00:1A:79:00:00:01", "the one MAC address it takes")
 	allowed := flag.Int("streams", 1, "how many streams it plays at once")
 	ffmpeg := flag.String("ffmpeg", "ffmpeg", "ffmpeg's path, or its name on the PATH")
 	flag.Parse()
-	p := &portal{addr: *addr, mac: strings.ToUpper(*mac), ffmpeg: *ffmpeg, allowed: max(1, *allowed), tokens: map[string]bool{}, asked: map[string]int{}}
+	named := *addr
+	if *link != "" {
+		named = *link
+	}
+	p := &portal{addr: named, mac: strings.ToUpper(*mac), ffmpeg: *ffmpeg, allowed: max(1, *allowed), tokens: map[string]bool{}, asked: map[string]int{}}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/stalker_portal/server/load.php", p.load)
 	mux.HandleFunc("/live/", p.live)
