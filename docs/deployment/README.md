@@ -149,6 +149,25 @@ logs, local backups, and certificates when it makes its own.
 - **It is as sensitive as every secret the household gave it.** Keep it, and
   anything copied from it, where only you can read it.
 
+## Memory and processor, for copies
+
+Smaller copies for downloads are made on the processor — SVT-AV1 by default —
+and that is what asks most of the machine:
+
+- **Memory.** A copy in AV1 takes about 0.6 GB at 720p, 1 GB at 1080p — the
+  default ceiling — and 2.8 GB at 2160p at the encoder's least parallelism,
+  and some 0.5 GB more, three or four times faster, at its own choice on eight
+  cores. Foyer reads what it has left — the system's, or less where its
+  container or service is limited — and makes a copy the slower way where
+  the faster one would not fit; the file comes out the same. Give a VM 4 GB
+  for 1080p copies at full speed, more for 2160p or for several copies at
+  once. A copy the system stops for want of memory says so on Live Activity.
+- **Time.** A 1080p film takes about as long as it runs, or longer, on a few
+  cores; `Copies made at once` stays 1 unless the machine has the cores and
+  memory for more. Copies run below whatever a player needs.
+- **Disk.** Copies live in `pb_data/foyer_copies`, outside every backup, up
+  to `Room for copies`, and 10 GB of the disk are always left free.
+
 ## TLS
 
 **Use TLS anywhere but a home network you trust.** On plain HTTP, anyone on
