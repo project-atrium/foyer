@@ -48,12 +48,15 @@ type variant struct {
 }
 
 // fitted is a master holding only what the player plays: pictures no taller
-// than it decodes, in codecs it decodes — at each height, those of the codec
-// it would rather — and the sounds and captions they name. ffmpeg's HLS
-// reader, mpv's, opens every playlist a master names and reads the first
-// segment of each before it starts: YouTube's name a dozen pictures and more,
-// each fetched through Foyer, so a phone waited on every one. A master with
-// nothing that fits is left as it is, and so is anything not a master.
+// than it decodes, in one codec it decodes — the one that reaches the tallest
+// of them, or on a tie the one it would rather — and the sounds and captions
+// they name. ffmpeg's HLS reader, mpv's, opens every playlist a master names
+// and reads the first segment of each before it starts: YouTube's name a
+// dozen pictures and more, each fetched through Foyer, so a phone waited on
+// every one. One codec, never one per height: libVLC on Android aborts the
+// whole app when its switching climbs from H.264 at 1080p to VP9 at 1440p
+// mid-stream. A master with nothing that fits is left as it is, and so is
+// anything not a master.
 func fitted(body []byte, f fit) []byte {
 	text := string(body)
 	if f.none() || !strings.Contains(text, "#EXT-X-STREAM-INF") {
@@ -83,20 +86,17 @@ func fitted(body []byte, f fit) []byte {
 		}
 		return -1
 	}
-	// At each height, the codec the player would rather.
-	best := map[int]int{}
+	fits := func(v variant) bool { return rank(v) >= 0 && (f.Height == 0 || v.height <= f.Height) }
+	// The codec whose pictures reach the tallest, the one the player would rather on a tie.
+	chosen, tallest := -1, 0
 	for _, v := range variants {
-		r := rank(v)
-		if r < 0 || f.Height > 0 && v.height > f.Height {
-			continue
-		}
-		if b, ok := best[v.height]; !ok || r < b {
-			best[v.height] = r
+		if r := rank(v); fits(v) && (v.height > tallest || v.height == tallest && r < chosen) {
+			chosen, tallest = r, v.height
 		}
 	}
 	keep := map[int]bool{}
 	for _, v := range variants {
-		if b, ok := best[v.height]; ok && rank(v) == b && (f.Height == 0 || v.height <= f.Height) {
+		if fits(v) && rank(v) == chosen {
 			keep[v.at] = true
 		}
 	}

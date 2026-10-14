@@ -48,11 +48,14 @@ func TestAMasterHoldsOnlyWhatThePlayerPlays(t *testing.T) {
 		want   []string
 		groups []string
 	}{
-		// mpv on Android: every codec, H.264 first, 1080p at most — the site's
-		// VP9 kept only where it alone has the height, past 1080p none.
-		{"mpv on a phone", fit{Height: 1080, Codecs: []string{"h264", "hevc", "vp9", "av1"}}, []string{"h240a.m3u8", "h360.m3u8", "h720.m3u8", "h1080.m3u8", "v144.m3u8"}, []string{"233", "234", "vtt"}},
-		// A 4K player that would rather VP9 keeps VP9, and H.264 where VP9 has none.
-		{"VP9 first, to 4K", fit{Height: 2160, Codecs: []string{"vp9", "h264"}}, []string{"h240a.m3u8", "h1080.m3u8", "v144.m3u8", "v360.m3u8", "v720.m3u8", "v2160.m3u8"}, []string{"233", "234", "vtt"}},
+		// mpv on Android: every codec, H.264 first, 1080p at most — H.264 reaches
+		// 1080p where VP9 stops at 720p, so H.264 alone.
+		{"mpv on a phone", fit{Height: 1080, Codecs: []string{"h264", "hevc", "vp9", "av1"}}, []string{"h240a.m3u8", "h360.m3u8", "h720.m3u8", "h1080.m3u8"}, []string{"233", "234", "vtt"}},
+		// VLC to 4K, H.264 first: VP9 alone reaches 2160p, so VP9 alone — never
+		// H.264 to 1080p and VP9 above it, which libVLC on Android dies switching across.
+		{"VLC to 4K", fit{Height: 2160, Codecs: []string{"h264", "hevc", "vp8", "vp9", "av1"}}, []string{"v144.m3u8", "v360.m3u8", "v720.m3u8", "v2160.m3u8"}, []string{"233", "234", "vtt"}},
+		// Both reach 720p: the one the player would rather.
+		{"a tie at 720p", fit{Height: 720, Codecs: []string{"h264", "vp9"}}, []string{"h240a.m3u8", "h360.m3u8", "h720.m3u8"}, []string{"233", "234", "vtt"}},
 		// No taller than 360: the sound only the taller ones named still goes with the 240p's.
 		{"360p at most", fit{Height: 360, Codecs: []string{"h264"}}, []string{"h240a.m3u8", "h360.m3u8"}, []string{"233", "234", "vtt"}},
 		// H.264 alone, 1080p: the HE-AAC group only the 144p VP9 and the 240p name stays with the 240p.
