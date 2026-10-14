@@ -317,6 +317,12 @@ Go tests sit beside what they test. Everything else is PocketBase's: `serve`,
   `OnBackupRestore`'s `Exclude`; never put them anywhere a backup reads.
   Raise `copies.RecipeVersion` when what ffmpeg is told changes what comes
   out: copies made before are made again.
+- **A copy no smaller than its file is no copy.** The offer is an
+  estimate; a picture hard to make smaller — noise, grain, a test pattern —
+  can come out as big as the file or bigger. Judged once made: under four
+  fifths of the file it is kept, else let go of and remembered by its key
+  (`Made.NoSmaller`, a record with no file), offered no more, and whoever
+  asks for it is handed the file as it is.
 - **A copy is made in the memory the server has left.** SVT-AV1 takes
   about 1 GB for a 1080p copy at its least parallelism and 0.5 GB more at
   its own choice, and the kernel stops ffmpeg without a word when there is

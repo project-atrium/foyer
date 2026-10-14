@@ -128,6 +128,9 @@ type Made struct {
 	Asked   time.Time     `json:"asked"`
 	// By is who asked for it first.
 	By string `json:"by,omitempty"`
+	// NoSmaller is a copy that came out no smaller than the file, let go of
+	// as it was made: no Name, no Size, and whoever asks is handed the file.
+	NoSmaller bool `json:"noSmaller,omitzero"`
 }
 
 // Making is a copy being made, as Live Activity shows it.
@@ -392,11 +395,19 @@ func (m *Manager) make(ctx context.Context, j *job, settings Settings) error {
 	if err != nil {
 		return err
 	}
+	now := time.Now()
+	if j.Source.Size > 0 && info.Size() >= j.Source.Size*4/5 {
+		// The estimate is an estimate: a picture hard to make smaller comes
+		// out as big as the file, or bigger, and is no copy worth keeping.
+		m.o.Log("A copy came out no smaller than its file, and the file is handed instead", "file", j.File, "copy", info.Size(), "source", j.Source.Size)
+		m.mu.Lock()
+		defer m.mu.Unlock()
+		return m.keep(&Made{Key: j.Key, File: j.File, Title: j.Title, Encode: j.Recipe.Encode, Made: now, Asked: now, By: j.User, NoSmaller: true})
+	}
 	name := j.Key + "." + j.Recipe.Encode.Container
 	if err := os.Rename(part, filepath.Join(m.o.Root, name)); err != nil {
 		return err
 	}
-	now := time.Now()
 	made := &Made{Key: j.Key, File: j.File, Title: j.Title, Encode: j.Recipe.Encode, Version: j.Recipe.Made(j.Source, info.Size()),
 		Name: name, Size: info.Size(), Made: now, Asked: now, By: j.User}
 	m.mu.Lock()
@@ -470,10 +481,19 @@ func (m *Manager) Path(key string) (string, *Made, bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	made, ok := m.made(key)
-	if !ok {
+	if !ok || made.NoSmaller {
 		return "", nil, false
 	}
 	return filepath.Join(m.o.Root, made.Name), made, true
+}
+
+// NoSmaller says the copy was made and came out no smaller than its file:
+// it is offered no more.
+func (m *Manager) NoSmaller(key string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	made, ok := m.made(key)
+	return ok && made.NoSmaller
 }
 
 // made reads a copy's record, where its file is there too. Its caller holds
@@ -487,7 +507,13 @@ func (m *Manager) made(key string) (*Made, bool) {
 		return nil, false
 	}
 	var made Made
-	if json.Unmarshal(b, &made) != nil || made.Key != key || made.Name != filepath.Base(made.Name) {
+	if json.Unmarshal(b, &made) != nil || made.Key != key {
+		return nil, false
+	}
+	if made.NoSmaller {
+		return &made, made.Name == ""
+	}
+	if made.Name == "" || made.Name != filepath.Base(made.Name) {
 		return nil, false
 	}
 	if _, err := os.Stat(filepath.Join(m.o.Root, made.Name)); err != nil {
@@ -532,7 +558,7 @@ func (m *Manager) Making() []Making {
 func (m *Manager) Kept() []Made {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	kept := m.all()
+	kept := slices.DeleteFunc(m.all(), func(made Made) bool { return made.NoSmaller })
 	slices.SortFunc(kept, func(a, b Made) int { return b.Asked.Compare(a.Asked) })
 	return kept
 }
@@ -584,7 +610,9 @@ func (m *Manager) Remove(key string) bool {
 // drop removes a copy and its record. Its caller holds the lock.
 func (m *Manager) drop(made Made) {
 	_ = os.Remove(filepath.Join(m.o.Root, made.Key+".json"))
-	_ = os.Remove(filepath.Join(m.o.Root, made.Name))
+	if made.Name != "" {
+		_ = os.Remove(filepath.Join(m.o.Root, made.Name))
+	}
 }
 
 // Close stops every copy being made: the server is going.

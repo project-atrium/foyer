@@ -12,6 +12,7 @@ import (
 	"github.com/pocketbase/pocketbase/core"
 
 	"foyer/internal/copies"
+	"foyer/internal/hls"
 	"foyer/internal/media"
 	"foyer/internal/sessions"
 	"foyer/internal/stream"
@@ -28,7 +29,7 @@ func (e *Engine) copyOption(ctx context.Context, p *playable, asked copies.Encod
 	if _, kept, ok := made.Path(r.Key); ok {
 		return optionOf(kept.Version, r.Recipe.Encode.ID(), true), true
 	}
-	if !r.Recipe.Smaller(p.version) {
+	if !r.Recipe.Smaller(p.version) || made.NoSmaller(r.Key) {
 		return DownloadOption{}, false
 	}
 	o := optionOf(r.Recipe.Made(p.version, r.Recipe.Bytes), r.Recipe.Encode.ID(), true)
@@ -107,7 +108,8 @@ func (e *Engine) dolbyVisionOf(ctx context.Context, p *playable) int {
 }
 
 // downloadCopy answers a download of a smaller copy: its address once it is
-// made, how far along it is until then, or that it could not be made.
+// made, how far along it is until then, or that it could not be made — and
+// the file as it is where the copy came out no smaller.
 func (e *Engine) downloadCopy(re *core.RequestEvent, streams *stream.Streamer, playings *sessions.Registry, made *copies.Manager, p playable) error {
 	asked, ok := copies.ParseID(p.option)
 	if !ok || made == nil {
@@ -121,6 +123,13 @@ func (e *Engine) downloadCopy(re *core.RequestEvent, streams *stream.Streamer, p
 	status := made.Ask(r)
 	switch status.State {
 	case copies.Done:
+		if status.Made.NoSmaller {
+			address, expires, _, err := e.address(re, streams, playings, p, sessions.KindDownload, hls.Direct)
+			if err != nil {
+				return re.InternalServerError("", err)
+			}
+			return re.JSON(http.StatusOK, Download{URL: address, ExpiresAt: expires, Version: p.version.Public()})
+		}
 		expires := time.Now().Add(stream.Lifetime).UTC().Truncate(time.Second)
 		id := sessions.NewID()
 		address, err := made.Address(r.Key, re.Auth.Id, id, expires)

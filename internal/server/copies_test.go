@@ -5,7 +5,9 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -187,5 +189,85 @@ func TestADownloadIsMadeSmallerOnFoyer(t *testing.T) {
 			t.Fatal("PocketBase wrote no log in time to compare against")
 		}
 		time.Sleep(200 * time.Millisecond)
+	}
+}
+
+// A copy that came out no smaller than its file is no copy: the device that
+// asked is handed the file as it is, and the copy is offered no more.
+func TestACopyNoSmallerHandsTheFileAsItIs(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("no shell here")
+	}
+	mkv := remuxable(t)
+	// ffmpeg's stand-in has SVT-AV1 and Opus, and makes every copy a byte
+	// bigger than the file.
+	tool := filepath.Join(t.TempDir(), "ffmpeg")
+	script := "#!/bin/sh\ncase \"$*\" in\n*-encoders*) echo ' V....D libsvtav1 SVT-AV1'; echo ' A....D libopus Opus' ;;\n*-filters*) ;;\n" +
+		"*) for a; do out=$a; done; head -c " + strconv.Itoa(len(mkv)+1) + " /dev/zero > \"$out\" ;;\nesac\n"
+	if err := os.WriteFile(tool, []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	h := start(t, options{})
+	admin := h.superuser()
+	share := webdavtest.New()
+	share.AsZurg = true
+	share.File("movies/Some.Film.2022.1080p.BluRay.x264-GRP/Some.Film.2022.1080p.BluRay.x264-GRP.mkv", mkv, monday)
+	share.Dir("movies/Some.Film.2022.1080p.BluRay.x264-GRP", monday)
+	zurg := httptest.NewServer(share)
+	t.Cleanup(zurg.Close)
+	h.share(admin, "Zurg", zurg.URL+"/dav")
+	movies := h.addLibrary(admin, "movies", "movies", "movies")["id"].(string)
+	if err := h.server.Library.Scan(context.Background(), movies, true); err != nil {
+		t.Fatal(err)
+	}
+	if got := h.call(http.MethodPut, "/api/foyer/admin/adapters/ffmpeg", admin, map[string]any{"enabled": true, "values": map[string]any{"ffmpeg": tool}}); got.status != http.StatusOK {
+		t.Fatalf("ffmpeg: %d %v", got.status, got.body)
+	}
+	if err := h.server.Streams.StartTwin(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = h.server.Streams.StopTwin(context.Background()) })
+	ctx, cancel := context.WithCancel(context.Background())
+	running := make(chan struct{})
+	go func() { h.server.Copies.Run(ctx); close(running) }()
+	t.Cleanup(func() { cancel(); h.server.Copies.Close(); <-running })
+	alex := h.makeUser("alex", map[string]any{"name": "Alex"})
+	film, err := h.app.FindFirstRecordByData("movies", "title", "Some Film")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	encode := map[string]any{"video": "av1", "preference": "size", "maxHeight": 240, "hdr": false, "audio": "opus", "container": "mkv"}
+	options := func() []any {
+		return h.call(http.MethodPost, "/api/foyer/download/options", alex.token, map[string]any{"collection": "movies", "id": film.Id, "encode": encode}).body["options"].([]any)
+	}
+	offered := options()
+	if len(offered) != 2 {
+		t.Fatalf("offered %v", offered)
+	}
+	body := map[string]any{"collection": "movies", "id": film.Id, "option": offered[0].(map[string]any)["id"]}
+	var got answer
+	deadline := time.Now().Add(time.Minute)
+	for {
+		got = h.call(http.MethodPost, "/api/foyer/download", alex.token, body)
+		if got.status != http.StatusAccepted {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("never made")
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	if got.status != http.StatusOK || strings.HasPrefix(got.body["url"].(string), copies.Prefix) || int(got.body["version"].(map[string]any)["size"].(float64)) != len(mkv) {
+		t.Fatalf("handed %d %v", got.status, got.body)
+	}
+	if status, _, whole := h.fetchRange(got.body["url"].(string), ""); status != http.StatusOK || whole != string(mkv) {
+		t.Errorf("the file: %d, %d bytes", status, len(whole))
+	}
+	if again := options(); len(again) != 1 || again[0].(map[string]any)["id"] != copies.Original {
+		t.Errorf("offered after %v", again)
+	}
+	if listed := h.call(http.MethodGet, "/api/foyer/admin/copies", admin, nil); len(listed.body["kept"].([]any)) != 0 {
+		t.Errorf("kept %v", listed.body["kept"])
 	}
 }

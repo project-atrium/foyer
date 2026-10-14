@@ -293,6 +293,60 @@ func TestACopyTheSystemStoppedSaysWhy(t *testing.T) {
 	}
 }
 
+// A copy that came out no smaller than its file — an estimate is an
+// estimate — is let go of, offered no more, and remembered as such; one a
+// fifth smaller is kept.
+func TestACopyNoSmallerThanItsFileIsLetGo(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("no shell here")
+	}
+	// ffmpeg's stand-in writes 5,000 bytes to the last thing it is given.
+	tool := filepath.Join(t.TempDir(), "ffmpeg")
+	if err := os.WriteFile(tool, []byte("#!/bin/sh\nfor a; do out=$a; done\nhead -c 5000 /dev/zero > \"$out\"\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	root := t.TempDir()
+	m, _ := manager(t, tool, shared(t, []byte("a film")), root)
+	ask := func(key string, size int64) Status {
+		r := Request{Key: key, File: "file5", Source: media.Version{Size: size, Video: &media.Video{Width: 1280, Height: 720}},
+			Recipe: Recipe{Encode: asLoge, Video: VideoPlan{Codec: "av1", Width: 1280, Height: 720, BitDepth: 10, CRF: 30}}}
+		m.Ask(r)
+		return until(t, m, r, Done)
+	}
+
+	bigger := ask("0123456789abcdef0123456789abcdef", 6000)
+	if bigger.Made == nil || !bigger.Made.NoSmaller || bigger.Made.Name != "" {
+		t.Fatalf("made %+v", bigger.Made)
+	}
+	if _, _, ok := m.Path(bigger.Made.Key); ok || !m.NoSmaller(bigger.Made.Key) || len(m.Kept()) != 0 {
+		t.Error("a copy no smaller is handed out or shown as kept")
+	}
+	if left, _ := filepath.Glob(filepath.Join(root, "0123456789abcdef0123456789abcdef*")); len(left) != 1 || filepath.Ext(left[0]) != ".json" {
+		t.Errorf("left %v", left)
+	}
+
+	smaller := ask("fedcba9876543210fedcba9876543210", 100_000)
+	if _, made, ok := m.Path(smaller.Made.Key); !ok || made.NoSmaller || made.Size != 5000 || m.NoSmaller(made.Key) {
+		t.Errorf("kept %+v", made)
+	}
+
+	// Let go of in its days, the record leaves nothing behind.
+	m.mu.Lock()
+	gone := *bigger.Made
+	gone.Asked = time.Now().Add(-15 * 24 * time.Hour)
+	if err := m.keep(&gone); err != nil {
+		t.Fatal(err)
+	}
+	m.mu.Unlock()
+	m.prune(0)
+	if m.NoSmaller(gone.Key) {
+		t.Error("kept past its days")
+	}
+	if _, err := os.Stat(root); err != nil {
+		t.Errorf("the folder went with it: %v", err)
+	}
+}
+
 // A copy stopped while it is made leaves nothing behind.
 func TestACopyStoppedLeavesNothing(t *testing.T) {
 	ffmpeg, ffprobe := tools(t)
