@@ -1,6 +1,6 @@
 ---
 name: foyer-media-library
-description: Foyer's media library, end to end — a WebDAV share read, Zurg's above all, release names parsed, TMDB asked once per title, a library's collections made from one template, artwork in PocketBase's storage, ffprobe through the loopback, signed streams, watch status kept by identity, and the dashboard's Library and Adapters pages. Use when changing a scan, the parser, matching or episode mapping, a library collection's template, probing, streams, watch status, an admin route or a dashboard page — or when finding out why a title is missing, misnamed, hidden or will not play.
+description: Foyer's media library, end to end — a WebDAV share read, Zurg's above all, release names parsed, TMDB asked once per title, a superuser's corrections by TMDB search and per file, a library's collections made from one template, artwork in PocketBase's storage, ffprobe through the loopback, the catalogue Loge reads, signed streams under playings, smaller copies for downloads, watch status kept by identity, and the dashboard's Library, Live Activity and Adapters pages. Use when changing a scan, the parser, matching or episode mapping, a correction, a library collection's template, probing, the catalogue, streams, copies, watch status, an admin route or a dashboard page — or when finding out why a title is missing, misnamed, hidden, will not play or will not download smaller.
 ---
 
 # Foyer's media library
@@ -19,9 +19,10 @@ route, collection and rule).
 - the stream route, the play route, watch status
 - an admin route, or a page of the dashboard (`internal/dashboard/ui`)
 
-Not for deployment (`docs/deployment`) or for Loge: Foyer imports nothing of
-the app, and what it shares with it — a title key, a watch identity — is
-ported, with Loge's own test cases.
+Not for deployment (`docs/deployment`), for a portal (`foyer-iptv`), or for
+Loge: Foyer imports nothing of the app, and what it shares with it — a title
+key, a watch identity, the catalogue's order — is ported, held to the app's
+fixtures (`internal/fixtures`).
 
 ## How a file becomes a title
 
@@ -30,13 +31,18 @@ webdav.List / Walk        the folder, each entry's files             adapters/we
 library/scan.go           media_files written, new ones pending      outside any transaction: network first
 parse.Path / Name         title, year, numbers, what the file is     pure, table-tested
 library/plan.go           files grouped into candidate titles
-library/match.go          identities: TMDB asked once per key        sure, uncertain, none, manual
+library/match.go          identities: TMDB asked once per key        sure, uncertain, none, manual; episode titles break a tie
+library/corrections.go    a superuser's word on one file             file_corrections, read before the file's name
 library/place.go          the title, its episodes, its files linked  one transaction, the library's lock
 library/mapping.go        an episode's place: release, offset, absolute, cumulative, group, special
 library/sweep.go          what the share stopped listing, after 72 hours
 library/artwork.go        posters, backdrops, logos, stills          saved one record at a time
 probe/queue.go            ffprobe through the loopback → versions    then the title's lists redrawn
-library/play.go, stream/  a signed address; the Range proxy
+library/keys.go           the keys a title sorts and searches by      compareItems' order as bytes, held to order.json
+catalogue/                what Loge reads: keyset pages, a title, its seasons and episodes
+library/play.go, stream/  a signed address under a playing; the Range proxy
+sessions/                 playings: Live Activity, a superuser's Stop, play_history
+library/copies.go, copies/  a smaller copy: the recipe, the job, made once, kept in pb_data/foyer_copies
 watch/                    a user's state, by identity
 ```
 
@@ -107,4 +113,12 @@ a free debugging port — never in a window on the owner's screen. And check:
   its name against TMDB's season 0, whole or by the part before TMDB's
   colon or dash.
 - **not playing** — `probe_state` and `probe_error`; the stream answers
-  `404` for a file the share no longer has and `502` while it fails.
+  `404` for a file the share no longer has and `502` while it fails, and
+  `403` once a superuser stopped its playing.
+- **not offered smaller** — the copy's estimate is not a fifth under the
+  file, or a copy made of it came out no smaller (a `noSmaller` record in
+  `pb_data/foyer_copies`, which hands the file instead), or FFmpeg's copies
+  are off. **A copy that failed** says why on Live Activity: "the system
+  stopped ffmpeg, most likely for want of memory" is the kernel's OOM killer
+  — SVT-AV1 is made lean (`lp=1`) where the memory left is short, so see
+  what else holds the memory.
