@@ -1,6 +1,6 @@
 # Foyer — your household's own server
 
-A small server you run yourself for [Loge](https://github.com/Loge-Foyer/loge):
+A small server you run yourself for [Loge](https://github.com/project-atrium/loge):
 your household's profiles, and — as it grows — your library, what each of you
 watched, and the streams.
 
@@ -56,7 +56,8 @@ go run . serve --http=0.0.0.0:8090
 ```
 
 Then make the dashboard's superuser, and a user for each person.
-`docs/getting-started` walks through both, and through Docker.
+The developer docs walk through both, and through Docker; they are kept in
+the private Project Atrium workspace repo for now.
 
 ## Current state
 
@@ -155,11 +156,10 @@ Then make the dashboard's superuser, and a user for each person.
 
 ## Documentation
 
-`docs/` covers getting started, the routes and collections, deployment and
-development.
-
-`CLAUDE.md` and `AGENTS.md` are written for AI coding assistants — denser, and
-full of rules. This file is the one written for you.
+The developer docs — getting started, the routes and collections, deployment
+and development — and the notes written for AI coding assistants are kept in
+the private Project Atrium workspace repo for now. This file is the one
+written for you.
 
 ---
 
