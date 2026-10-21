@@ -21,7 +21,7 @@ import (
 // Path is a fixture's place in the app beside this repository.
 func Path(name string) string {
 	_, here, _, _ := runtime.Caller(0)
-	return filepath.Join(filepath.Dir(here), "..", "..", "..", "loge", "adapters", "api", "fixtures", "foyer", filepath.FromSlash(name))
+	return filepath.Join(filepath.Dir(here), "..", "..", "..", "..", "loge", "src", "adapters", "api", "fixtures", "foyer", filepath.FromSlash(name))
 }
 
 // Load decodes a fixture into v, or skips the test where the app is not

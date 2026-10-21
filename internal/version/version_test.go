@@ -12,7 +12,7 @@ import (
 // The app beside this repository has this version: its `npm run release`
 // moves both, and a release that moved only one fails here.
 func TestTheAppHasTheSameVersion(t *testing.T) {
-	raw, err := os.ReadFile(filepath.Join("..", "..", "..", "loge", "package.json"))
+	raw, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "loge", "src", "package.json"))
 	if errors.Is(err, fs.ErrNotExist) {
 		t.Skip("the app is not beside this repository")
 	}

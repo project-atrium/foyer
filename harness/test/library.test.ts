@@ -24,7 +24,7 @@ import { plugin as library } from '@loge/source-foyer';
 import { plugin as foyer } from '@loge/sync-foyer';
 import { afterEach, expect, it } from 'vitest';
 
-import { PROFILES } from '../../../loge/adapters/players/system/src/profiles';
+import { PROFILES } from '../../../../loge/src/adapters/players/system/src/profiles';
 import { context, fetchHttp } from './support/host';
 import { startServer, type Server } from './support/server';
 import { startZurg, type Zurg } from './support/zurg';

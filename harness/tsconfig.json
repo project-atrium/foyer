@@ -1,6 +1,6 @@
 {
   // The harness runs on Node, so it has Node's types. `@loge/api` and the
-  // Foyer adapters are their source in ../../loge/adapters, aliased, never
+  // Foyer adapters are their source in ../../../loge/src/adapters, aliased, never
   // installed: what is under test is what the app ships.
   "compilerOptions": {
     "strict": true,
@@ -15,10 +15,10 @@
     "noEmit": true,
     "skipLibCheck": true,
     "paths": {
-      "@loge/api": ["../../loge/adapters/api/src/index.ts"],
-      "@loge/sync-foyer": ["../../loge/adapters/sync/foyer/src/index.ts"],
-      "@loge/source-foyer": ["../../loge/adapters/sources/foyer/src/index.ts"],
-      "@loge/iptv-foyer": ["../../loge/adapters/iptv/foyer/src/index.ts"]
+      "@loge/api": ["../../../loge/src/adapters/api/src/index.ts"],
+      "@loge/sync-foyer": ["../../../loge/src/adapters/sync/foyer/src/index.ts"],
+      "@loge/source-foyer": ["../../../loge/src/adapters/sources/foyer/src/index.ts"],
+      "@loge/iptv-foyer": ["../../../loge/src/adapters/iptv/foyer/src/index.ts"]
     }
   },
   "include": ["test/**/*.ts", "vitest.config.ts"]

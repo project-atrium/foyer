@@ -4,10 +4,10 @@ import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitest/config';
 
 // The same aliases as tsconfig: one @loge/api, and the adapters the app ships, from source.
-const source = (path: string) => fileURLToPath(new URL(`../../loge/adapters/${path}`, import.meta.url));
+const source = (path: string) => fileURLToPath(new URL(`../../../loge/src/adapters/${path}`, import.meta.url));
 
 // Loge and Foyer share one version: the server must answer the app's.
-const appVersion = (JSON.parse(readFileSync(new URL('../../loge/package.json', import.meta.url), 'utf8')) as { version: string }).version;
+const appVersion = (JSON.parse(readFileSync(new URL('../../../loge/src/package.json', import.meta.url), 'utf8')) as { version: string }).version;
 
 export default defineConfig({
   resolve: {
