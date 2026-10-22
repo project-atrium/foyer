@@ -54,7 +54,9 @@ const (
 	Tools    Category = "tools"
 )
 
-// Categories are the page's sections, in its order.
+// Categories are the page's sections, in its order: the categories of Loge's
+// one list (`PLUGIN_CATEGORIES` in `@loge/api`) that run on a server, in that
+// list's order. A test holds them to the app's fixture.
 var Categories = []Category{Sources, IPTV, Metadata, Tracking, Tools}
 
 type FieldType string
@@ -102,7 +104,14 @@ type Result struct {
 }
 
 type Adapter struct {
-	Key         string
+	// Key is what `connections` stores as the connection's adapter. It stays
+	// as it was stored, so no connection moves.
+	Key string
+	// ID is the adapter's qualified id, `category/name` — `iptv/stalker`,
+	// `sources/google-drive` — the one Loge's manifest has. The app's
+	// `adapters/api/fixtures/adapters.json` describes every adapter by it, and
+	// a test holds each of Foyer's to its entry there.
+	ID          string
 	Category    Category
 	Name        string
 	Description string

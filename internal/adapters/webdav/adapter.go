@@ -17,6 +17,7 @@ const Key = "webdav"
 func Adapter() adapters.Adapter {
 	return adapters.Adapter{
 		Key:      Key,
+		ID:       "sources/webdav",
 		Category: adapters.Sources,
 		Name:     "WebDAV",
 		Description: "A WebDAV share: Zurg's Real-Debrid library, rclone's, a NAS's. Each of its folders you choose becomes a library; " +

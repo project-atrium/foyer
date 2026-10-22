@@ -223,6 +223,7 @@ func (d Detection) Summary() string {
 func Adapter() adapters.Adapter {
 	return adapters.Adapter{
 		Key:         Key,
+		ID:          "tools/ffmpeg",
 		Category:    adapters.Tools,
 		Single:      true,
 		Name:        "FFmpeg",

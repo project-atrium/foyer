@@ -69,16 +69,23 @@ var collections = []string{
 	iptv.LineupsCollection,
 }
 
+// AllAdapters is every adapter Foyer lists: those it has built first — the
+// portal's with its service's test — then those still planned. Each is the
+// server's side of an app manifest of the same qualified id, and a test holds
+// them to the app's `adapters.json`.
+func AllAdapters(portal adapters.Adapter) []adapters.Adapter {
+	built := []adapters.Adapter{webdav.Adapter(), tmdb.Adapter(), ffmpeg.Adapter(), youtube.Adapter(), trakt.Adapter(), portal}
+	return append(built, adapters.Planned()...)
+}
+
 // Bind binds Foyer's guard, routes and dashboard pages, and starts nothing:
 // a test that binds it runs no background work. main asks for that with
 // Background.
 func Bind(app core.App, cfg config.Config) *Server {
-	// What is built first: an adapter that is built takes its planned
-	// stand-in's place. A portal's test is its service's, made below.
+	// A portal's test is its service's, made below.
 	var tv *iptv.Service
 	portal := iptv.Adapter(func(ctx context.Context, settings adapters.Settings) adapters.Result { return tv.Check(ctx, settings) })
-	built := []adapters.Adapter{webdav.Adapter(), tmdb.Adapter(), ffmpeg.Adapter(), youtube.Adapter(), trakt.Adapter(), portal}
-	registry := adapters.NewRegistry(app, append(built, adapters.Planned()...)...)
+	registry := adapters.NewRegistry(app, AllAdapters(portal)...)
 	lib := library.New(app, registry)
 	s := &Server{
 		App:      app,

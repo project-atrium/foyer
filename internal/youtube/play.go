@@ -223,6 +223,7 @@ func vttOf(link string) string {
 func Adapter() adapters.Adapter {
 	return adapters.Adapter{
 		Key:      Key,
+		ID:       "sources/youtube",
 		Category: adapters.Sources,
 		Single:   true,
 		Name:     "YouTube",

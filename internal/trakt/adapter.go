@@ -12,6 +12,7 @@ import (
 func Adapter() adapters.Adapter {
 	return adapters.Adapter{
 		Key:         Key,
+		ID:          "tracking/trakt",
 		Category:    adapters.Tracking,
 		Single:      true,
 		Name:        "Trakt",

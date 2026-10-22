@@ -15,6 +15,7 @@ const Key = "tmdb"
 func Adapter() adapters.Adapter {
 	return adapters.Adapter{
 		Key:         Key,
+		ID:          "metadata/tmdb",
 		Category:    adapters.Metadata,
 		Single:      true,
 		Name:        "TMDB",

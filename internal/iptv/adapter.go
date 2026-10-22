@@ -13,6 +13,7 @@ import (
 func Adapter(check func(context.Context, adapters.Settings) adapters.Result) adapters.Adapter {
 	return adapters.Adapter{
 		Key:      Key,
+		ID:       "iptv/stalker",
 		Category: adapters.IPTV,
 		Name:     "Stalker portal",
 		Description: "A Stalker or Ministra portal, reached as the one box its MAC address is: Foyer becomes the portal's only client, " +
@@ -33,7 +34,7 @@ func Adapter(check func(context.Context, adapters.Settings) adapters.Result) ada
 				Help:    "How many requests may be on their way to the portal at once, a quarter of a second apart. One is gentlest: a portal that counts requests can block an address that asks too fast. Starting a channel always goes first."},
 			{Key: "timeZone", Label: "Guide time zone", Type: adapters.Text, Pattern: `^([A-Za-z]+(/[A-Za-z0-9_+-]+){1,2}|UTC)$`,
 				Help: "Empty for as the portal says. If what is on now is off by an hour or more, the time zone the portal keeps its guide in — often its own — such as Europe/Berlin."},
-			{Key: "guideByCountry", Label: "Put other countries' guides right", Type: adapters.Bool, Default: true,
+			{Key: "guideByCountry", Label: "Put other countries’ guides right", Type: adapters.Bool, Default: true,
 				Help: "A channel from another country than the portal's own can have a guide written in UTC that the portal takes for its own clock, hours early. Such a guide is read as UTC."},
 			{Key: "lineupDays", Label: "Read the channels again every (days)", Type: adapters.Number, Default: 7, Min: 1, Max: 30,
 				Help: "Foyer keeps the portal's channels and reads them again this often, or when someone pulls to refresh. A portal counts requests."},
