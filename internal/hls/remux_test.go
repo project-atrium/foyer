@@ -290,7 +290,13 @@ func TestAFileIsRemuxedToHLSAtItsOwnKeyframes(t *testing.T) {
 		t.Errorf("the subtitles near the end:\n%s", vtt)
 	}
 	// ffmpeg says its speed every half second, and a reader of its own
-	// passes it on: a busy machine may take a moment.
+	// passes it on: a busy machine may take a moment. Its first report is
+	// 0x, and a run quick enough says a real one only as it ends — but a run
+	// waits once it is far ahead of the player, so the player plays on to
+	// the end, as a real one would, and the run gets there.
+	for n := 3; n < len(segments); n++ {
+		get(t, m, ticket, "v"+itoa(n)+".m4s")
+	}
 	told := false
 	for wait := time.Now().Add(5 * time.Second); !told && time.Now().Before(wait); time.Sleep(20 * time.Millisecond) {
 		x.plays.mu.Lock()
