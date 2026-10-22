@@ -387,8 +387,16 @@ func (j *job) start(n int) error {
 	j.run = r
 	r.span = len(j.covered)
 	j.covered = append(j.covered, span{from: j.segments[n].StartMs, to: j.segments[n].StartMs})
-	go j.progress(r, stdout)
+	// Wait closes stdout once ffmpeg exits, losing what the reader had not
+	// read yet — its last speed, all of it for a run quicker than ffmpeg's
+	// first report — so it waits for the reader to reach the end first.
+	read := make(chan struct{})
 	go func() {
+		defer close(read)
+		j.progress(r, stdout)
+	}()
+	go func() {
+		<-read
 		err := cmd.Wait()
 		j.mu.Lock()
 		j.poll(r)
@@ -421,7 +429,8 @@ func (j *job) start(n int) error {
 	return nil
 }
 
-// progress reads ffmpeg's progress for its speed, which Live Activity shows.
+// progress reads ffmpeg's progress for its speed, which Live Activity shows,
+// to the end of its output: ffmpeg's exit closes it.
 func (j *job) progress(r *run, out io.Reader) {
 	lines := bufio.NewScanner(out)
 	for lines.Scan() {
@@ -433,6 +442,9 @@ func (j *job) progress(r *run, out io.Reader) {
 			j.m.playings.Speed(j.ticket.Session, speed)
 		}
 	}
+	// A line too long stops the scanner: what follows is drained, or ffmpeg
+	// would block on a full pipe and never exit.
+	_, _ = io.Copy(io.Discard, out)
 }
 
 // poll reads what a run finished since it last looked: its lists' new
