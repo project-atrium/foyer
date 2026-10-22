@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -361,6 +362,44 @@ func TestAViewerWhoLeavesLetsItsLineGoAndAStopFreesOne(t *testing.T) {
 	}
 	if got := v.play(phone, alex, "ch:103", nil); got.status != http.StatusOK {
 		t.Fatalf("after a stop: %d %v", got.status, got.body)
+	}
+}
+
+// A viewer's timer pending as the app terminates never reaches its playing:
+// the database it would write to is closed.
+func TestNoViewersTimerOutlivesTheApp(t *testing.T) {
+	v := startTV(t, nil, stalkertest.Options{})
+	alex := v.makeUser("alex", nil)
+	lines := v.harness.server.IPTV.Lines
+	// Long enough that play answers well before it: a timer that fired first
+	// would prove nothing.
+	lines.FirstOpen = time.Second
+	var terminating atomic.Bool
+	var early, late atomic.Int32
+	left := lines.Left
+	lines.Left = func(session string) {
+		if terminating.Load() {
+			late.Add(1)
+			return
+		}
+		early.Add(1)
+		left(session)
+	}
+	played := v.play(deviceHeader(t, "alex-phone-0001", "Alex’s phone"), alex, "ch:101", nil)
+	if played.status != http.StatusOK {
+		t.Fatalf("play: %d %v", played.status, played.body)
+	}
+	// Its stream never opens: its timer, armed before play answered, is
+	// pending as the app terminates.
+	answered := time.Now()
+	terminating.Store(true)
+	if early.Load() != 0 {
+		t.Fatal("the viewer's timer fired before the app terminated: play took longer than FirstOpen")
+	}
+	v.app.Cleanup()
+	time.Sleep(time.Until(answered.Add(lines.FirstOpen + 500*time.Millisecond)))
+	if late.Load() != 0 {
+		t.Fatal("a viewer's timer ended its playing after the app terminated")
 	}
 }
 

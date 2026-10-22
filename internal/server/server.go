@@ -93,6 +93,13 @@ func Bind(app core.App, cfg config.Config) *Server {
 	s.IPTV = tv
 	// A playing that ends lets go of its channel's line.
 	s.Playings.OnEnd(tv.Lines.Leave)
+	// A viewer's timer would end its playing in a database closed under it:
+	// the lines end as the app terminates — any app Bind is on, a test's too,
+	// since requests make the timers, not Background.
+	app.OnTerminate().BindFunc(func(e *core.TerminateEvent) error {
+		tv.Lines.Shutdown()
+		return e.Next()
+	})
 	fileOf := func(id string) (*core.Record, error) { return app.FindRecordById(library.FilesCollection, id) }
 	s.Remux = hls.NewManager(hls.Options{
 		Log: func(msg string, args ...any) { app.Logger().Warn(msg, args...) },
@@ -289,8 +296,6 @@ func (s *Server) Background() *Server {
 	s.App.OnTerminate().BindFunc(func(e *core.TerminateEvent) error {
 		cancel()
 		s.Remux.Close()
-		// A viewer's timer would end its playing in a closed database.
-		s.IPTV.Lines.Shutdown()
 		s.Copies.Close()
 		stop, release := context.WithTimeout(context.Background(), 5*time.Second)
 		_ = s.Streams.StopTwin(stop)
