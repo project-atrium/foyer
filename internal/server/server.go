@@ -289,6 +289,8 @@ func (s *Server) Background() *Server {
 	s.App.OnTerminate().BindFunc(func(e *core.TerminateEvent) error {
 		cancel()
 		s.Remux.Close()
+		// A viewer's timer would end its playing in a closed database.
+		s.IPTV.Lines.Shutdown()
 		s.Copies.Close()
 		stop, release := context.WithTimeout(context.Background(), 5*time.Second)
 		_ = s.Streams.StopTwin(stop)

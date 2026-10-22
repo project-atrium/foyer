@@ -109,6 +109,10 @@ type Lines struct {
 	lines     map[string]*line
 	bySession map[string]*line
 	evicted   map[string]eviction
+	// shut is Lines after Shutdown: no viewer is told of as gone any more,
+	// and leaving counts those being told of, outside the lock.
+	shut    bool
+	leaving sync.WaitGroup
 }
 
 // NewLines keeps lines, starting each with open.
@@ -172,6 +176,7 @@ func (ls *Lines) Claim(conn, channel, name, cmd string, v Viewer, limit int, can
 			forced = true
 		default:
 			full := &Full{Streams: ls.streams(conn), CanForce: canForce}
+			left = ls.leavingLocked(left)
 			ls.mu.Unlock()
 			ls.left(left)
 			return nil, nil, full
@@ -181,6 +186,7 @@ func (ls *Lines) Claim(conn, channel, name, cmd string, v Viewer, limit int, can
 		ls.lines[target.id] = target
 		ls.add(target, w)
 	}
+	left = ls.leavingLocked(left)
 	ls.mu.Unlock()
 	ls.left(left)
 	return target, stopped, nil
@@ -244,16 +250,20 @@ func (ls *Lines) wait(l *line, w *watcher, d time.Duration) {
 	if w.timer != nil {
 		w.timer.Stop()
 	}
+	if ls.shut {
+		return
+	}
 	w.timer = time.AfterFunc(d, func() {
 		ls.mu.Lock()
-		gone := l.watchers[w.Session] == w && w.open == 0
-		if gone {
+		// A timer that fired as Lines shut down does nothing: the database
+		// its viewer's playing would be written to is closing.
+		var left []string
+		if !ls.shut && l.watchers[w.Session] == w && w.open == 0 {
 			ls.removeLocked(l, w)
+			left = ls.leavingLocked([]string{w.Session})
 		}
 		ls.mu.Unlock()
-		if gone {
-			ls.Left(w.Session)
-		}
+		ls.left(left)
 	})
 }
 
@@ -289,7 +299,24 @@ func (ls *Lines) closeLocked(l *line, why error) {
 	delete(ls.lines, l.id)
 }
 
+// leavingLocked is the viewers about to be told of as gone, counted until
+// left has told of them — none once Lines shut down. Its caller holds the
+// lock, and passes what it answers to left once it lets go of it.
+func (ls *Lines) leavingLocked(sessions []string) []string {
+	if ls.shut || len(sessions) == 0 {
+		return nil
+	}
+	ls.leaving.Add(1)
+	return sessions
+}
+
+// left tells of viewers that went, as leavingLocked answered them; never
+// under the lock, since Left ends their playings.
 func (ls *Lines) left(sessions []string) {
+	if len(sessions) == 0 {
+		return
+	}
+	defer ls.leaving.Done()
 	for _, s := range sessions {
 		ls.Left(s)
 	}
@@ -418,8 +445,27 @@ func (ls *Lines) Close(conn string) {
 			ls.closeLocked(l, errClosed)
 		}
 	}
+	left = ls.leavingLocked(left)
 	ls.mu.Unlock()
 	ls.left(left)
+}
+
+// Shutdown ends every line as the server stops: every viewer's timer
+// stopped, one that fired already made to do nothing, and no viewer told of
+// as gone — the database closes next. It returns once any viewer already
+// being told of as gone has been. Lines stay shut.
+func (ls *Lines) Shutdown() {
+	ls.mu.Lock()
+	ls.shutLocked()
+	ls.mu.Unlock()
+	ls.leaving.Wait()
+}
+
+func (ls *Lines) shutLocked() {
+	ls.shut = true
+	for _, l := range ls.lines {
+		ls.closeLocked(l, errClosed)
+	}
 }
 
 // InUse are every connection's lines, for Live Activity.
