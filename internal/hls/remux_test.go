@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/binary"
 	"net/http"
 	"net/http/httptest"
@@ -229,7 +230,19 @@ func TestAFileIsRemuxedToHLSAtItsOwnKeyframes(t *testing.T) {
 	if back, ok := openTicket(sealed, m.sign, time.Now()); !ok || back.Session != "s1" || len(back.Plan.Audio) != 2 {
 		t.Fatalf("the ticket read back: %+v %v", back, ok)
 	}
-	if _, ok := openTicket(sealed[:len(sealed)-2]+"AA", m.sign, time.Now()); ok {
+	// Forged by a bit of the signature itself: new characters at the end
+	// could spell the same bytes, or differ in base64's unused bits alone.
+	encoded, sig, _ := strings.Cut(sealed, ".")
+	mac, err := base64.RawURLEncoding.DecodeString(sig)
+	if err != nil || len(mac) == 0 {
+		t.Fatalf("the ticket's signature %q: %v", sig, err)
+	}
+	mac[0] ^= 1
+	forged := encoded + "." + base64.RawURLEncoding.EncodeToString(mac)
+	if forged == sealed {
+		t.Fatal("the forgery is the ticket")
+	}
+	if _, ok := openTicket(forged, m.sign, time.Now()); ok {
 		t.Error("a forged ticket was taken")
 	}
 	if _, ok := openTicket(sealed, m.sign, time.Now().Add(2*time.Hour)); ok {
