@@ -10,6 +10,12 @@ import (
 // Key is this adapter's key in the registry.
 const Key = "tmdb"
 
+// APIKey is the field the household's key is kept under, as the app keys it.
+// It was `key` before the two were one field, and that is not migrated: a
+// Foyer whose key is under the old name is as without TMDB until it is
+// entered again.
+const APIKey = "apiKey"
+
 // Adapter is TMDB as the Adapters page shows it. Its notice is the one TMDB's
 // terms ask for wherever its data is used.
 func Adapter() adapters.Adapter {
@@ -23,7 +29,7 @@ func Adapter() adapters.Adapter {
 		Notice:      "This product uses the TMDB API but is not endorsed or certified by TMDB.",
 		Fields: []adapters.Field{
 			{
-				Key: "key", Label: "Read Access Token or API key", Type: adapters.Password, Required: true,
+				Key: APIKey, Label: "API key or Read Access Token", Type: adapters.Password, Required: true,
 				Help: "From themoviedb.org → Settings → API. Stored on this server as typed.",
 			},
 			{
@@ -33,7 +39,7 @@ func Adapter() adapters.Adapter {
 			},
 		},
 		Test: func(ctx context.Context, s adapters.Settings) adapters.Result {
-			err := New(s.String("key")).Check(ctx)
+			err := New(s.String(APIKey)).Check(ctx)
 			switch {
 			case err == nil:
 				return adapters.Result{OK: true, Message: "TMDB takes the key."}

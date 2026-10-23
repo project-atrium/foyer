@@ -36,13 +36,13 @@ const (
 // so a refused key stays refused and the pace holds across scans.
 func (e *Engine) tmdb() (*tmdb.Client, string) {
 	s, err := e.adapters.Settings(tmdb.Key)
-	if err != nil || !s.Enabled || strings.TrimSpace(s.String("key")) == "" {
+	if err != nil || !s.Enabled || strings.TrimSpace(s.String(tmdb.APIKey)) == "" {
 		return nil, ""
 	}
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	if e.tmdbClient == nil || e.tmdbKey != s.String("key") {
-		e.tmdbClient, e.tmdbKey = tmdb.New(s.String("key"), e.tmdbOptions...), s.String("key")
+	if e.tmdbClient == nil || e.tmdbKey != s.String(tmdb.APIKey) {
+		e.tmdbClient, e.tmdbKey = tmdb.New(s.String(tmdb.APIKey), e.tmdbOptions...), s.String(tmdb.APIKey)
 	}
 	return e.tmdbClient, s.String("language")
 }

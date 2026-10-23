@@ -131,23 +131,29 @@ func identityOf(settings adapters.Settings) string {
 }
 
 func optionsOf(settings adapters.Settings) stalker.ProviderOptions {
-	atOnce, _ := strconv.Atoi(settings.String("requestsAtOnce"))
 	return stalker.ProviderOptions{
 		Options: stalker.Options{
 			URL:      settings.String("portalUrl"),
 			Identity: stalker.Identity{MAC: settings.String("mac"), SerialNumber: settings.String("serialNumber"), DeviceID: settings.String("deviceId"), Signature: settings.String("signature")},
-			AtOnce:   atOnce,
+			AtOnce:   requestsAtOnce(settings),
 		},
 		Zone:   strings.TrimSpace(settings.String("timeZone")),
 		AsSent: !settings.Bool("guideByCountry"),
 	}
 }
 
+// requestsAtOnce is how many requests may be on their way to the portal: the
+// connection's whole number, held to 1–4. One kept as text from when it was a
+// choice ("2") was not migrated, and Settings reads it as the default, 1.
+func requestsAtOnce(settings adapters.Settings) int {
+	return min(4, max(1, settings.Int("requestsAtOnce")))
+}
+
 // provider is a connection's portal: one per connection, kept while its
 // settings stand, so every call shares its sign-in and its gate.
 func (s *Service) provider(c adapters.Connection) *stalker.Provider {
 	identity := identityOf(c.Settings)
-	key := identity + "|" + c.String("requestsAtOnce") + "|" + c.String("timeZone") + "|" + strconv.FormatBool(c.Bool("guideByCountry"))
+	key := identity + "|" + strconv.Itoa(requestsAtOnce(c.Settings)) + "|" + c.String("timeZone") + "|" + strconv.FormatBool(c.Bool("guideByCountry"))
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if h, ok := s.providers[c.ID]; ok && h.identity == key {

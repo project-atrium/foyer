@@ -20,7 +20,7 @@ func TestEpisodeTitlesTellTwoSeriesOfOneNameApart(t *testing.T) {
 	admin := h.superuser()
 	fake := fakeTMDB(t)
 	h.server.Library.UseTMDB(tmdb.WithBase(fake.URL+"/3", fake.URL+"/t/p"), tmdb.WithBackoff(time.Millisecond))
-	if got := h.call(http.MethodPut, "/api/foyer/admin/adapters/tmdb", admin, map[string]any{"enabled": true, "values": map[string]any{"key": "a-key.for.tests", "language": "en-US"}}); got.status != http.StatusOK {
+	if got := h.call(http.MethodPut, "/api/foyer/admin/adapters/tmdb", admin, map[string]any{"enabled": true, "values": map[string]any{"apiKey": "a-key.for.tests", "language": "en-US"}}); got.status != http.StatusOK {
 		t.Fatalf("tmdb: %d %v", got.status, got.body)
 	}
 	share := webdavtest.New()

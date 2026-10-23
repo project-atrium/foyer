@@ -40,7 +40,7 @@ func TestAnAdapterStartsWithNoConnectionAndItsDefaults(t *testing.T) {
 	}
 	view := typeView(t, got.list, "tmdb")
 	defaults := view["defaults"].(map[string]any)
-	if len(view["connections"].([]any)) != 0 || defaults["language"] != "en-US" || defaults["key"] != "" || view["notice"] == "" ||
+	if len(view["connections"].([]any)) != 0 || defaults["language"] != "en-US" || defaults["apiKey"] != "" || view["notice"] == "" ||
 		view["single"] != true || view["category"] != "metadata" {
 		t.Fatalf("view %v", view)
 	}
@@ -98,13 +98,13 @@ func TestASecretIsMaskedAndKeptWhenASaveLeavesItOut(t *testing.T) {
 	h := start(t, options{})
 	admin := h.superuser()
 	got := h.call(http.MethodPut, "/api/foyer/admin/adapters/tmdb", admin, map[string]any{
-		"enabled": true, "values": map[string]any{"key": "a secret key", "language": "de-DE"},
+		"enabled": true, "values": map[string]any{"apiKey": "a secret key", "language": "de-DE"},
 	})
-	if got.status != http.StatusOK || got.body["values"].(map[string]any)["key"] != "******" || got.body["name"] != "TMDB" {
+	if got.status != http.StatusOK || got.body["values"].(map[string]any)["apiKey"] != "******" || got.body["name"] != "TMDB" {
 		t.Fatalf("save: %d %v", got.status, got.body)
 	}
 	if got := h.call(http.MethodPut, "/api/foyer/admin/adapters/tmdb", admin, map[string]any{
-		"enabled": true, "values": map[string]any{"key": "******", "language": "en-GB"},
+		"enabled": true, "values": map[string]any{"apiKey": "******", "language": "en-GB"},
 	}); got.status != http.StatusOK {
 		t.Fatalf("save again: %d %v", got.status, got.body)
 	}
@@ -120,7 +120,7 @@ func TestASecretIsMaskedAndKeptWhenASaveLeavesItOut(t *testing.T) {
 	_ = record.UnmarshalJSONField("secrets", &secrets)
 	config := map[string]any{}
 	_ = record.UnmarshalJSONField("config", &config)
-	if secrets["key"] != "a secret key" || config["language"] != "en-GB" || config["key"] != nil {
+	if secrets["apiKey"] != "a secret key" || config["language"] != "en-GB" || config["apiKey"] != nil {
 		t.Fatalf("secrets %v, config %v", secrets, config)
 	}
 	// A profile reads no adapter at all; a superuser sees everything, secrets
@@ -137,7 +137,7 @@ func TestASaveThatWillNotDoNamesTheField(t *testing.T) {
 		"enabled": true, "values": map[string]any{"language": "German"},
 	})
 	values, _ := got.body["data"].(map[string]any)["values"].(map[string]any)
-	if got.status != http.StatusBadRequest || values["language"] == nil || values["key"] == nil {
+	if got.status != http.StatusBadRequest || values["language"] == nil || values["apiKey"] == nil {
 		t.Fatalf("%d %v", got.status, got.body)
 	}
 }
@@ -171,11 +171,11 @@ func TestEachShareIsAConnectionOfItsOwn(t *testing.T) {
 		t.Fatalf("connections %v", connections)
 	}
 	if got := h.call(http.MethodPut, "/api/foyer/admin/connections/"+nas, admin, map[string]any{
-		"name": "NAS", "enabled": false, "values": map[string]any{"url": "https://nas.example.com/webdav"},
+		"name": "NAS", "enabled": false, "values": map[string]any{"serverUrl": "https://nas.example.com/webdav"},
 	}); got.status != http.StatusOK || got.body["name"] != "NAS" || got.body["enabled"] != false {
 		t.Fatalf("update: %d %v", got.status, got.body)
 	}
-	if c, err := h.server.Adapters.Connection(zurg); err != nil || c.String("url") != "http://zurg:9999/dav" || !c.Enabled {
+	if c, err := h.server.Adapters.Connection(zurg); err != nil || c.String("serverUrl") != "http://zurg:9999/dav" || !c.Enabled {
 		t.Fatalf("the other share changed: %v %v", c, err)
 	}
 	if got := h.call(http.MethodDelete, "/api/foyer/admin/connections/"+nas, admin, nil); got.status != http.StatusNoContent {
@@ -185,15 +185,15 @@ func TestEachShareIsAConnectionOfItsOwn(t *testing.T) {
 		t.Fatalf("removing again: %d %v", got.status, got.body)
 	}
 	// A share's address is checked as ever, and named by its field.
-	bad := h.call(http.MethodPost, "/api/foyer/admin/connections", admin, map[string]any{"adapter": "webdav", "enabled": true, "values": map[string]any{"url": "zurg"}})
-	if values, _ := bad.body["data"].(map[string]any)["values"].(map[string]any); bad.status != http.StatusBadRequest || values["url"] == nil {
+	bad := h.call(http.MethodPost, "/api/foyer/admin/connections", admin, map[string]any{"adapter": "webdav", "enabled": true, "values": map[string]any{"serverUrl": "zurg"}})
+	if values, _ := bad.body["data"].(map[string]any)["values"].(map[string]any); bad.status != http.StatusBadRequest || values["serverUrl"] == nil {
 		t.Fatalf("a bad address: %d %v", bad.status, bad.body)
 	}
 	// TMDB is the household's once: a second connection is refused.
-	if got := h.call(http.MethodPost, "/api/foyer/admin/connections", admin, map[string]any{"adapter": "tmdb", "enabled": true, "values": map[string]any{"key": "k"}}); got.status != http.StatusOK {
+	if got := h.call(http.MethodPost, "/api/foyer/admin/connections", admin, map[string]any{"adapter": "tmdb", "enabled": true, "values": map[string]any{"apiKey": "k"}}); got.status != http.StatusOK {
 		t.Fatalf("tmdb: %d %v", got.status, got.body)
 	}
-	if got := h.call(http.MethodPost, "/api/foyer/admin/connections", admin, map[string]any{"adapter": "tmdb", "enabled": true, "values": map[string]any{"key": "k"}}); got.status != http.StatusBadRequest {
+	if got := h.call(http.MethodPost, "/api/foyer/admin/connections", admin, map[string]any{"adapter": "tmdb", "enabled": true, "values": map[string]any{"apiKey": "k"}}); got.status != http.StatusBadRequest {
 		t.Fatalf("a second tmdb: %d %v", got.status, got.body)
 	}
 	// A share is no single adapter: it is not saved by its key.

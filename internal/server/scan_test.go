@@ -245,7 +245,7 @@ func scanLibrary(t *testing.T) *scanned {
 	h.server.Library.UseTMDB(tmdb.WithBase(tmdbServer.URL+"/3", tmdbServer.URL+"/t/p"), tmdb.WithBackoff(time.Millisecond))
 	h.server.Library.SetClock(func() time.Time { return friday.Add(time.Hour) })
 	share := h.share(admin, "Zurg", zurgServer.URL+"/dav")
-	if got := h.call(http.MethodPut, "/api/foyer/admin/adapters/tmdb", admin, map[string]any{"enabled": true, "values": map[string]any{"key": "a-key.for.tests", "language": "en-US"}}); got.status != http.StatusOK {
+	if got := h.call(http.MethodPut, "/api/foyer/admin/adapters/tmdb", admin, map[string]any{"enabled": true, "values": map[string]any{"apiKey": "a-key.for.tests", "language": "en-US"}}); got.status != http.StatusOK {
 		t.Fatalf("tmdb: %d %v", got.status, got.body)
 	}
 	movies := h.addLibrary(admin, "movies", "movies", "movies")["id"].(string)
@@ -256,6 +256,98 @@ func scanLibrary(t *testing.T) *scanned {
 		}
 	}
 	return &scanned{harness: h, admin: admin, zurg: fake, zurgShare: share, movies: movies, tvs: tvs}
+}
+
+// A share kept before its address had its key (`url`, not migrated) has no
+// address: its scan fails — never an empty listing — and takes nothing away,
+// and the Adapters page shows it needing setup until the address is entered.
+func TestAShareWithoutItsAddressFailsItsScanAndTakesNothingAway(t *testing.T) {
+	s := scanLibrary(t)
+	entries, _ := s.app.CountRecords("media_entries", dbx.HashExp{"library": s.movies})
+	files, _ := s.app.CountRecords("media_files", dbx.HashExp{"library": s.movies})
+	titles, _ := s.app.CountRecords("movies")
+	if entries == 0 || files == 0 || titles == 0 {
+		t.Fatalf("nothing scanned to keep: %d entries, %d files, %d titles", entries, files, titles)
+	}
+	record, err := s.app.FindRecordById("connections", s.zurgShare)
+	if err != nil {
+		t.Fatal(err)
+	}
+	config := map[string]any{}
+	_ = record.UnmarshalJSONField("config", &config)
+	config["url"] = config["serverUrl"]
+	delete(config, "serverUrl")
+	record.Set("config", config)
+	if err := s.app.Save(record); err != nil {
+		t.Fatal(err)
+	}
+	for _, full := range []bool{true, false, true} {
+		if err := s.server.Library.Scan(context.Background(), s.movies, full); err == nil || !strings.Contains(err.Error(), "Zurg has no address") {
+			t.Fatalf("scanning a share without its address: %v", err)
+		}
+	}
+	if n, _ := s.app.CountRecords("media_entries", dbx.HashExp{"library": s.movies}); n != entries {
+		t.Errorf("%d entries left of %d", n, entries)
+	}
+	if n, _ := s.app.CountRecords("media_entries", dbx.NewExp("library = {:library} AND missing_since != ''", dbx.Params{"library": s.movies})); n != 0 {
+		t.Errorf("%d entries marked missing", n)
+	}
+	if n, _ := s.app.CountRecords("media_files", dbx.HashExp{"library": s.movies}); n != files {
+		t.Errorf("%d files left of %d", n, files)
+	}
+	if n, _ := s.app.CountRecords("movies"); n != titles {
+		t.Errorf("%d titles left of %d", n, titles)
+	}
+	lib, _ := s.app.FindRecordById("libraries", s.movies)
+	if !strings.Contains(lib.GetString("scan_error"), "has no address") {
+		t.Errorf("the library says %q", lib.GetString("scan_error"))
+	}
+	view := typeView(t, s.call(http.MethodGet, "/api/foyer/admin/adapters", s.admin, nil).list, "webdav")
+	if c := view["connections"].([]any)[0].(map[string]any); c["needsSetup"] != true || c["values"].(map[string]any)["serverUrl"] != nil {
+		t.Fatalf("the share as the page sees it: %v", c)
+	}
+	if metadata := typeView(t, s.call(http.MethodGet, "/api/foyer/admin/adapters", s.admin, nil).list, "tmdb"); metadata["connections"].([]any)[0].(map[string]any)["needsSetup"] == true {
+		t.Fatalf("TMDB, its key entered, needs no setup: %v", metadata)
+	}
+	// Entered again, the address is the share's, and it scans.
+	if got := s.call(http.MethodPut, "/api/foyer/admin/connections/"+s.zurgShare, s.admin, map[string]any{"name": "Zurg", "enabled": true, "values": map[string]any{"serverUrl": config["url"]}}); got.status != http.StatusOK || got.body["needsSetup"] == true {
+		t.Fatalf("entering the address again: %d %v", got.status, got.body)
+	}
+	if err := s.server.Library.Scan(context.Background(), s.movies, true); err != nil {
+		t.Fatalf("scanning again: %v", err)
+	}
+	// What was kept under the old key is not deleted by the save: only no longer read.
+	record, _ = s.app.FindRecordById("connections", s.zurgShare)
+	kept := map[string]any{}
+	_ = record.UnmarshalJSONField("config", &kept)
+	if kept["url"] != config["url"] || kept["serverUrl"] != config["url"] {
+		t.Fatalf("config after the save: %v", kept)
+	}
+}
+
+// TMDB whose key was kept under its old name (`key`, not migrated) is TMDB
+// off: no key, so nothing is asked of it, and the page shows it needing setup.
+func TestTMDBWithoutItsKeyIsOff(t *testing.T) {
+	h := start(t, options{})
+	admin := h.superuser()
+	if got := h.call(http.MethodPut, "/api/foyer/admin/adapters/tmdb", admin, map[string]any{"enabled": true, "values": map[string]any{"apiKey": "a-key", "language": "en-US"}}); got.status != http.StatusOK {
+		t.Fatalf("tmdb: %d %v", got.status, got.body)
+	}
+	record, err := h.app.FindFirstRecordByData("connections", "adapter", "tmdb")
+	if err != nil {
+		t.Fatal(err)
+	}
+	record.Set("secrets", map[string]any{"key": "a-key"})
+	if err := h.app.Save(record); err != nil {
+		t.Fatal(err)
+	}
+	s, err := h.server.Adapters.Settings("tmdb")
+	if err != nil || !s.Enabled || s.String("apiKey") != "" {
+		t.Fatalf("settings %v %v", s, err)
+	}
+	if c := typeView(t, h.call(http.MethodGet, "/api/foyer/admin/adapters", admin, nil).list, "tmdb")["connections"].([]any)[0].(map[string]any); c["needsSetup"] != true || c["values"].(map[string]any)["apiKey"] != "" {
+		t.Fatalf("TMDB as the page sees it: %v", c)
+	}
 }
 
 // An entry that will not be kept is told and passed over: the library's
@@ -271,7 +363,7 @@ func TestAnEntryThatWillNotBeKeptHoldsNothingBack(t *testing.T) {
 	tmdbServer := fakeTMDB(t)
 	h.server.Library.UseTMDB(tmdb.WithBase(tmdbServer.URL+"/3", tmdbServer.URL+"/t/p"), tmdb.WithBackoff(time.Millisecond))
 	h.share(admin, "Zurg", zurgServer.URL+"/dav")
-	if got := h.call(http.MethodPut, "/api/foyer/admin/adapters/tmdb", admin, map[string]any{"enabled": true, "values": map[string]any{"key": "a-key.for.tests", "language": "en-US"}}); got.status != http.StatusOK {
+	if got := h.call(http.MethodPut, "/api/foyer/admin/adapters/tmdb", admin, map[string]any{"enabled": true, "values": map[string]any{"apiKey": "a-key.for.tests", "language": "en-US"}}); got.status != http.StatusOK {
 		t.Fatalf("tmdb: %d %v", got.status, got.body)
 	}
 	refuse := true
@@ -548,7 +640,7 @@ func TestEachLibraryIsReadFromItsOwnShare(t *testing.T) {
 		}
 	}
 	// Switched off, a share is read no more: its library says why.
-	if got := s.call(http.MethodPut, "/api/foyer/admin/connections/"+nas, s.admin, map[string]any{"name": "NAS", "enabled": false, "values": map[string]any{"url": nasServer.URL + "/dav"}}); got.status != http.StatusOK {
+	if got := s.call(http.MethodPut, "/api/foyer/admin/connections/"+nas, s.admin, map[string]any{"name": "NAS", "enabled": false, "values": map[string]any{"serverUrl": nasServer.URL + "/dav"}}); got.status != http.StatusOK {
 		t.Fatalf("switching the NAS off: %d %v", got.status, got.body)
 	}
 	if err := s.server.Library.Scan(context.Background(), got.body["id"].(string), false); err == nil || !strings.Contains(err.Error(), "NAS is switched off") {

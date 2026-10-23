@@ -141,6 +141,10 @@ var errOff = errors.New("switched off on the Adapters page")
 // errNoShare is a library no share is set for.
 var errNoShare = errors.New("this library is a folder of no WebDAV share")
 
+// errNeedsSetup is a share with no address: one set up before the address
+// had its key, which was not migrated. Its scans fail until it is entered.
+var errNeedsSetup = errors.New("has no address: enter it again on the Adapters page")
+
 type share struct {
 	settings string
 	client   *webdav.Client
@@ -170,13 +174,18 @@ func (e *Engine) shareFor(id string) (*webdav.Client, error) {
 	if !c.Enabled {
 		return nil, fmt.Errorf("%s is %w", c.Name, errOff)
 	}
-	settings := c.String("url") + "\x00" + c.String("username") + "\x00" + c.String("password")
+	address := strings.TrimSpace(c.String(webdav.AddressKey))
+	if address == "" {
+		// Never an empty listing: a scan that stops here takes nothing away.
+		return nil, fmt.Errorf("%s %w", c.Name, errNeedsSetup)
+	}
+	settings := address + "\x00" + c.String("username") + "\x00" + c.String("password")
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if cached, ok := e.shares[id]; ok && cached.settings == settings {
 		return cached.client, nil
 	}
-	client, err := webdav.New(c.String("url"), c.String("username"), c.String("password"))
+	client, err := webdav.New(address, c.String("username"), c.String("password"))
 	if err != nil {
 		return nil, err
 	}

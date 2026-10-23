@@ -76,7 +76,8 @@ type Option struct {
 }
 
 // Field is one value an adapter asks for. Default is a string, an int or a
-// bool, as its type is.
+// bool, as its type is. Min and Max bound a number where they are given —
+// nil is no bound, and a bound of 0 is one (`new(0)`).
 type Field struct {
 	Key      string    `json:"key"`
 	Label    string    `json:"label"`
@@ -84,8 +85,8 @@ type Field struct {
 	Required bool      `json:"required,omitempty"`
 	Default  any       `json:"default,omitempty"`
 	Options  []Option  `json:"options,omitempty"`
-	Min      int       `json:"min,omitempty"`
-	Max      int       `json:"max,omitempty"`
+	Min      *int      `json:"min,omitempty"`
+	Max      *int      `json:"max,omitempty"`
 	// Pattern, for a text field, is what its value must match.
 	Pattern string `json:"pattern,omitempty"`
 	// Visible, for a password, shows it as typed and sends it back: a
@@ -309,7 +310,9 @@ func (a Adapter) settings(record *core.Record) Settings {
 			from = secrets
 		}
 		if v, ok := from[f.Key]; ok {
-			s.Values[f.Key] = normalise(f, v)
+			if value, fits := normalise(f, v); fits {
+				s.Values[f.Key] = value
+			}
 		}
 	}
 	return s
@@ -323,15 +326,29 @@ func (a Adapter) connection(record *core.Record) Connection {
 	return Connection{ID: record.Id, Adapter: a.Key, Name: name, Settings: a.settings(record)}
 }
 
-// normalise turns a stored JSON value back into the field's own type.
-func normalise(f Field, v any) any {
+// normalise turns a stored JSON value back into the field's own type, and
+// says whether it is one: a value kept before its field changed type — text
+// where a number is asked now, a time zone no longer among the choices — is
+// not migrated, and the field reads as its default.
+func normalise(f Field, v any) (any, bool) {
 	switch f.Type {
 	case Number:
-		if n, ok := v.(float64); ok {
-			return int(n)
+		switch n := v.(type) {
+		case float64:
+			return int(n), n == float64(int(n))
+		case int:
+			return n, true
 		}
+		return nil, false
+	case Bool:
+		b, ok := v.(bool)
+		return b, ok
+	case Select:
+		s, ok := v.(string)
+		return s, ok && (s == "" || slices.ContainsFunc(f.Options, func(o Option) bool { return o.Value == s }))
 	}
-	return v
+	s, ok := v.(string)
+	return s, ok
 }
 
 // TypeView is an adapter as the page sees it: its fields, what a new
@@ -358,6 +375,10 @@ type ConnectionView struct {
 	Enabled bool           `json:"enabled"`
 	Values  map[string]any `json:"values"`
 	Status  *Status        `json:"status,omitempty"`
+	// NeedsSetup is a saved connection a required field of which is empty —
+	// one kept before the field had its key, and not migrated: a share kept
+	// its address under `url`.
+	NeedsSetup bool `json:"needsSetup,omitempty"`
 }
 
 // Status is the last test's result, and when it ran.
@@ -404,12 +425,25 @@ func (r *Registry) View(id string) (ConnectionView, error) {
 
 func (a Adapter) view(record *core.Record) ConnectionView {
 	c := a.connection(record)
-	view := ConnectionView{ID: c.ID, Adapter: a.Key, Name: c.Name, Enabled: c.Enabled, Values: a.mask(c.Values)}
+	view := ConnectionView{ID: c.ID, Adapter: a.Key, Name: c.Name, Enabled: c.Enabled, Values: a.mask(c.Values), NeedsSetup: !a.SetUp(c.Settings)}
 	var status Status
 	if err := record.UnmarshalJSONField("status", &status); err == nil && !status.At.IsZero() {
 		view.Status = &status
 	}
 	return view
+}
+
+// SetUp says whether settings fill every field the adapter requires.
+func (a Adapter) SetUp(s Settings) bool {
+	for _, f := range a.Fields {
+		if !f.Required {
+			continue
+		}
+		if v, ok := s.Values[f.Key]; !ok || v == nil || v == "" {
+			return false
+		}
+	}
+	return true
 }
 
 // mask hides every secret that is set, but a password shown as typed.
@@ -535,8 +569,11 @@ func (r *Registry) write(a Adapter, record *core.Record, name string, enabled bo
 		return Connection{}, err
 	}
 	s.Enabled = enabled
-	// A secret Foyer made itself — a token no field asks for — is kept.
+	// A secret Foyer made itself — a token no field asks for — is kept, and so
+	// is a value no field reads: one kept under a key since renamed (a share's
+	// `url`), which is not migrated, and never deleted by a save either.
 	config, secrets := map[string]any{}, map[string]any{}
+	_ = record.UnmarshalJSONField("config", &config)
 	_ = record.UnmarshalJSONField("secrets", &secrets)
 	for _, f := range a.Fields {
 		v, ok := s.Values[f.Key]
@@ -660,8 +697,8 @@ func (f Field) check(v any) (any, error) {
 		if !ok || n != float64(int(n)) {
 			return nil, validation.NewError("validation_invalid_number", "Must be a whole number.")
 		}
-		if (f.Min != 0 || f.Max != 0) && (int(n) < f.Min || int(n) > f.Max) {
-			return nil, validation.NewError("validation_out_of_range", fmt.Sprintf("Must be from %d to %d.", f.Min, f.Max))
+		if (f.Min != nil && int(n) < *f.Min) || (f.Max != nil && int(n) > *f.Max) {
+			return nil, validation.NewError("validation_out_of_range", outOfRange(f))
 		}
 		return int(n), nil
 	}
@@ -696,6 +733,18 @@ func (f Field) check(v any) (any, error) {
 }
 
 var patterns sync.Map
+
+// outOfRange says which numbers a field takes, by the bounds it has.
+func outOfRange(f Field) string {
+	switch {
+	case f.Min != nil && f.Max != nil:
+		return fmt.Sprintf("Must be from %d to %d.", *f.Min, *f.Max)
+	case f.Min != nil:
+		return fmt.Sprintf("Must be %d or more.", *f.Min)
+	default:
+		return fmt.Sprintf("Must be %d or less.", *f.Max)
+	}
+}
 
 // matches reports whether s matches the field's pattern, compiled once.
 func matches(pattern, s string) bool {

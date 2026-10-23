@@ -35,7 +35,7 @@ func (h *harness) addLibrary(admin, folder, name, kind string) map[string]any {
 func (h *harness) share(admin, name, address string) string {
 	h.t.Helper()
 	got := h.call(http.MethodPost, "/api/foyer/admin/connections", admin, map[string]any{
-		"adapter": "webdav", "name": name, "enabled": true, "values": map[string]any{"url": address},
+		"adapter": "webdav", "name": name, "enabled": true, "values": map[string]any{"serverUrl": address},
 	})
 	if got.status != http.StatusOK {
 		h.t.Fatalf("setting up %s: %d %v", name, got.status, got.body)
@@ -306,7 +306,7 @@ func TestTheSharesFoldersComeWithTheirLibraries(t *testing.T) {
 
 	// Before the share is switched on, the page is told why there is nothing.
 	made := h.call(http.MethodPost, "/api/foyer/admin/connections", admin, map[string]any{
-		"adapter": "webdav", "name": "Zurg", "enabled": false, "values": map[string]any{"url": server.URL + "/dav"},
+		"adapter": "webdav", "name": "Zurg", "enabled": false, "values": map[string]any{"serverUrl": server.URL + "/dav"},
 	})
 	if made.status != http.StatusOK {
 		t.Fatalf("setting up the share: %d %v", made.status, made.body)
@@ -315,7 +315,7 @@ func TestTheSharesFoldersComeWithTheirLibraries(t *testing.T) {
 	if got := h.call(http.MethodGet, "/api/foyer/admin/connections/"+id+"/folders", admin, nil); got.status != http.StatusOK || got.body["ok"] != false || got.body["message"] == "" {
 		t.Fatalf("switched off: %d %v", got.status, got.body)
 	}
-	if got := h.call(http.MethodPut, "/api/foyer/admin/connections/"+id, admin, map[string]any{"name": "Zurg", "enabled": true, "values": map[string]any{"url": server.URL + "/dav"}}); got.status != http.StatusOK {
+	if got := h.call(http.MethodPut, "/api/foyer/admin/connections/"+id, admin, map[string]any{"name": "Zurg", "enabled": true, "values": map[string]any{"serverUrl": server.URL + "/dav"}}); got.status != http.StatusOK {
 		t.Fatalf("switching the share on: %d %v", got.status, got.body)
 	}
 	h.addLibrary(admin, "movies", "movies", "movies")

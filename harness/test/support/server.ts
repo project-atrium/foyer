@@ -134,7 +134,7 @@ export async function startServer(): Promise<Server> {
       const response = await fetch(`${url}/api/foyer/admin/connections`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: await superuserToken() },
-        body: JSON.stringify({ adapter: 'webdav', name: 'Zurg', enabled: true, values: { url: address } }),
+        body: JSON.stringify({ adapter: 'webdav', name: 'Zurg', enabled: true, values: { serverUrl: address } }),
       });
       if (!response.ok) throw new Error(`The share could not be set up (${response.status}): ${await response.text()}`);
       return ((await response.json()) as { id: string }).id;

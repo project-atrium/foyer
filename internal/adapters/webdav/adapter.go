@@ -12,6 +12,9 @@ import (
 // Key is this adapter's key in the registry.
 const Key = "webdav"
 
+// AddressKey is the field a share's address is kept under.
+const AddressKey = "serverUrl"
+
 // Adapter is a WebDAV share as the Adapters page shows it — Zurg's above
 // all. Which of its folders are libraries is set beside it, on the page.
 func Adapter() adapters.Adapter {
@@ -24,18 +27,21 @@ func Adapter() adapters.Adapter {
 			"nothing in it is renamed or moved.",
 		Fields: []adapters.Field{
 			{
-				Key: "url", Label: "Address", Type: adapters.URL, Required: true,
+				// `serverUrl`, as the app keys it: the share kept its address under `url`
+				// before the two were one field, and that key is not migrated — a share
+				// without one fails its scans, and the page shows it needing setup.
+				Key: AddressKey, Label: "Server address", Type: adapters.URL, Required: true,
 				Help: "The share's WebDAV root. Zurg's is under /dav: http://zurg:9999/dav.",
 			},
 			{Key: "username", Label: "Username", Type: adapters.Text, Help: "Only if the share asks for one."},
 			{Key: "password", Label: "Password", Type: adapters.Password, Help: "Stored on this server as typed."},
 			{
-				Key: "interval", Label: "Look for new media every", Type: adapters.Number, Default: 15, Min: 5, Max: 1440,
+				Key: "interval", Label: "Look for new media every", Type: adapters.Number, Default: 15, Min: new(5), Max: new(1440),
 				Help: "Minutes. The share can also tell Foyer itself — Zurg from its on_library_update.",
 			},
 		},
 		Test: func(ctx context.Context, s adapters.Settings) adapters.Result {
-			client, err := New(s.String("url"), s.String("username"), s.String("password"))
+			client, err := New(s.String(AddressKey), s.String("username"), s.String("password"))
 			if err != nil {
 				return adapters.Result{Message: capital(err.Error()) + "."}
 			}

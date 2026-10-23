@@ -310,15 +310,15 @@ func TestTheAdaptersTestNamesTheSharesFolders(t *testing.T) {
 	fake.Dir("shows", added)
 	server := httptest.NewServer(fake)
 	defer server.Close()
-	result := webdav.Adapter().Test(context.Background(), adapters.Settings{Values: map[string]any{"url": server.URL + "/dav"}})
+	result := webdav.Adapter().Test(context.Background(), adapters.Settings{Values: map[string]any{"serverUrl": server.URL + "/dav"}})
 	if !result.OK || !strings.Contains(result.Message, "2 folders") {
 		t.Fatalf("result %+v", result)
 	}
-	beside := webdav.Adapter().Test(context.Background(), adapters.Settings{Values: map[string]any{"url": server.URL}})
+	beside := webdav.Adapter().Test(context.Background(), adapters.Settings{Values: map[string]any{"serverUrl": server.URL}})
 	if beside.OK || !strings.Contains(beside.Message, "http://zurg:9999/dav") {
 		t.Fatalf("the server's root, not its share: %+v", beside)
 	}
-	refused := webdav.Adapter().Test(context.Background(), adapters.Settings{Values: map[string]any{"url": "http://127.0.0.1:1"}})
+	refused := webdav.Adapter().Test(context.Background(), adapters.Settings{Values: map[string]any{"serverUrl": "http://127.0.0.1:1"}})
 	if refused.OK {
 		t.Fatalf("an address with nothing behind it: %+v", refused)
 	}

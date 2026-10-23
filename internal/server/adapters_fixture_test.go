@@ -106,10 +106,14 @@ func TestAnAdapterThatDiffersFromItsManifestIsNamed(t *testing.T) {
 		"required":    {list: edit("tracking/trakt", func(a *adapters.Adapter) { field(a, "clientSecret").Required = false }), want: `"tracking/trakt" field "clientSecret": required`},
 		"default":     {list: edit("tools/ffmpeg", func(a *adapters.Adapter) { field(a, "copies_room_gb").Default = 50 }), want: `"tools/ffmpeg" field "copies_room_gb": default`},
 		"options":     {list: edit("tools/ffmpeg", func(a *adapters.Adapter) { field(a, "copy_effort").Options = field(a, "copy_effort").Options[:2] }), want: `"tools/ffmpeg" field "copy_effort": options`},
-		"min":         {list: edit("iptv/stalker", func(a *adapters.Adapter) { field(a, "streams").Min = 2 }), want: `"iptv/stalker" field "streams": min`},
-		"max":         {list: edit("iptv/stalker", func(a *adapters.Adapter) { field(a, "lineupDays").Max = 31 }), want: `"iptv/stalker" field "lineupDays": max`},
-		"pattern":     {list: edit("sources/youtube", func(a *adapters.Adapter) { field(a, "region").Pattern = `^[A-Z]{3}$` }), want: `"sources/youtube" field "region": pattern`},
-		"visible":     {list: edit("iptv/stalker", func(a *adapters.Adapter) { field(a, "mac").Visible = false }), want: `"iptv/stalker" field "mac": visible`},
+		"min":         {list: edit("iptv/stalker", func(a *adapters.Adapter) { field(a, "streams").Min = new(2) }), want: `"iptv/stalker" field "streams": min`},
+		"max":         {list: edit("iptv/stalker", func(a *adapters.Adapter) { field(a, "lineupDays").Max = new(31) }), want: `"iptv/stalker" field "lineupDays": max`},
+		// A bound of 0 is one: the app's `min: 0` against none here is a difference.
+		"min 0, or none": {list: edit("tools/ffmpeg", func(a *adapters.Adapter) { field(a, "copies_room_gb").Min = nil }), want: `"tools/ffmpeg" field "copies_room_gb": min is none here, 0 in the manifest`},
+		"a bound more":   {list: edit("sources/webdav", func(a *adapters.Adapter) { field(a, "interval").Max = nil; field(a, "interval").Min = new(0) }), want: `"sources/webdav" field "interval": min is 0 here, 5 in the manifest`},
+		"a choice less":  {list: edit("iptv/stalker", func(a *adapters.Adapter) { f := field(a, "timeZone"); f.Options = f.Options[:len(f.Options)-1] }), want: `"iptv/stalker" field "timeZone": options`},
+		"pattern":        {list: edit("sources/youtube", func(a *adapters.Adapter) { field(a, "region").Pattern = `^[A-Z]{3}$` }), want: `"sources/youtube" field "region": pattern`},
+		"visible":        {list: edit("iptv/stalker", func(a *adapters.Adapter) { field(a, "mac").Visible = false }), want: `"iptv/stalker" field "mac": visible`},
 		"a field more": {list: edit("sources/local", func(a *adapters.Adapter) {
 			a.Fields = append(a.Fields, adapters.Field{Key: "depth", Label: "Depth", Type: adapters.Number})
 		}), want: `"sources/local" field "depth" is not in the manifest`},
@@ -208,7 +212,7 @@ func fieldDifferences(a adapters.Adapter, e fixtureAdapter) []string {
 		}
 		differ := func(what string, got, want any) {
 			if !reflect.DeepEqual(got, want) {
-				problems = append(problems, fmt.Sprintf("%q field %q: %s is %v here, %v in the manifest", a.ID, f.Key, what, got, want))
+				problems = append(problems, fmt.Sprintf("%q field %q: %s is %v here, %v in the manifest", a.ID, f.Key, what, shown(got), shown(want)))
 			}
 		}
 		differ("label", f.Label, w.Label)
@@ -216,8 +220,9 @@ func fieldDifferences(a adapters.Adapter, e fixtureAdapter) []string {
 		differ("required", f.Required, w.Required)
 		differ("default", normalDefault(f), normalFixtureDefault(w))
 		differ("options", optionsOf(f.Options), optionsOf(w.Options))
-		differ("min", f.Min, intOr0(w.Min))
-		differ("max", f.Max, intOr0(w.Max))
+		// Presence too: nil is no bound, and a bound of 0 is one.
+		differ("min", f.Min, w.Min)
+		differ("max", f.Max, w.Max)
 		differ("pattern", f.Pattern, w.Pattern)
 		differ("visible", f.Visible, w.Visible)
 	}
@@ -265,9 +270,13 @@ func optionsOf(options []adapters.Option) []adapters.Option {
 	return options
 }
 
-func intOr0(n *int) int {
-	if n == nil {
-		return 0
+// shown is a value as a difference names it: a bound by its number, or none.
+func shown(v any) any {
+	if n, ok := v.(*int); ok {
+		if n == nil {
+			return "none"
+		}
+		return *n
 	}
-	return *n
+	return v
 }

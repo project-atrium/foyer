@@ -153,6 +153,8 @@ function connectionPanel(type, connection, reload, open, discard) {
     enabled: connection ? connection.enabled : true,
     values: {},
     status: null,
+    // Saved with a required field empty: kept before the field had its key.
+    needsSetup: false,
     init: 'null',
     saving: false,
     testing: false,
@@ -177,6 +179,7 @@ function connectionPanel(type, connection, reload, open, discard) {
     form.enabled = enabled;
     form.values = values;
     form.status = next?.status || null;
+    form.needsSetup = !!next?.needsSetup;
     form.init = JSON.stringify([name, enabled, values]);
   }
 
@@ -255,6 +258,7 @@ function connectionPanel(type, connection, reload, open, discard) {
       t.span({ className: 'txt' }, () => (type.single ? type.name : form.name || type.name)),
       connection || type.single ? null : t.span({ className: 'label sm' }, 'New'),
       t.div({ className: 'flex-fill' }),
+      () => (form.needsSetup ? t.span({ className: 'label warning' }, 'Needs setup') : null),
       () => (form.enabled ? t.span({ className: 'label success' }, 'Enabled') : t.span({ className: 'label' }, 'Disabled')),
       () => {
         const s = form.status;
@@ -488,8 +492,9 @@ function fieldOf(form, connection, f) {
       name,
       type: 'number',
       step: 1,
-      min: f.min || undefined,
-      max: f.max || undefined,
+      // A bound of 0 is one: only an absent bound is none.
+      min: f.min ?? undefined,
+      max: f.max ?? undefined,
       required: !!f.required,
       value: () => form.values[f.key] ?? '',
       oninput: (e) => (form.values[f.key] = e.target.value === '' ? undefined : parseInt(e.target.value, 10)),
